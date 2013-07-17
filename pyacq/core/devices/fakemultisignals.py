@@ -35,10 +35,9 @@ def fake_device_mainLoop(stop_flag, stream,  precomputed):
             print 'will stop'
             break
         t2 = time.time()
-        #~ print packet_size/sampling_rate, (t2-t1)
         time.sleep(packet_size/sampling_rate-(t2-t1))
         
-        time.sleep(packet_size/sampling_rate)
+        #~ time.sleep(packet_size/sampling_rate)
         #~ gevent.sleep(packet_size/sampling_rate)
 
 class FakeMultiSignals(DeviceBase):
@@ -49,6 +48,7 @@ class FakeMultiSignals(DeviceBase):
         DeviceBase.__init__(self, **kargs)
 
     def initialize(self, streamhandler = None):
+        self.sampling_rate = float(self.sampling_rate)
         s = self.stream = self.streamhandler.new_signals_stream(name = self.name, sampling_rate = self.sampling_rate,
                                                         nb_channel = self.nb_channel, buffer_length = self.buffer_length,
                                                         packet_size = self.packet_size, dtype = np.float64,)
