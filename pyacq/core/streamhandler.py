@@ -28,6 +28,11 @@ class StreamHandler:
                                         channel_names = None, channel_indexes = None,            
                                                     ):
         
+        if channel_indexes is None:
+            channel_indexes = range(nb_channel)
+        if channel_names is None:
+            channel_names = [ 'Channel {}'.format(i) for i in channel_indexes]
+        
         s = stream = { }
         s['name'] = name
         s['type'] = 'signals_stream'

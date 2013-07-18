@@ -49,9 +49,15 @@ class FakeMultiSignals(DeviceBase):
 
     def initialize(self, streamhandler = None):
         self.sampling_rate = float(self.sampling_rate)
+
+        channel_indexes = range(self.nb_channel)
+        channel_names = [ 'Channel {}'.format(i) for i in channel_indexes]
+        
         s = self.stream = self.streamhandler.new_signals_stream(name = self.name, sampling_rate = self.sampling_rate,
                                                         nb_channel = self.nb_channel, buffer_length = self.buffer_length,
-                                                        packet_size = self.packet_size, dtype = np.float64,)
+                                                        packet_size = self.packet_size, dtype = np.float64,
+                                                        channel_names = channel_names, channel_indexes = channel_indexes,            
+                                                        )
         
         arr_size = self.stream['shared_array'].shape[1]
         #~ print arr_size
@@ -66,7 +72,10 @@ class FakeMultiSignals(DeviceBase):
             f1 = np.linspace(np.random.rand()*60+20. , np.random.rand()*60+20., n)
             f2 = np.linspace(np.random.rand()*1.+.1 , np.random.rand()*1.+.1, n)
             self.precomputed[i,:] += np.sin(2*np.pi*t*f1) * np.sin(np.pi*t*f2+np.random.rand()*np.pi)
-        
+            self.precomputed[i,:] += np.random.rand()*2. -1  # add random offset
+            self.precomputed[i,:] *= np.random.rand()*10 # add random gain
+            
+            
         print 'FakeMultiAnalogChannel initialized:', self.name, s['port']
     
     def start(self):

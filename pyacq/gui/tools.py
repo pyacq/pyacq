@@ -12,10 +12,11 @@ class RecvPosThread(QtCore.QThread):
         self.running = False
         self.socket = socket
         self.port = port
+        self.pos = None
     
     def run(self):
         self.running = True
         while self.running:
             message = self.socket.recv()
-            pos = msgpack.loads(message)
-            self.newpacket.emit(self.port, pos)
+            self.pos = msgpack.loads(message)
+            self.newpacket.emit(self.port, self.pos)
