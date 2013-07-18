@@ -17,6 +17,7 @@ param_global = [
     {'name': 'xsize', 'type': 'logfloat', 'value': 1., 'step': 0.1},
     {'name': 'ylims', 'type': 'range', 'value': [-10., 10.] },
     {'name': 'background_color', 'type': 'color', 'value': 'k' },
+    {'name': 'refresh_interval', 'type': 'int', 'value': 100 , 'limits':[5, 1000]},
     ]
 
 param_by_channel = [ 
@@ -79,7 +80,7 @@ class Oscilloscope(QtGui.QWidget):
         self.thread = RecvPosThread(socket = self.socket, port = self.stream['port'])
         self.thread.start()
         
-        self.timer = QtCore.QTimer(interval = 40)
+        self.timer = QtCore.QTimer(interval = 100)
         self.timer.timeout.connect(self.refresh)
         self.timer.start()
         
@@ -122,17 +123,11 @@ class Oscilloscope(QtGui.QWidget):
         if self.thread.pos is None: return None, None
         pos =self.thread.pos
         n = self.stream['nb_channel']
-        #~ self.all_median = np.array([ np.median(self.np_array[i,:pos]) for i in range(n) ])
-        #~ self.all_mad =  np.array([ np.median(np.abs(self.np_array[i,:pos]-self.all_median[i])/.6745) for i in range(n) ])
-        
-        print [ np.mean(self.np_array[i,:pos]) for i in range(n) ], [ np.median(self.np_array[i,:pos]) for i in range(n) ]
         #~ self.all_mean =  np.array([ np.mean(self.np_array[i,:pos]) for i in range(n) ])
+        #~ self.all_sd = np.array([ np.std(self.np_array[i,:pos]) for i in range(n) ])
+        # better than std and mean
         self.all_mean = np.array([ np.median(self.np_array[i,:pos]) for i in range(n) ])
-        #~ return self.all_median, self.all_mad
-        self.all_sd = np.array([ np.std(self.np_array[i,:pos]) for i in range(n) ])
-        
-        
-        
+        self.all_sd=  np.array([ np.median(np.abs(self.np_array[i,:pos]-self.all_mean[i])/.6745) for i in range(n) ])
         return self.all_mean, self.all_sd
     
     def on_param_change(self, params, changes):
@@ -152,6 +147,8 @@ class Oscilloscope(QtGui.QWidget):
                 self.intsize = int(xsize*sr)
                 self.t_vect = np.arange(self.intsize, dtype = np.float64)/sr
                 self.t_vect -= self.t_vect[-1]
+            if param.name()=='refresh_interval':
+                self.timer.setInterval(data)
         #~ self.refresh()
 
 
@@ -184,7 +181,7 @@ class Oscilloscope(QtGui.QWidget):
             
             g = p.param('gain').value()
             o = p.param('offset').value()
-            curve.setData(self.t_vect, (np_arr[c,:]+o)*g)
+            curve.setData(self.t_vect, np_arr[c,:]*g+o)
         
         self.plot.setXRange( self.t_vect[0], self.t_vect[-1])
         ylims  = self.paramGlobal.param('ylims').value()
@@ -232,20 +229,16 @@ class OscilloscopeControler(QtGui.QWidget):
         self.treeParamGlobal.setParameters(self.oscilloscope.paramGlobal, showTop=True)
 
         # Gain and offset
-        v.addWidget(QLabel(u'<b>Automatic gain and offset:<\b>'))
-        but = QPushButton('Real scale (gain = 1, offset = 0)')
-        but.clicked.connect(self.center_all)
-        v.addWidget(but)        
-        for apply_for_selection, labels in enumerate([[ 'fake scale (all  + same gain)', 'fake scale (all)'],
-                                                            ['fake scale (selection  + same gain)', 'fake scale (selection)' ]] ):
-            for gain_adaptated, label in enumerate(labels):
-                but = QPushButton(label)
-                but.gain_adaptated  = gain_adaptated
-                but.apply_for_selection  = apply_for_selection
-                but.clicked.connect(self.automatic_gain_offset)
-                v.addWidget(but)
+        v.addWidget(QLabel(u'<b>Automatic gain and offset on selection:<\b>'))
+        for i,text in enumerate(['Real scale (gain = 1, offset = 0)',
+                            'Fake scale (same gain for all)',
+                            'Fake scale (gain per channel)',]):
+            but = QPushButton(text)
+            v.addWidget(but)
+            but.mode = i
+            but.clicked.connect(self.auto_gain_and_offset)
 
-        v.addWidget(QLabel(self.tr('<b>Automatic color:<\b>'),self))
+        v.addWidget(QLabel(self.tr('<b>Automatic color on selection:<\b>'),self))
         but = QPushButton('Progressive')
         but.clicked.connect(lambda : self.automatic_color(cmap_name = None))
         v.addWidget(but)
@@ -253,77 +246,62 @@ class OscilloscopeControler(QtGui.QWidget):
         v.addWidget(QLabel(self.tr('<b>Gain zoom (mouse wheel on graph):<\b>'),self))
         h = QHBoxLayout()
         v.addLayout(h)
-        #~ self.all_buttons = [ ]
         for label, factor in [ ('--', 1./10.), ('-', 1./1.3), ('+', 1.3), ('++', 10.),]:
             but = QPushButton(label)
             but.factor = factor
             but.clicked.connect(self.gain_zoom)
             h.addWidget(but)
-            #~ self.all_buttons.append(f)
     
-    
-    def center_all(self):
-        av, sd = self.oscilloscope.autoestimate_scales()
-        print av, sd
-        ylims = [np.min(av-3*sd), np.min(av+3*sd) ]
-        self.oscilloscope.paramGlobal.param('ylims').setValue(ylims)
-        for p in self.oscilloscope.paramSignals.children():
-            p.param('gain').setValue(1)
-            p.param('offset').setValue(0)
-            p.param('visible').setValue(True)
-    
-    def automatic_gain_offset(self, gain_adaptated = None, apply_for_selection = None):
-        if gain_adaptated is None:
-            gain_adaptated = self.sender().gain_adaptated
-        if apply_for_selection is None:
-            apply_for_selection = self.sender().apply_for_selection
-        
+    def auto_gain_and_offset(self):
+        mode = self.sender().mode
+
         nb_channel = self.oscilloscope.stream['nb_channel']
-        gains = np.zeros(nb_channel, dtype = float)
-        
-        if apply_for_selection :
-            selected =  np.zeros(nb_channel, dtype = bool)
-            selected[self.multi.selectedRows()] = True
-            if not selected.any(): return
-        else:
-            selected =  np.ones(nb_channel, dtype = bool)
+        selected = self.multi.selected()
         n = np.sum(selected)
-        ylims  = [-.5, nb_channel-.5 ]
-        self.oscilloscope.paramGlobal.param('ylims').setValue(ylims)
+        if n==0: return
         
         av, sd = self.oscilloscope.autoestimate_scales()
+        if mode==0:
+            ylims = [np.min(av[selected]-3*sd[selected]), np.max(av[selected]+3*sd[selected]) ]
+            gains = np.ones(nb_channel, dtype = float)
+            offsets = np.zeros(nb_channel, dtype = float)
+        elif mode in [1, 2]:
+            ylims  = [-.5, n-.5 ]
+            gains = np.zeros(nb_channel, dtype = float)
+            if mode==1:
+                gains = np.ones(nb_channel, dtype = float) * 1./n/max(sd[selected])
+            elif mode==2:
+                gains = .6/n/sd
+            offsets = np.zeros(nb_channel, dtype = float)
+            offsets[selected] = range(n)[::-1] - av[selected]*gains[selected]
         
-        dy = np.diff(ylims)[0]/(n)
-        gains = np.zeros(nb_channel, dtype = float)
-        if gain_adaptated:
-            gains = dy/n/sd*3.
-        else:
-            gains = np.ones(nb_channel, dtype = float) * dy/n/max(sd[selected])*3.
-        gains *= .3
-        #~ o = .5
-        o = n-.5
+        # apply
         for i, p in enumerate(self.oscilloscope.paramSignals.children()):
+            p.param('gain').setValue(gains[i])
+            p.param('offset').setValue(offsets[i])
             p.param('visible').setValue(selected[i])
-            if selected[i]:
-                p.param('gain').setValue(gains[i])
-                #~ p.param('offset').setValue(-av[i]+(dy*o+ylims[0])/gains[i])
-                p.param('offset').setValue(-av[i])
-                #~ p.param('offset').setValue(dy*o+ylims[0] - av[i]/gains[i])
-                #~ o+=1
-                o-=1
+        self.oscilloscope.paramGlobal.param('ylims').setValue(ylims)
+    
     
     def automatic_color(self, cmap_name = None):
         if cmap_name is None:
             cmap_name = 'jet'
-        nb_channel = self.oscilloscope.stream['nb_channel']
-        cmap = get_cmap(cmap_name , nb_channel)
+        #~ nb_channel = self.oscilloscope.stream['nb_channel']
+        selected = self.multi.selected()
+        n = np.sum(selected)
+        if n==0: return
+        cmap = get_cmap(cmap_name , n)
+        s=0
         for i, p in enumerate(self.oscilloscope.paramSignals.children()):
-            color = [ int(c*255) for c in ColorConverter().to_rgb(cmap(i)) ] 
-            p.param('color').setValue(color)
+            if selected[i]:
+                color = [ int(c*255) for c in ColorConverter().to_rgb(cmap(s)) ] 
+                p.param('color').setValue(color)
+                s += 1
     
     def gain_zoom(self, factor):
         if type(factor) is bool:# button
             factor = self.sender().factor
         for i, p in enumerate(self.oscilloscope.paramSignals.children()):
             p.param('gain').setValue(p.param('gain').value()*factor)
+            #~ p.param('offset').setValue(p.param('gain').value()/factor)
 

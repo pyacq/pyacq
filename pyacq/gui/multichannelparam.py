@@ -33,6 +33,14 @@ class MultiChannelParam(QWidget):
         
         
         mainlayout.addWidget(QLabel(u'Select one or several channel\nto change parameters'))
+        #~ h = QHBoxLayout()
+        #~ mainlayout.addLayout(h)
+        #~ but = QPushButton('Select all')
+        #~ but.clicked.connect(self.select_all)
+        #~ h.addWidget(but)
+        #~ but = QPushButton('Unselect all')
+        #~ h.addWidget(but)
+        #~ but.clicked.connect(self.unselect_all)
         
         names = [ p.name() for p in self.all_params ]
         self.list = QListWidget()
@@ -40,8 +48,8 @@ class MultiChannelParam(QWidget):
         self.list.addItems(names)
         self.list.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.list.itemSelectionChanged.connect(self.selectionChanged)
-        
-        
+    
+    
     
     def paramChanged(self, param, changes):
         for p, change, data in changes:
@@ -61,6 +69,15 @@ class MultiChannelParam(QWidget):
     
     def selectedRows(self):
         return [ ind.row() for ind in self.list.selectedIndexes()]
+
+    def selected(self):
+        selected =  np.zeros(len(self.all_params.children()), dtype = bool)
+        selected[self.selectedRows()] = True
+        return selected
+
         
-        
+    #~ def select_all(self):
+        #~ self.list.
+    
+    #~ def unselect_all(self):
 

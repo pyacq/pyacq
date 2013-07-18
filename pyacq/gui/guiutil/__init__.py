@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
 
-from .icons import icons 
+#~ from .icons import icons 
 
 from mypyqtgraph import *
