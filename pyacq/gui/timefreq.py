@@ -123,9 +123,7 @@ class TimeFreq(QtGui.QWidget):
         self.need_change_grid.connect(self.do_change_grid, type = Qt.QueuedConnection)
 
 
-        self.paramGlobal.param('xsize').sigValueChanged.connect(self.initialize_time_freq)
-        self.paramGlobal.param('nb_column').sigValueChanged.connect(self.change_grid)
-        self.paramGlobal.param('colormap').sigValueChanged.connect(self.initialize_time_freq)
+        self.paramGlobal.sigTreeStateChanged.connect(self.on_param_change)
         self.paramTimeFreq.sigTreeStateChanged.connect(self.initialize_time_freq)
         for p in self.paramChannels.children():
             p.param('visible').sigValueChanged.connect(self.change_grid)
@@ -145,6 +143,36 @@ class TimeFreq(QtGui.QWidget):
         
         #~ self.paramGlobal.param('xsize').setValue(3)
 
+    def change_param_channel(self, channel, **kargs):
+        p  = self.paramChannels.children()[channel]
+        for k, v in kargs.items():
+            p.param(k).setValue(v)
+        
+    def change_param_global(self, **kargs):
+        for k, v in kargs.items():
+            self.paramGlobal.param(k).setValue(v)
+
+    def change_param_tfr(self, **kargs):
+        for k, v in kargs.items():
+            self.paramTimeFreq.param(k).setValue(v)
+
+    def on_param_change(self, params, changes):
+        for param, change, data in changes:
+            if change != 'value': continue
+            if param.name()=='background_color':
+                color = data
+                for graphicsview in self.graphicsviews:
+                    if graphicsview is not None:
+                        graphicsview.setBackground(color)
+            if param.name()=='xsize':
+                self.initialize_time_freq()
+            if param.name()=='colormap':
+                self.initialize_time_freq()
+            if param.name()=='nb_column':
+                self.self.change_grid()
+            if param.name()=='refresh_interval':
+                self.timer.setInterval(data)
+       
 
     need_change_grid = pyqtSignal()
     def change_grid(self, param):
@@ -215,7 +243,6 @@ class TimeFreq(QtGui.QWidget):
             if not self.timer_back_initialize.isActive():
                 self.timer_back_initialize.start()
             return
-        
         # create self.params_time_freq
         p = self.params_time_freq = { }
         for param in self.paramTimeFreq.children():
@@ -282,7 +309,8 @@ class TimeFreq(QtGui.QWidget):
     def refresh(self):
         if self.thread_initialize_tfr is not None or self.is_computing.any():
             return
-
+        if self.timer_back_initialize.isActive():
+            return
         if self.thread_pos.pos is None: return
         head = self.thread_pos.pos%self.half_size+self.half_size
         tail = head-self.sig_chunk_size

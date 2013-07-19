@@ -128,17 +128,6 @@ class Oscilloscope(QtGui.QWidget):
     def change_param_global(self, **kargs):
         for k, v in kargs.items():
             self.paramGlobal.param(k).setValue(v)
-        
-    def autoestimate_scales(self):
-        if self.thread_pos.pos is None: return None, None
-        pos =self.thread_pos.pos
-        n = self.stream['nb_channel']
-        #~ self.all_mean =  np.array([ np.mean(self.np_array[i,:pos]) for i in range(n) ])
-        #~ self.all_sd = np.array([ np.std(self.np_array[i,:pos]) for i in range(n) ])
-        # better than std and mean
-        self.all_mean = np.array([ np.median(self.np_array[i,:pos]) for i in range(n) ])
-        self.all_sd=  np.array([ np.median(np.abs(self.np_array[i,:pos]-self.all_mean[i])/.6745) for i in range(n) ])
-        return self.all_mean, self.all_sd
     
     def on_param_change(self, params, changes):
         for param, change, data in changes:
@@ -158,6 +147,18 @@ class Oscilloscope(QtGui.QWidget):
                 self.t_vect -= self.t_vect[-1]
             if param.name()=='refresh_interval':
                 self.timer.setInterval(data)
+
+    def autoestimate_scales(self):
+        if self.thread_pos.pos is None: return None, None
+        pos =self.thread_pos.pos
+        n = self.stream['nb_channel']
+        #~ self.all_mean =  np.array([ np.mean(self.np_array[i,:pos]) for i in range(n) ])
+        #~ self.all_sd = np.array([ np.std(self.np_array[i,:pos]) for i in range(n) ])
+        # better than std and mean
+        self.all_mean = np.array([ np.median(self.np_array[i,:pos]) for i in range(n) ])
+        self.all_sd=  np.array([ np.median(np.abs(self.np_array[i,:pos]-self.all_mean[i])/.6745) for i in range(n) ])
+        return self.all_mean, self.all_sd
+
     
     def refresh(self):
         if self.thread_pos.pos is None: return

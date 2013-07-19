@@ -38,9 +38,9 @@ def fake_device_mainLoop(stop_flag, stream,  precomputed):
             print 'will stop'
             break
         t2 = time.time()
-        time.sleep(packet_size/sampling_rate-(t2-t1))
+        #~ time.sleep(packet_size/sampling_rate-(t2-t1))
         
-        #~ time.sleep(packet_size/sampling_rate)
+        time.sleep(packet_size/sampling_rate)
         #~ gevent.sleep(packet_size/sampling_rate)
 
 class FakeMultiSignals(DeviceBase):
