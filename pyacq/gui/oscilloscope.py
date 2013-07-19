@@ -94,10 +94,10 @@ class Oscilloscope(QtGui.QWidget):
         for i, channel_index, channel_name in zip(range(n), stream['channel_indexes'], stream['channel_names']):
             name = 'Signal{} name={} channel_index={}'.format(i, channel_name,channel_index)
             all.append({ 'name': name, 'type' : 'group', 'children' : param_by_channel})
-        self.paramSignals = pg.parametertree.Parameter.create(name='AnalogSignals', type='group', children=all)
+        self.paramChannels = pg.parametertree.Parameter.create(name='AnalogSignals', type='group', children=all)
         self.paramGlobal = pg.parametertree.Parameter.create( name='Global options',
                                                     type='group', children =param_global)
-        self.allParams = pg.parametertree.Parameter.create(name = 'all param', type = 'group', children = [self.paramGlobal,self.paramSignals  ])
+        self.allParams = pg.parametertree.Parameter.create(name = 'all param', type = 'group', children = [self.paramGlobal,self.paramChannels  ])
         
         self.allParams.sigTreeStateChanged.connect(self.on_param_change)
         self.paramGlobal.param('xsize').setLimits([2./sr, self.half_size/sr*.95])
@@ -111,7 +111,7 @@ class Oscilloscope(QtGui.QWidget):
         # Create curve items
         self.curves = [ ]
         for i, channel_index, channel_name in zip(range(n), stream['channel_indexes'], stream['channel_names']):
-            color = self.paramSignals.children()[i].param('color').value()
+            color = self.paramChannels.children()[i].param('color').value()
             curve = self.plot.plot([np.nan], [np.nan], pen = color)
             self.curves.append(curve)            
         
@@ -120,6 +120,15 @@ class Oscilloscope(QtGui.QWidget):
     def open_configure_dialog(self):
         self.paramControler.show()    
     
+    def change_param_channel(self, channel, **kargs):
+        p  = self.paramChannels.children()[channel]
+        for k, v in kargs.items():
+            p.param(k).setValue(v)
+        
+    def change_param_global(self, **kargs):
+        for k, v in kargs.items():
+            self.paramGlobal.param(k).setValue(v)
+        
     def autoestimate_scales(self):
         if self.thread.pos is None: return None, None
         pos =self.thread.pos
@@ -136,7 +145,7 @@ class Oscilloscope(QtGui.QWidget):
             if change != 'value': continue
             if param.name() in ['gain', 'offset', 'visible', 'ylims']: continue # done in refresh
             if param.name()=='color':
-                i = self.paramSignals.children().index(param.parent())
+                i = self.paramChannels.children().index(param.parent())
                 pen = pg.mkPen(color = data)
                 self.curves[i].setPen(pen)
             if param.name()=='background_color':
@@ -157,7 +166,7 @@ class Oscilloscope(QtGui.QWidget):
         np_arr = self.np_array[:,tail:head]
         
         for c, curve in enumerate(self.curves):
-            p = self.paramSignals.children()[c]
+            p = self.paramChannels.children()[c]
             if not p.param('visible').value():
                 curve.setData([np.nan], [np.nan])
                 continue
@@ -174,20 +183,16 @@ class Oscilloscope(QtGui.QWidget):
 
 
 
-
-
-
-
 class OscilloscopeControler(QtGui.QWidget):
     def __init__(self, parent = None):
         QtGui.QWidget.__init__(self, parent)
         
-        self.oscilloscope = parent
+        self.viewer = parent
 
         #layout
         self.mainlayout = QtGui.QVBoxLayout()
         self.setLayout(self.mainlayout)
-        t = u'Options for signals - {}'.format(self.oscilloscope.stream['name'])
+        t = u'Options for signals - {}'.format(self.viewer.stream['name'])
         self.setWindowTitle(t)
         self.mainlayout.addWidget(QLabel('<b>'+t+'<\b>'))
         
@@ -197,10 +202,10 @@ class OscilloscopeControler(QtGui.QWidget):
         self.treeParamSignal = pg.parametertree.ParameterTree()
         self.treeParamSignal.header().hide()
         h.addWidget(self.treeParamSignal)
-        self.treeParamSignal.setParameters(self.oscilloscope.paramSignals, showTop=True)
+        self.treeParamSignal.setParameters(self.viewer.paramChannels, showTop=True)
         
-        if self.oscilloscope.stream['nb_channel']>1:
-            self.multi = MultiChannelParam( all_params = self.oscilloscope.paramSignals, param_by_channel = param_by_channel)
+        if self.viewer.stream['nb_channel']>1:
+            self.multi = MultiChannelParam( all_params = self.viewer.paramChannels, param_by_channel = param_by_channel)
             h.addWidget(self.multi)
         
         v = QtGui.QVBoxLayout()
@@ -209,7 +214,7 @@ class OscilloscopeControler(QtGui.QWidget):
         self.treeParamGlobal = pg.parametertree.ParameterTree()
         self.treeParamGlobal.header().hide()
         v.addWidget(self.treeParamGlobal)
-        self.treeParamGlobal.setParameters(self.oscilloscope.paramGlobal, showTop=True)
+        self.treeParamGlobal.setParameters(self.viewer.paramGlobal, showTop=True)
 
         # Gain and offset
         v.addWidget(QLabel(u'<b>Automatic gain and offset on selection:<\b>'))
@@ -238,12 +243,12 @@ class OscilloscopeControler(QtGui.QWidget):
     def auto_gain_and_offset(self):
         mode = self.sender().mode
 
-        nb_channel = self.oscilloscope.stream['nb_channel']
+        nb_channel = self.viewer.stream['nb_channel']
         selected = self.multi.selected()
         n = np.sum(selected)
         if n==0: return
         
-        av, sd = self.oscilloscope.autoestimate_scales()
+        av, sd = self.viewer.autoestimate_scales()
         if mode==0:
             ylims = [np.min(av[selected]-3*sd[selected]), np.max(av[selected]+3*sd[selected]) ]
             gains = np.ones(nb_channel, dtype = float)
@@ -255,35 +260,36 @@ class OscilloscopeControler(QtGui.QWidget):
                 gains = np.ones(nb_channel, dtype = float) * 1./n/max(sd[selected])
             elif mode==2:
                 gains = .6/n/sd
+                #~ gains = 1./n/sd
             offsets = np.zeros(nb_channel, dtype = float)
             offsets[selected] = range(n)[::-1] - av[selected]*gains[selected]
         
         # apply
-        for i, p in enumerate(self.oscilloscope.paramSignals.children()):
-            p.param('gain').setValue(gains[i])
-            p.param('offset').setValue(offsets[i])
-            p.param('visible').setValue(selected[i])
-        self.oscilloscope.paramGlobal.param('ylims').setValue(ylims)
+        for i in range(nb_channel):
+            self.viewer.change_param_channel(i, 
+                                                                        gain = gains[i],
+                                                                        offset =offsets[i],
+                                                                        visible =selected[i],)
+        self.viewer.paramGlobal.param('ylims').setValue(ylims)
     
     
     def automatic_color(self, cmap_name = None):
         if cmap_name is None:
             cmap_name = 'jet'
-        #~ nb_channel = self.oscilloscope.stream['nb_channel']
         selected = self.multi.selected()
         n = np.sum(selected)
         if n==0: return
         cmap = get_cmap(cmap_name , n)
         s=0
-        for i, p in enumerate(self.oscilloscope.paramSignals.children()):
+        for i in range(self.viewer.stream['nb_channel']):
             if selected[i]:
-                color = [ int(c*255) for c in ColorConverter().to_rgb(cmap(s)) ] 
-                p.param('color').setValue(color)
+                color = [ int(c*255) for c in ColorConverter().to_rgb(cmap(s)) ]
+                self.viewer.change_param_channel(i,  color = color)
                 s += 1
     
     def gain_zoom(self, factor):
         if type(factor) is bool:# button
             factor = self.sender().factor
-        for i, p in enumerate(self.oscilloscope.paramSignals.children()):
+        for i, p in enumerate(self.viewer.paramChannels.children()):
             p.param('gain').setValue(p.param('gain').value()*factor)
 

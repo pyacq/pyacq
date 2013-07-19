@@ -22,7 +22,7 @@ def test1():
     # Configure and start
     dev = FakeMultiSignals(streamhandler = streamhandler)
     dev.configure( name = 'Test dev',
-                                nb_channel = 64,
+                                nb_channel = 10,
                                 sampling_rate =1000.,
                                 buffer_length = 64.,
                                 packet_size = 128,

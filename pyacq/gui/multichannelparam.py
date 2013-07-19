@@ -48,6 +48,12 @@ class MultiChannelParam(QWidget):
         self.list.addItems(names)
         self.list.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.list.itemSelectionChanged.connect(self.selectionChanged)
+        
+        for i in range(len(names)):
+            self.list.item(i).setSelected(True)
+        
+        # QItemSelection
+        #~ self.list.selectionModel().select(QItemSelection(0,len(names)))
     
     
     
