@@ -77,8 +77,8 @@ class Oscilloscope(QtGui.QWidget):
         self.socket.setsockopt(zmq.SUBSCRIBE,'')
         self.socket.connect("tcp://localhost:{}".format(self.stream['port']))
         
-        self.thread = RecvPosThread(socket = self.socket, port = self.stream['port'])
-        self.thread.start()
+        self.thread_pos = RecvPosThread(socket = self.socket, port = self.stream['port'])
+        self.thread_pos.start()
         
         self.timer = QtCore.QTimer(interval = 100)
         self.timer.timeout.connect(self.refresh)
@@ -130,8 +130,8 @@ class Oscilloscope(QtGui.QWidget):
             self.paramGlobal.param(k).setValue(v)
         
     def autoestimate_scales(self):
-        if self.thread.pos is None: return None, None
-        pos =self.thread.pos
+        if self.thread_pos.pos is None: return None, None
+        pos =self.thread_pos.pos
         n = self.stream['nb_channel']
         #~ self.all_mean =  np.array([ np.mean(self.np_array[i,:pos]) for i in range(n) ])
         #~ self.all_sd = np.array([ np.std(self.np_array[i,:pos]) for i in range(n) ])
@@ -160,8 +160,8 @@ class Oscilloscope(QtGui.QWidget):
                 self.timer.setInterval(data)
     
     def refresh(self):
-        if self.thread.pos is None: return
-        head = self.thread.pos%self.half_size+self.half_size
+        if self.thread_pos.pos is None: return
+        head = self.thread_pos.pos%self.half_size+self.half_size
         tail = head-self.intsize
         np_arr = self.np_array[:,tail:head]
         

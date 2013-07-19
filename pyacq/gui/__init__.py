@@ -2,3 +2,5 @@
  
  
 from oscilloscope import Oscilloscope
+from timefreq import TimeFreq
+
