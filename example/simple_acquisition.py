@@ -36,14 +36,16 @@ def test1():
     socket.connect("tcp://localhost:{}".format(port))
     t0 = time.time()
     last_pos = 0
+    half_size = np_array.shape[1]/2
     while time.time()-t0<10.:
         # loop during 10s
         message = socket.recv()
         pos = msgpack.loads(message)
         # pos is absolut so need modulo
-        pos2 = pos%np_array.shape[1]
-        print 'pos', pos, ' time', time.time()-t0, 'np_array.shape:', np_array[:,last_pos:pos2].shape
-        last_pos = pos2
+        ind1 = last_pos%half_size+half_size
+        ind2 = pos%half_size+half_size
+        print 'pos', pos, ' time', time.time()-t0, 'np_array.shape:', np_array[:,ind1:ind2].shape
+        last_pos = pos
         
         
     # Stope and release the device

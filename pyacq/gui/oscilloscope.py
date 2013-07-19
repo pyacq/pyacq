@@ -58,7 +58,7 @@ class Oscilloscope(QtGui.QWidget):
     def __init__(self, stream = None, parent = None,):
         QtGui.QWidget.__init__(self, parent)
         
-        assert stream['type'] == 'signals_stream'
+        assert stream['type'] == 'signals_stream_sharedmem'
         
         self.stream = stream
         
@@ -87,6 +87,7 @@ class Oscilloscope(QtGui.QWidget):
         # Create parameters
         n = stream['nb_channel']
         self.np_array = self.stream['shared_array'].to_numpy_array()
+        self.half_size = self.np_array.shape[1]/2
         sr = self.stream['sampling_rate']
         
         all = [ ]
@@ -99,7 +100,7 @@ class Oscilloscope(QtGui.QWidget):
         self.allParams = pg.parametertree.Parameter.create(name = 'all param', type = 'group', children = [self.paramGlobal,self.paramSignals  ])
         
         self.allParams.sigTreeStateChanged.connect(self.on_param_change)
-        self.paramGlobal.param('xsize').setLimits([2./sr, self.np_array.shape[1]/sr*.9])
+        self.paramGlobal.param('xsize').setLimits([2./sr, self.half_size/sr*.95])
         
         
         self.paramControler = OscilloscopeControler(parent = self)
@@ -131,7 +132,6 @@ class Oscilloscope(QtGui.QWidget):
         return self.all_mean, self.all_sd
     
     def on_param_change(self, params, changes):
-        #~ print params, changes
         for param, change, data in changes:
             if change != 'value': continue
             if param.name() in ['gain', 'offset', 'visible', 'ylims']: continue # done in refresh
@@ -149,29 +149,12 @@ class Oscilloscope(QtGui.QWidget):
                 self.t_vect -= self.t_vect[-1]
             if param.name()=='refresh_interval':
                 self.timer.setInterval(data)
-        #~ self.refresh()
-
-
     
     def refresh(self):
         if self.thread.pos is None: return
-        head = self.thread.pos%self.np_array.shape[1]
-        
-        #~ color = self.paramGlobal.param('background_color').value()
-        #~ self.graphicsview.setBackground(color)
-        
-
-        
+        head = self.thread.pos%self.half_size+self.half_size
         tail = head-self.intsize
-        if tail<0:
-            # FIXME : 2 curves and no concatenate here
-            #~ print 'need concatenate'
-            #~ print self.np_array.shape
-            #~ print tail, head, size
-            np_arr = np.concatenate([self.np_array[:,self.np_array.shape[1]+tail:], self.np_array[:,0:head], ], axis = 1)
-            #~ print np_arr.shape
-        else:
-            np_arr = self.np_array[:,tail:head]
+        np_arr = self.np_array[:,tail:head]
         
         for c, curve in enumerate(self.curves):
             p = self.paramSignals.children()[c]
@@ -303,5 +286,4 @@ class OscilloscopeControler(QtGui.QWidget):
             factor = self.sender().factor
         for i, p in enumerate(self.oscilloscope.paramSignals.children()):
             p.param('gain').setValue(p.param('gain').value()*factor)
-            #~ p.param('offset').setValue(p.param('gain').value()/factor)
 

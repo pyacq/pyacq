@@ -21,14 +21,17 @@ def fake_device_mainLoop(stop_flag, stream,  precomputed):
     packet_size = stream['packet_size']
     sampling_rate = stream['sampling_rate']
     np_arr = stream['shared_array'].to_numpy_array()
+    half_size = np_arr.shape[1]/2
     while True:
         t1 = time.time()
         #~ print 'pos', pos, 'abs_pos', abs_pos
+        #double copy
         np_arr[:,pos2:pos2+packet_size] = precomputed[:,pos:pos+packet_size]
+        np_arr[:,pos2+half_size:pos2+packet_size+half_size] = precomputed[:,pos:pos+packet_size]
         pos += packet_size
         pos = pos%precomputed.shape[1]
         abs_pos += packet_size
-        pos2 = abs_pos%np_arr.shape[1]
+        pos2 = abs_pos%half_size
         socket.send(msgpack.dumps(abs_pos))
         
         if stop_flag.value:
@@ -62,7 +65,7 @@ class FakeMultiSignals(DeviceBase):
         arr_size = self.stream['shared_array'].shape[1]
         #~ print arr_size
         #~ print self.arr_size%self.packet_size
-        assert arr_size%self.packet_size ==0, 'buffer should be a multilple of pcket_size {} {}'.format(arr_size, self.packet_size)
+        assert (arr_size/2)%self.packet_size ==0, 'buffer should be a multilple of pcket_size {}/2 {}'.format(arr_size, self.packet_size)
         
         # private precomuted array of 20s = some noise + some sinus burst
         n = int(self.sampling_rate*20./self.packet_size)*self.packet_size

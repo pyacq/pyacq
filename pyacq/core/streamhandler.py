@@ -27,7 +27,9 @@ class StreamHandler:
                                         packet_size = 64, dtype = np.float32,
                                         channel_names = None, channel_indexes = None,            
                                                     ):
-        
+        """
+        Shared mem doucle buffer size
+        """
         if channel_indexes is None:
             channel_indexes = range(nb_channel)
         if channel_names is None:
@@ -35,7 +37,7 @@ class StreamHandler:
         
         s = stream = { }
         s['name'] = name
-        s['type'] = 'signals_stream'
+        s['type'] = 'signals_stream_sharedmem'
         s['sampling_rate'] = sampling_rate
         s['nb_channel'] = nb_channel
         s['packet_size'] = packet_size
@@ -45,7 +47,7 @@ class StreamHandler:
         
         l = int(sampling_rate*buffer_length)
         assert l%packet_size ==0, 'buffer should be a multilple of packet_size {} {}'.format(l, packet_size)
-        shape = (nb_channel, l)
+        shape = (nb_channel, l*2)
         
         s['shared_array'] = SharedArray(shape = shape, dtype = np.dtype(dtype))
         s['port'] = self.new_port()
