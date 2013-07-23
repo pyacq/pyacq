@@ -3,7 +3,7 @@
 Oscilloscope example
 """
 
-from pyacq import StreamHandler, FakeMultiSignals, TimestampServer
+from pyacq import StreamHandler, FakeMultiSignals
 from pyacq.gui import Oscilloscope
 
 import msgpack

@@ -3,8 +3,8 @@
 Oscilloscope example
 """
 
-from pyacq import StreamHandler, FakeMultiSignals
-from pyacq.gui import TimeFreq
+from pyacq import StreamHandler, MeasurementComputingMultiSignals
+from pyacq.gui import Oscilloscope
 
 import msgpack
 #~ import gevent
@@ -20,18 +20,17 @@ def test1():
     streamhandler = StreamHandler()
     
     # Configure and start
-    dev = FakeMultiSignals(streamhandler = streamhandler)
-    dev.configure( name = 'Test dev',
-                                nb_channel = 64,
-                                sampling_rate =1000.,
-                                buffer_length = 64.,
-                                packet_size = 128,
+    dev = MeasurementComputingMultiSignals(streamhandler = streamhandler)
+    dev.configure( board_num = 0,
+                          sampling_rate =1000.,
+                          buffer_length = 5.12,
+                          channel_indexes = range(64),
                                 )
     dev.initialize()
     dev.start()
     
     app = QtGui.QApplication([])
-    w1=TimeFreq(stream = dev.stream)
+    w1=Oscilloscope(stream = dev.stream)
     w1.show()
     
     app.exec_()

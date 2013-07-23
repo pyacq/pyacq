@@ -2,3 +2,4 @@
 
 
 from .fakemultisignals import FakeMultiSignals
+from .measurementcomputing import MeasurementComputingMultiSignals

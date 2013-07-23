@@ -3,7 +3,7 @@
 Oscilloscope  and tfr example
 """
 
-from pyacq import StreamHandler, FakeMultiSignals, TimestampServer
+from pyacq import StreamHandler, FakeMultiSignals
 from pyacq.gui import Oscilloscope
 from pyacq.gui import TimeFreq
 

@@ -45,6 +45,21 @@ def fake_device_mainLoop(stop_flag, stream,  precomputed):
 
 class FakeMultiSignals(DeviceBase):
     """
+    Usage:
+        dev = FakeMultiSignals()
+        dev.configure(...)
+        dev.initialize()
+        dev.start()
+        dev.stop()
+        
+    Configuration Parameters:
+        nb_channel
+        sampling_rate
+        buffer_length
+        packet_size
+        channel_names
+        channel_indexes
+    
     
     """
     def __init__(self,  **kargs):
