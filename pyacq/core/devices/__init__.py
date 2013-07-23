@@ -2,3 +2,4 @@
 
 
 from .fakemultisignals import FakeMultiSignals
+from .emotiv import EmotivMultiSignals
