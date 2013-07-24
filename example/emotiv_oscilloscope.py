@@ -4,7 +4,7 @@ Oscilloscope example
 """
 
 from pyacq import StreamHandler, FakeMultiSignals, TimestampServer, EmotivMultiSignals
-from pyacq.gui import Oscilloscope
+from pyacq.gui import Oscilloscope, TimeFreq
 
 import msgpack
 #~ import gevent
@@ -21,10 +21,9 @@ def emotiv_oscillo():
     
     # Configure and start
     dev = EmotivMultiSignals(streamhandler = streamhandler)
-    dev.configure( name = 'Test dev',
+    dev.configure( name = 'Emo Acc',
                                 nb_channel = 14,
-                                nb_impedance = 14, 
-                                buffer_length = 6.4,    # doit être un multiple du packet size
+                                buffer_length = 1800,    # doit être un multiple du packet size
                                 packet_size = 1,
                                 )
     dev.initialize()
@@ -34,7 +33,17 @@ def emotiv_oscillo():
     w1=Oscilloscope(stream = dev.stream)
     w1.show()
     print"ok"
+
+    w2=Oscilloscope(stream = dev.stream)
+    w2.show()
+
+
+    w3=TimeFreq(stream = dev.stream)
+    w3.show()    
+    
     app.exec_()
+    
+    
     
     # Stope and release the device
     dev.stop()

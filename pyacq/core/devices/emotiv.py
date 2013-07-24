@@ -51,6 +51,7 @@ class EmotivMultiSignals(DeviceBase):
         self.__dict__.update(kargs)
         
         self.sampling_rate = 128
+        self.nb_gyro = 2
         
         self.configured = True
 
@@ -60,8 +61,8 @@ class EmotivMultiSignals(DeviceBase):
         self._os_decryption = False
 
         # Stream Channels
-        channel_indexes = range(self.nb_channel)
-        channel_names = [ 'F3', 'FC6', 'P7', 'T8', 'F7','F8','T7','P8','AF4','F4','AF3','O2','O1','FC5']#,'X','Y','Unknown']
+        channel_indexes = range(self.nb_channel) 
+        channel_names = [ 'F3', 'F4', 'P7', 'FC6', 'F7', 'F8','T7','P8','FC5','AF4','T8','O2','O1','FC3']  #TODO : confirm order
         s_chan = self.stream = self.streamhandler.new_signals_stream(name = self.name, sampling_rate = self.sampling_rate,
                                                         nb_channel = self.nb_channel, buffer_length = self.buffer_length,
                                                         packet_size = self.packet_size, dtype = np.float64,
@@ -74,10 +75,20 @@ class EmotivMultiSignals(DeviceBase):
         impedances_indexes = range(self. nb_channel)
         impedances_names = [ 'Quality_F3', 'Quality_FC6', 'Quality_P7', 'Quality_T8', 'Quality_F7','Quality_F8','Quality_T7','Quality_P8','Quality_AF4','Quality_F4','Quality_AF3','Quality_O2','Quality_O1','Quality_FC5']
         s_imp = self.stream2 = self.streamhandler.new_signals_stream(name = self.name, sampling_rate = self.sampling_rate,
-                                                        nb_channel = self.nb_impedance, buffer_length = self.buffer_length,
+                                                        nb_channel = self.nb_channel, buffer_length = self.buffer_length,
                                                         packet_size = self.packet_size, dtype = np.float64,
                                                         channel_names = impedances_names, channel_indexes = impedances_indexes,            
                                                         )
+                                                        
+        # Stream Gyro
+        gyro_indexes = range(self. nb_gyro)
+        gyro_names = [ 'X','Y']   # Unknown' sup parameter (see Daeken notes)
+        s_gyro = self.stream3 = self.streamhandler.new_signals_stream(name = self.name, sampling_rate = self.sampling_rate,
+                                                        nb_channel = self.nb_gyro, buffer_length = self.buffer_length,
+                                                        packet_size = self.packet_size, dtype = np.float64,
+                                                        channel_names = gyro_names, channel_indexes = gyro_indexes,            
+                                                        )
+        
         if windows:
             self.setupWin()
         else:
@@ -86,15 +97,7 @@ class EmotivMultiSignals(DeviceBase):
         self._goOn = True   
         print 'FakeMultiAnalogChannel initialized:', self.name, 'Data Channel: ', s_chan['port'], ' Impedances: ', s_imp['port']
 
-        #FIXME : is it usefull ????
-        #self.packets = Queue()
-        self.packetsReceived = 0
-        self.packetsProcessed = 0
-        self.battery = 0
-        self.headsetId = 0 #headsetId
-        #self.research_headset = research_headset
-        #raise NotImplementedError
-        
+
         self.sensors = {
             'F3': {'value': 0, 'quality': 0},
             'FC6': {'value': 0, 'quality': 0},
@@ -118,24 +121,25 @@ class EmotivMultiSignals(DeviceBase):
 
     def start(self):
         
-        self.stop_flag = mp.Value('i', 0) #flag pultiproc
+        self.stop_flag = mp.Value('i', 0) #flag pultiproc  = global 
         
         s_chan = self.stream
         s_imp = self.stream2
         mp_arrChan = s_chan['shared_array'].mp_array
         mp_arrImp = s_imp['shared_array'].mp_array
-        self.process = mp.Process(target = self.emotiv_mainLoop,  args=(self.stop_flag, self.stream, self.stream2) )
+        self.process = mp.Process(target = emotiv_mainLoop,  args=(self.stop_flag, self.stream, self.stream2, self.hidraw, self._os_decryption, self.cipher, self.sensors, self.nb_channel) )
         self.process.start()
-        
-        #self.emotiv_mainLoop(self.stop_flag, self.stream, self.stream2) 
-        
+   
         print 'FakeMultiAnalogChannel started:', self.name
         self.running = True
-        
-        #raise NotImplementedError
+
 
     def stop(self):
-        raise NotImplementedError
+        self.stop_flag.value = 1
+        self.process.join()
+        
+        print 'FakeMultiAnalogChannel stopped:', self.name
+        self.running = False
 
     def close(self):
         if windows:
@@ -143,7 +147,6 @@ class EmotivMultiSignals(DeviceBase):
         else:
             self._goOn = False
             self.hidraw.close()
-        raise NotImplementedError
 
 
     def setupWin(self):
@@ -228,9 +231,7 @@ class EmotivMultiSignals(DeviceBase):
                 print "Couldn't open file: %s" % e
 
 
-# When is it usefull ??
     def setupCrypto(self, sn):
-        print("entre dans setup crypto")
         type = 0 #feature[5]
         type &= 0xF
         type = 0
@@ -263,7 +264,6 @@ class EmotivMultiSignals(DeviceBase):
         k[13] = '\0'
         k[14] = sn[-4]
         k[15] = 'P'
-        print ("ici")
         #It doesn't make sense to have more than one greenlet handling this as data needs to be in order anyhow. I guess you could assign an ID or something
         #to each packet but that seems like a waste also or is it? The ID might be useful if your using multiple headsets or usb sticks.
         key = ''.join(k)
@@ -272,68 +272,63 @@ class EmotivMultiSignals(DeviceBase):
 
 
 
-    def emotiv_mainLoop(self,stop_flag, streamChan, streamImp):
-        import zmq
-        pos = 0
-        abs_pos = pos2 = 0
-        ################ TODO ##################### second socket and second flow for impedances
-        context = zmq.Context()
-        socket = context.socket(zmq.PUB)
-        socket.bind("tcp://*:{}".format(streamChan['port']))
+def emotiv_mainLoop(stop_flag, streamChan, streamImp, hidraw, _os_decryption, cipher, sensors, nb_channel):
+    import zmq
+    pos = 0
+    abs_pos = pos2 = 0
+    ################ TODO ##################### second socket and second flow for impedances
+    context = zmq.Context()
+    socket = context.socket(zmq.PUB)
+    socket.bind("tcp://*:{}".format(streamChan['port']))
+    
+    packet_size = streamChan['packet_size']
+    sampling_rate = streamChan['sampling_rate']
+    np_arr = streamChan['shared_array'].to_numpy_array()
+    half_size = np_arr.shape[1]/2
+    
+    precomputed = np.array(1, dtype = np.int32)
+    
+    print("main loop")
+    
+    # Linux Style
+    while True:
+        t1 = time.time()
+        try:
+            rawData = hidraw.read(32)
+            if rawData != "":
+                if _os_decryption:
+                    # TODO check if correct
+                    deCryptData =  EmotivPacket(rawData)  #need self.sensors ?
+                else:
+                    deCryptData = cipher.decrypt(rawData[:16]) + cipher.decrypt(rawData[16:])
+                    data =  EmotivPacket(deCryptData, sensors)
+                    print data.sensors
+        except KeyboardInterrupt:
+            print("Data not received")
+            stop_flag.value = 1
         
-        packet_size = streamChan['packet_size']
-        sampling_rate = streamChan['sampling_rate']
-        np_arr = streamChan['shared_array'].to_numpy_array()
-        half_size = np_arr.shape[1]/2
+        # Get Channels data
+        for name in 'F3 F4 P7 FC6 F7 F8 T7 P8 FC5 AF4 T8 O2 O1 AF3'.split(' '):	
+            precomputed = np.append(precomputed, data.sensors[name]['value'] )
+        precomputed = precomputed[-nb_channel:].reshape(nb_channel,1)
+         #double copy For Chan Data
+        np_arr[:,pos2:pos2+packet_size] = precomputed
+        np_arr[:,pos2+half_size:pos2+packet_size+half_size] = precomputed
+        pos += packet_size
+        pos = pos%precomputed.shape[1]
+        abs_pos += packet_size
+        pos2 = abs_pos%half_size
+        socket.send(msgpack.dumps(abs_pos))
         
-        precomputed = np.array(1, dtype = np.int32)
+        #TODO
+        #Get Channels impedances
         
-        print("main loop")
-        
-        time.sleep(packet_size/sampling_rate)
-        #~ gevent.sleep(packet_size/sampling_rate)
-        
-        print self._goOn
-        
-        # Linux Style
-        while self._goOn:
-            print 'pos', pos, 'abs_pos', abs_pos
-            t1 = time.time()
-            try:
-                rawData = self.hidraw.read(32)
-                #print data
-                print len(rawData)
-                if rawData != "":
-                    if self._os_decryption:
-                        # TODO check if correct
-                        deCryptData =  EmotivPacket(rawData)  #need self.sensors ?
-                    else:
-                        deCryptData = self.cipher.decrypt(rawData[:16]) + self.cipher.decrypt(rawData[16:])
-                        data =  EmotivPacket(deCryptData, self.sensors)
-                        self.packetsProcessed += 1  
-                        print data.sensors
-            except KeyboardInterrupt:
-                self._goOn = False
-            
-            for name in 'F3 F4 P7 FC6 F7 F8 T7 P8 FC5 AF4 T8 O2 O1 AF3'.split(' '):	
-                precomputed = np.append(precomputed, data.sensors[name]['value'] )
-            precomputed = precomputed[-self.nb_channel:].reshape(14,1)
-             #double copy
-            np_arr[:,pos2:pos2+packet_size] = precomputed
-            print np_arr
-            np_arr[:,pos2+half_size:pos2+packet_size+half_size] = precomputed
-            pos += packet_size
-            pos = pos%precomputed.shape[1]
-            abs_pos += packet_size
-            pos2 = abs_pos%half_size
-            socket.send(msgpack.dumps(abs_pos))
-            
-	#send data via socket
+        #Get X and Y gyro data 
 
-            if stop_flag.value:
-                print 'will stop'
-                break
-            t2 = time.time()
+        if stop_flag.value:
+            print 'will stop'
+            break
+        t2 = time.time()
  
 
 class EmotivPacket(object):
