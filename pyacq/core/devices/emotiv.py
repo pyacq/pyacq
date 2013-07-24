@@ -73,7 +73,7 @@ class EmotivMultiSignals(DeviceBase):
         
         # Stream Impedances
         impedances_indexes = range(self. nb_channel)
-        impedances_names = [ 'Quality_F3', 'Quality_FC6', 'Quality_P7', 'Quality_T8', 'Quality_F7','Quality_F8','Quality_T7','Quality_P8','Quality_AF4','Quality_F4','Quality_AF3','Quality_O2','Quality_O1','Quality_FC5']
+        impedances_names = [ 'Quality_F3', 'Quality_F4', 'Quality_P7', 'Quality_FC6', 'Quality_F7','Quality_F8','Quality_T7','Quality_P8','Quality_FC5','Quality_AF4','Quality_T8','Quality_O2','Quality_O1','Quality_FC3']
         s_imp = self.stream2 = self.streamhandler.new_signals_stream(name = self.name, sampling_rate = self.sampling_rate,
                                                         nb_channel = self.nb_channel, buffer_length = self.buffer_length,
                                                         packet_size = self.packet_size, dtype = np.float64,
@@ -302,7 +302,6 @@ def emotiv_mainLoop(stop_flag, streamChan, streamImp, hidraw, _os_decryption, ci
                 else:
                     deCryptData = cipher.decrypt(rawData[:16]) + cipher.decrypt(rawData[16:])
                     data =  EmotivPacket(deCryptData, sensors)
-                    print data.sensors
         except KeyboardInterrupt:
             print("Data not received")
             stop_flag.value = 1
