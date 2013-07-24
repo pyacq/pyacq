@@ -75,6 +75,8 @@ class Oscilloscope(QtGui.QWidget):
         self.thread_pos.start()
         
         self.last_pos = 0
+        self.all_mean, self.all_sd = None, None
+        
         self.timer = QtCore.QTimer(interval = 100)
         self.timer.timeout.connect(self.refresh)
         self.timer.start()
@@ -160,16 +162,6 @@ class Oscilloscope(QtGui.QWidget):
                 self.curves_data = [ np.zeros( ( self.intsize), dtype = self.np_array.dtype) for i in range(self.stream['nb_channel']) ]
                 self.last_pos = self.thread_pos.pos
 
-    def autoestimate_scales(self):
-        if self.thread_pos.pos is None: return None, None
-        pos =self.thread_pos.pos
-        n = self.stream['nb_channel']
-        #~ self.all_mean =  np.array([ np.mean(self.np_array[i,:pos]) for i in range(n) ])
-        #~ self.all_sd = np.array([ np.std(self.np_array[i,:pos]) for i in range(n) ])
-        # better than std and mean
-        self.all_mean = np.array([ np.median(self.np_array[i,:pos]) for i in range(n) ])
-        self.all_sd=  np.array([ np.median(np.abs(self.np_array[i,:pos]-self.all_mean[i])/.6745) for i in range(n) ])
-        return self.all_mean, self.all_sd
 
     def refresh(self):
         if self.thread_pos.pos is None: return
@@ -226,6 +218,20 @@ class Oscilloscope(QtGui.QWidget):
             
     
     #
+    def autoestimate_scales(self):
+        if self.thread_pos.pos is None: 
+            self.all_mean, self.all_sd = None, None
+            return None, None
+        pos =self.thread_pos.pos
+        n = self.stream['nb_channel']
+        #~ self.all_mean =  np.array([ np.mean(self.np_array[i,:pos]) for i in range(n) ])
+        #~ self.all_sd = np.array([ np.std(self.np_array[i,:pos]) for i in range(n) ])
+        # better than std and mean
+        self.all_mean = np.array([ np.median(self.np_array[i,:pos]) for i in range(n) ])
+        self.all_sd=  np.array([ np.median(np.abs(self.np_array[i,:pos]-self.all_mean[i])/.6745) for i in range(n) ])
+        return self.all_mean, self.all_sd
+
+    
     def auto_gain_and_offset(self, mode = 0, selected = None):
         """
         mode = 0, 1, 2
@@ -238,6 +244,8 @@ class Oscilloscope(QtGui.QWidget):
         if n==0: return
         
         av, sd = self.autoestimate_scales()
+        if av is None: return
+        
         if mode==0:
             ylims = [np.min(av[selected]-3*sd[selected]), np.max(av[selected]+3*sd[selected]) ]
             gains = np.ones(nb_channel, dtype = float)
@@ -279,7 +287,8 @@ class Oscilloscope(QtGui.QWidget):
 
     def gain_zoom(self, factor):
         for i, p in enumerate(self.paramChannels.children()):
-            p['offset'] = p['offset'] + self.all_mean[i]*p['gain'] - self.all_mean[i]*p['gain']*factor
+            if self.all_mean is not None:
+                p['offset'] = p['offset'] + self.all_mean[i]*p['gain'] - self.all_mean[i]*p['gain']*factor
             p['gain'] = p['gain']*factor
             
             
