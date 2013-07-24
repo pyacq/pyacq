@@ -2,4 +2,7 @@
 
 
 from .fakemultisignals import FakeMultiSignals
-from .measurementcomputing import MeasurementComputingMultiSignals
+try:
+    from .measurementcomputing import MeasurementComputingMultiSignals
+except :
+    pass

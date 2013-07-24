@@ -13,21 +13,15 @@ from matplotlib.colors import ColorConverter
 
 
 param_global = [
-    #~ {'name': 'xsize', 'type': 'logfloat', 'value': 10., 'step': 0.1},
     {'name': 'xsize', 'type': 'logfloat', 'value': 1., 'step': 0.1},
     {'name': 'ylims', 'type': 'range', 'value': [-10., 10.] },
     {'name': 'background_color', 'type': 'color', 'value': 'k' },
     {'name': 'refresh_interval', 'type': 'int', 'value': 100 , 'limits':[5, 1000]},
+    {'name': 'mode', 'type': 'list', 'value': 'scan' , 'values' : ['scan', 'scroll'] },
     ]
 
 param_by_channel = [ 
-    #~ {'name': 'channel_name', 'type': 'str', 'value': '','readonly' : True},
-    #~ {'name': 'channel_index', 'type': 'str', 'value': '','readonly' : True},
     {'name': 'color', 'type': 'color', 'value': '#7FFF00'},
-    #~ {'name': 'width', 'type': 'float', 'value': 1. , 'step': 0.1},
-    #~ {'name': 'style', 'type': 'list', 
-                #~ 'values': OrderedDict([ ('SolidLine', Qt.SolidLine), ('DotLine', Qt.DotLine), ('DashLine', Qt.DashLine),]), 
-                #~ 'value': Qt.SolidLine},
     {'name': 'gain', 'type': 'float', 'value': 1, 'step': 0.1},
     {'name': 'offset', 'type': 'float', 'value': 0., 'step': 0.1},
     {'name': 'visible', 'type': 'bool', 'value': True},
@@ -80,6 +74,7 @@ class Oscilloscope(QtGui.QWidget):
         self.thread_pos = RecvPosThread(socket = self.socket, port = self.stream['port'])
         self.thread_pos.start()
         
+        self.last_pos = 0
         self.timer = QtCore.QTimer(interval = 100)
         self.timer.timeout.connect(self.refresh)
         self.timer.start()
@@ -111,9 +106,12 @@ class Oscilloscope(QtGui.QWidget):
         # Create curve items
         self.curves = [ ]
         for i, channel_index, channel_name in zip(range(n), stream['channel_indexes'], stream['channel_names']):
-            color = self.paramChannels.children()[i].param('color').value()
-            curve = self.plot.plot([np.nan], [np.nan], pen = color)
-            self.curves.append(curve)            
+            color = self.paramChannels.children()[i]['color']
+            #~ curve = self.plot.plot([np.nan], [np.nan], pen = color)
+            #~ self.curves.append(curve)
+            curve = pg.PlotCurveItem(pen = color)
+            self.plot.addItem(curve)
+            self.curves.append(curve)
         
         self.paramGlobal.param('xsize').setValue(3)
 
@@ -132,7 +130,21 @@ class Oscilloscope(QtGui.QWidget):
     def on_param_change(self, params, changes):
         for param, change, data in changes:
             if change != 'value': continue
-            if param.name() in ['gain', 'offset', 'visible', 'ylims']: continue # done in refresh
+            if param.name() in ['gain', 'offset']: 
+                self.last_pos = self.thread_pos.pos - self.intsize
+            if param.name()=='ylims':
+                continue
+            if param.name()=='visible':
+                #~ continue
+                c = self.paramChannels.children().index(param.parent())
+                if data:
+                    #~ pass
+                    self.curves[c].show()
+                    #~ self.curves[c].setData(self.t_vect, self.curves_data[c], copy = False)
+                else:
+                    #~ self.curves[c].setData([np.nan], [np.nan])
+                    self.curves[c].hide()
+            
             if param.name()=='color':
                 i = self.paramChannels.children().index(param.parent())
                 pen = pg.mkPen(color = data)
@@ -143,10 +155,20 @@ class Oscilloscope(QtGui.QWidget):
                 xsize = data
                 sr = self.stream['sampling_rate']
                 self.intsize = int(xsize*sr)
-                self.t_vect = np.arange(self.intsize, dtype = np.float64)/sr
+                self.t_vect = np.arange(self.intsize, dtype = self.np_array.dtype)/sr
                 self.t_vect -= self.t_vect[-1]
+                self.curves_data = [ np.zeros( ( self.intsize), dtype = self.np_array.dtype) for i in range(self.stream['nb_channel']) ]
+                
             if param.name()=='refresh_interval':
                 self.timer.setInterval(data)
+            if param.name()=='mode':
+                self.curves_data = [ np.zeros( ( self.intsize), dtype = self.np_array.dtype) for i in range(self.stream['nb_channel']) ]
+                self.last_pos = self.thread_pos.pos
+                #~ for c, curve in enumerate(self.curves):
+                    #~ curve.setData(self.t_vect, self.curves_data[c], copy = False)
+                
+                
+                pass
 
     def autoestimate_scales(self):
         if self.thread_pos.pos is None: return None, None
@@ -159,27 +181,60 @@ class Oscilloscope(QtGui.QWidget):
         self.all_sd=  np.array([ np.median(np.abs(self.np_array[i,:pos]-self.all_mean[i])/.6745) for i in range(n) ])
         return self.all_mean, self.all_sd
 
-    
+    #~ def refresh_new(self):
     def refresh(self):
         if self.thread_pos.pos is None: return
-        head = self.thread_pos.pos%self.half_size+self.half_size
-        tail = head-self.intsize
-        np_arr = self.np_array[:,tail:head]
+        pos = self.thread_pos.pos
+
+        mode = self.paramGlobal['mode']
+        gains = np.array([p['gain'] for p in self.paramChannels.children()])#[:,np.newaxis]
+        offsets = np.array([p['offset'] for p in self.paramChannels.children()])#[:,np.newaxis]
+        visibles = np.array([p['visible'] for p in self.paramChannels.children()], dtype = bool)
+        
+        
+        if mode=='scroll':
+            head = pos%self.half_size+self.half_size
+            tail = head-self.intsize
+            np_arr = self.np_array[:, tail:head]
+            for c, g, o,v in zip(range(gains.size), gains, offsets, visibles):
+                if v :
+                    self.curves_data[c] = np_arr[c,:]*g+o
+        else:
+            new = (pos-self.last_pos)
+            if new>=self.intsize: new = self.intsize-1
+            head = pos%self.half_size+self.half_size
+            tail = head - new
+            np_arr = self.np_array[:, tail:head]
+            i1 = (pos-new)%self.intsize
+            i2 = pos%self.intsize
+            if i1>i2:
+                for c in range(gains.size):
+                    if visibles[c]:
+                        self.curves_data[c][i1:] = np_arr[c,:self.intsize-i1]*gains[c]+offsets[c]
+                        if i2!=0:
+                            self.curves_data[c][:i2] = np_arr[c,-i2:]*gains[c]+offsets[c]
+            else:
+                for c in range(gains.size):
+                    if visibles[c]:
+                        self.curves_data[c][i1:i2] = np_arr[c,:]*gains[c]+offsets[c]
+            self.last_pos = pos
         
         for c, curve in enumerate(self.curves):
             p = self.paramChannels.children()[c]
-            if not p.param('visible').value():
-                curve.setData([np.nan], [np.nan])
-                continue
+            if not p['visible']:  continue
+            curve.setData(self.t_vect, self.curves_data[c], antialias = False)
+            # Does this optmize ???
+            #~ curve.path = None
+            #~ curve.fillPath = None            
+            #~ curve.update()            
             
-            g = p.param('gain').value()
-            o = p.param('offset').value()
-            curve.setData(self.t_vect, np_arr[c,:]*g+o)
-        
+            
         self.plot.setXRange( self.t_vect[0], self.t_vect[-1])
-        ylims  = self.paramGlobal.param('ylims').value()
+        ylims  =self.paramGlobal['ylims']
         self.plot.setYRange( *ylims )
     
+    
+            
     
     #
     def auto_gain_and_offset(self, mode = 0, selected = None):
@@ -202,10 +257,9 @@ class Oscilloscope(QtGui.QWidget):
             ylims  = [-.5, n-.5 ]
             gains = np.zeros(nb_channel, dtype = float)
             if mode==1:
-                gains = np.ones(nb_channel, dtype = float) * 1./n/max(sd[selected])
+                gains = np.ones(nb_channel, dtype = float) * 1./(6*max(sd[selected]))
             elif mode==2:
-                gains = .6/n/sd
-                #~ gains = 1./n/sd
+                gains = 1/(6*sd)
             offsets = np.zeros(nb_channel, dtype = float)
             offsets[selected] = range(n)[::-1] - av[selected]*gains[selected]
         
@@ -228,7 +282,7 @@ class Oscilloscope(QtGui.QWidget):
         if n==0: return
         cmap = get_cmap(cmap_name , n)
         s=0
-        for i in range(self.viewer.stream['nb_channel']):
+        for i in range(self.stream['nb_channel']):
             if selected[i]:
                 color = [ int(c*255) for c in ColorConverter().to_rgb(cmap(s)) ]
                 self.change_param_channel(i,  color = color)
@@ -236,7 +290,10 @@ class Oscilloscope(QtGui.QWidget):
 
     def gain_zoom(self, factor):
         for i, p in enumerate(self.paramChannels.children()):
-            p.param('gain').setValue(p.param('gain').value()*factor)
+            p['offset'] = p['offset'] + self.all_mean[i]*p['gain'] - self.all_mean[i]*p['gain']*factor
+            p['gain'] = p['gain']*factor
+            
+            
 
 
 
@@ -300,12 +357,12 @@ class OscilloscopeControler(QtGui.QWidget):
     def on_auto_gain_and_offset(self):
         mode = self.sender().mode
         selected = self.multi.selected()
-        self.viewer.auto_gain_and_offset(mode = mdoe, selected = selected)
+        self.viewer.auto_gain_and_offset(mode = mode, selected = selected)
     
     def on_automatic_color(self, cmap_name = None):
         cmap_name = 'jet'
         selected = self.multi.selected()
-        self.automatic_color(cmap_name = cmap_name, selected = selected)
+        self.viewer.automatic_color(cmap_name = cmap_name, selected = selected)
             
     def on_gain_zoom(self):
         factor = self.sender().factor

@@ -24,7 +24,7 @@ def test1():
     dev.configure( name = 'Test dev',
                                 nb_channel = 64,
                                 sampling_rate =1000.,
-                                buffer_length = 64.,
+                                buffer_length = 6.4,
                                 packet_size = 10,
                                 )
     dev.initialize()
@@ -34,6 +34,7 @@ def test1():
     w1=Oscilloscope(stream = dev.stream)
     w1.show()
     w1.auto_gain_and_offset(mode = 2)
+    w1.change_param_global(xsize = 5)
     
     app.exec_()
     

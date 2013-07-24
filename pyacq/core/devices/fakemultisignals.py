@@ -90,7 +90,7 @@ class FakeMultiSignals(DeviceBase):
             f1 = np.linspace(np.random.rand()*60+20. , np.random.rand()*60+20., n)
             f2 = np.linspace(np.random.rand()*1.+.1 , np.random.rand()*1.+.1, n)
             self.precomputed[i,:] += np.sin(2*np.pi*t*f1) * np.sin(np.pi*t*f2+np.random.rand()*np.pi)
-            self.precomputed[i,:] += np.random.rand()*2. -1  # add random offset
+            self.precomputed[i,:] += np.random.rand()*40. -20  # add random offset
             self.precomputed[i,:] *= np.random.rand()*10 # add random gain
             
             

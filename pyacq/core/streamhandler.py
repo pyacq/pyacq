@@ -13,14 +13,16 @@ class StreamHandler:
     
     
     """
-    def __init__(self, stream_port = 5555):
-        self.stream_port = stream_port
+    def __init__(self):
         self.streams = OrderedDict()
     
-    def new_port(self):
-        # FIXME : test if available
-        self.stream_port += 1
-        return self.stream_port
+    def new_port(self, addr = 'tcp://*'):
+        import zmq
+        context = zmq.Context()
+        socket = context.socket(zmq.PUB)
+        available_port = socket.bind_to_random_port(addr, min_port=5000, max_port=10000, max_tries=100)
+        socket.close()
+        return available_port
     
     def new_signals_stream(self, name = '', sampling_rate = 100.,
                                         nb_channel = 2, buffer_length = 8.192,
