@@ -23,7 +23,7 @@ param_global = [
 param_by_channel = [ 
     #~ {'name': 'channel_name', 'type': 'str', 'value': '','readonly' : True},
     #~ {'name': 'channel_index', 'type': 'str', 'value': '','readonly' : True},
-    {'name': 'color', 'type': 'color', 'value': "FF0"},
+    {'name': 'color', 'type': 'color', 'value': '#7FFF00'},
     #~ {'name': 'width', 'type': 'float', 'value': 1. , 'step': 0.1},
     #~ {'name': 'style', 'type': 'list', 
                 #~ 'values': OrderedDict([ ('SolidLine', Qt.SolidLine), ('DotLine', Qt.DotLine), ('DashLine', Qt.DashLine),]), 
@@ -105,7 +105,7 @@ class Oscilloscope(QtGui.QWidget):
         
         self.paramControler = OscilloscopeControler(parent = self)
         self.paramControler.setWindowFlags(Qt.Window)
-        self.viewBox.zoom.connect(self.paramControler.gain_zoom)
+        self.viewBox.zoom.connect(self.gain_zoom)
 
         
         # Create curve items
@@ -179,8 +179,64 @@ class Oscilloscope(QtGui.QWidget):
         self.plot.setXRange( self.t_vect[0], self.t_vect[-1])
         ylims  = self.paramGlobal.param('ylims').value()
         self.plot.setYRange( *ylims )
+    
+    
+    #
+    def auto_gain_and_offset(self, mode = 0, selected = None):
+        """
+        mode = 0, 1, 2
+        """
+        nb_channel = self.stream['nb_channel']
+        if selected is None:
+            selected = np.ones(nb_channel, dtype = bool)
         
+        n = np.sum(selected)
+        if n==0: return
+        
+        av, sd = self.autoestimate_scales()
+        if mode==0:
+            ylims = [np.min(av[selected]-3*sd[selected]), np.max(av[selected]+3*sd[selected]) ]
+            gains = np.ones(nb_channel, dtype = float)
+            offsets = np.zeros(nb_channel, dtype = float)
+        elif mode in [1, 2]:
+            ylims  = [-.5, n-.5 ]
+            gains = np.zeros(nb_channel, dtype = float)
+            if mode==1:
+                gains = np.ones(nb_channel, dtype = float) * 1./n/max(sd[selected])
+            elif mode==2:
+                gains = .6/n/sd
+                #~ gains = 1./n/sd
+            offsets = np.zeros(nb_channel, dtype = float)
+            offsets[selected] = range(n)[::-1] - av[selected]*gains[selected]
+        
+        # apply
+        for i in range(nb_channel):
+            self.change_param_channel(i, 
+                                                                        gain = gains[i],
+                                                                        offset =offsets[i],
+                                                                        visible =selected[i],)
+        self.paramGlobal.param('ylims').setValue(ylims)
 
+    def automatic_color(self, cmap_name = None, selected = None):
+        nb_channel = self.stream['nb_channel']
+        if selected is None:
+            selected = np.ones(nb_channel, dtype = bool)
+        
+        if cmap_name is None:
+            cmap_name = 'jet'
+        n = np.sum(selected)
+        if n==0: return
+        cmap = get_cmap(cmap_name , n)
+        s=0
+        for i in range(self.viewer.stream['nb_channel']):
+            if selected[i]:
+                color = [ int(c*255) for c in ColorConverter().to_rgb(cmap(s)) ]
+                self.change_param_channel(i,  color = color)
+                s += 1
+
+    def gain_zoom(self, factor):
+        for i, p in enumerate(self.paramChannels.children()):
+            p.param('gain').setValue(p.param('gain').value()*factor)
 
 
 
@@ -225,11 +281,11 @@ class OscilloscopeControler(QtGui.QWidget):
             but = QPushButton(text)
             v.addWidget(but)
             but.mode = i
-            but.clicked.connect(self.auto_gain_and_offset)
+            but.clicked.connect(self.on_auto_gain_and_offset)
 
         v.addWidget(QLabel(self.tr('<b>Automatic color on selection:<\b>'),self))
         but = QPushButton('Progressive')
-        but.clicked.connect(lambda : self.automatic_color(cmap_name = None))
+        but.clicked.connect(self.on_automatic_color)
         v.addWidget(but)
 
         v.addWidget(QLabel(self.tr('<b>Gain zoom (mouse wheel on graph):<\b>'),self))
@@ -238,59 +294,20 @@ class OscilloscopeControler(QtGui.QWidget):
         for label, factor in [ ('--', 1./10.), ('-', 1./1.3), ('+', 1.3), ('++', 10.),]:
             but = QPushButton(label)
             but.factor = factor
-            but.clicked.connect(self.gain_zoom)
+            but.clicked.connect(self.on_gain_zoom)
             h.addWidget(but)
     
-    def auto_gain_and_offset(self):
+    def on_auto_gain_and_offset(self):
         mode = self.sender().mode
-
-        nb_channel = self.viewer.stream['nb_channel']
         selected = self.multi.selected()
-        n = np.sum(selected)
-        if n==0: return
-        
-        av, sd = self.viewer.autoestimate_scales()
-        if mode==0:
-            ylims = [np.min(av[selected]-3*sd[selected]), np.max(av[selected]+3*sd[selected]) ]
-            gains = np.ones(nb_channel, dtype = float)
-            offsets = np.zeros(nb_channel, dtype = float)
-        elif mode in [1, 2]:
-            ylims  = [-.5, n-.5 ]
-            gains = np.zeros(nb_channel, dtype = float)
-            if mode==1:
-                gains = np.ones(nb_channel, dtype = float) * 1./n/max(sd[selected])
-            elif mode==2:
-                gains = .6/n/sd
-                #~ gains = 1./n/sd
-            offsets = np.zeros(nb_channel, dtype = float)
-            offsets[selected] = range(n)[::-1] - av[selected]*gains[selected]
-        
-        # apply
-        for i in range(nb_channel):
-            self.viewer.change_param_channel(i, 
-                                                                        gain = gains[i],
-                                                                        offset =offsets[i],
-                                                                        visible =selected[i],)
-        self.viewer.paramGlobal.param('ylims').setValue(ylims)
+        self.viewer.auto_gain_and_offset(mode = mdoe, selected = selected)
     
-    
-    def automatic_color(self, cmap_name = None):
-        if cmap_name is None:
-            cmap_name = 'jet'
+    def on_automatic_color(self, cmap_name = None):
+        cmap_name = 'jet'
         selected = self.multi.selected()
-        n = np.sum(selected)
-        if n==0: return
-        cmap = get_cmap(cmap_name , n)
-        s=0
-        for i in range(self.viewer.stream['nb_channel']):
-            if selected[i]:
-                color = [ int(c*255) for c in ColorConverter().to_rgb(cmap(s)) ]
-                self.viewer.change_param_channel(i,  color = color)
-                s += 1
-    
-    def gain_zoom(self, factor):
-        if type(factor) is bool:# button
-            factor = self.sender().factor
-        for i, p in enumerate(self.viewer.paramChannels.children()):
-            p.param('gain').setValue(p.param('gain').value()*factor)
+        self.automatic_color(cmap_name = cmap_name, selected = selected)
+            
+    def on_gain_zoom(self):
+        factor = self.sender().factor
+        self.viewer.gain_zoom(factor)
 

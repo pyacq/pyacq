@@ -55,7 +55,7 @@ cbw = CBW()
 
 
 def device_mainLoop(stop_flag, stream, board_num):
-
+    
     packet_size = stream['packet_size']
     sampling_rate = stream['sampling_rate']
     np_arr = stream['shared_array'].to_numpy_array()
@@ -81,8 +81,8 @@ def device_mainLoop(stop_flag, stream, board_num):
     total_count = ctypes.c_long(int(int16_arr.size))
     # FIXME try with other card
     options = UL.BACKGROUND + UL.BLOCKIO  + UL.CONTINUOUS + UL.CONVERTDATA
-    
     try:
+        # this is SLOW!!!!:
         cbw.cbDaqInScan(board_num, chan_array.ctypes.data,  chan_array_type.ctypes.data,
                             gain_array.ctypes.data, nb_total_channel, byref(real_sr), byref(pretrig_count),
                              byref(total_count) ,int16_arr.ctypes.data, options)
@@ -90,11 +90,6 @@ def device_mainLoop(stop_flag, stream, board_num):
         print 'not able to cbDaqInScan properly'
         return
     
-    print 'real_sr', real_sr.value, 'instead of  ', sampling_rate
-
-    print 'total_count', total_count.value, 'instead of  ', int16_arr.size    
-    
-
     status = ctypes.c_int(0)
     cur_count = ctypes.c_long(0)
     cur_index = ctypes.c_long(0)
@@ -111,6 +106,8 @@ def device_mainLoop(stop_flag, stream, board_num):
     
     pos = abs_pos = 0
     last_index = 0
+    
+    
     while True:
         #~ try:
         if True:
@@ -167,9 +164,9 @@ def device_mainLoop(stop_flag, stream, board_num):
             print 'should stop properly'
             break
         t2 = time.time()
-        #~ time.sleep(packet_size/sampling_rate/4.)
+        #~ time.sleep(packet_size/sampling_rate)
         #~ print t2-t1, max(packet_size/sampling_rate-(t2-t1) , 0) , packet_size/sampling_rate
-        #~ time.sleep(max(packet_size/sampling_rate-(t2-t1), 0)/4)
+        time.sleep(max(packet_size/sampling_rate-(t2-t1), 0))
         #~ print 'half sleep'
         
     try:
@@ -184,6 +181,7 @@ def device_mainLoop(stop_flag, stream, board_num):
 
 
 def get_info(board_num):
+    
     config_val = ctypes.c_int(0)
     l = [ ('nb_channel_ad', UL.BOARDINFO, UL.BINUMADCHANS),
                 ('nb_channel_da', UL.BOARDINFO, UL.BINUMDACHANS),
@@ -194,7 +192,8 @@ def get_info(board_num):
                 ]
     info = {'board_num' : board_num}
     board_name = ctypes.create_string_buffer(UL.BOARDNAMELEN)
-    cbw.cbGetBoardName(board_num, byref(board_name))
+    cbw.cbGetBoardName(board_num, byref(board_name))# this is very SLOW!!!!!!!
+    
     info['board_name'] = board_name.value
     for name, info_type, config_item in l:
         cbw.cbGetConfig(info_type, board_num, 0, config_item, byref(config_val))
@@ -263,12 +262,11 @@ class MeasurementComputingMultiSignals(DeviceBase):
         self.configured = True
 
     def initialize(self, streamhandler = None):
+        
         self.sampling_rate = float(self.sampling_rate)
         
         # TODO card by card
-        
         info = self.device_info = get_info(self.board_num)
-        
         
         if self.channel_indexes is None:
             self.channel_indexes = range(info['nb_channel_ad'])
@@ -277,6 +275,7 @@ class MeasurementComputingMultiSignals(DeviceBase):
         self.nb_channel = len(self.channel_indexes)
         self.packet_size = int(info['device_packet_size']/self.nb_channel)
         print 'self.packet_size', self.packet_size
+        
         
         l = int(self.sampling_rate*self.buffer_length)
         self.buffer_length = (l - l%self.packet_size)/self.sampling_rate
@@ -287,14 +286,13 @@ class MeasurementComputingMultiSignals(DeviceBase):
                                                         packet_size = self.packet_size, dtype = np.float64,
                                                         channel_names = self.channel_names, channel_indexes = self.channel_indexes,            
                                                         )
-        
+
         arr_size = self.stream['shared_array'].shape[1]
         assert (arr_size/2)%self.packet_size ==0, 'buffer should be a multilple of pcket_size {}/2 {}'.format(arr_size, self.packet_size)
         
         
     
     def start(self):
-        
         self.stop_flag = mp.Value('i', 0)
         
         s = self.stream

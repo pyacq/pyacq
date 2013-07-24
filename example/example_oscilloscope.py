@@ -22,10 +22,10 @@ def test1():
     # Configure and start
     dev = FakeMultiSignals(streamhandler = streamhandler)
     dev.configure( name = 'Test dev',
-                                nb_channel = 10,
+                                nb_channel = 64,
                                 sampling_rate =1000.,
                                 buffer_length = 64.,
-                                packet_size = 128,
+                                packet_size = 10,
                                 )
     dev.initialize()
     dev.start()
@@ -33,6 +33,7 @@ def test1():
     app = QtGui.QApplication([])
     w1=Oscilloscope(stream = dev.stream)
     w1.show()
+    w1.auto_gain_and_offset(mode = 2)
     
     app.exec_()
     

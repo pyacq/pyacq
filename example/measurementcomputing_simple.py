@@ -11,6 +11,8 @@ import zmq
 import msgpack
 import time
 
+import multiprocessing as mp
+
 def test1():
     streamhandler = StreamHandler()
     # Get devices list
@@ -18,7 +20,19 @@ def test1():
     for n, info in MeasurementComputingMultiSignals.get_available_devices().items():
         print n ,info
     
-
+def test_recv_loop(port, stop_recv):
+    #~ import zmq.green as zmq
+    print('start rcv loop',port)
+    context = zmq.Context()
+    socket = context.socket(zmq.SUB)
+    socket.setsockopt(zmq.SUBSCRIBE,'')
+    socket.connect("tcp://localhost:{}".format(port))
+    #~ for i in range(50):
+    while stop_recv.value==0:
+        message = socket.recv()
+        pos = msgpack.loads(message)
+        #~ print('On port {} read pos is {}'.format( port, pos))
+    print('stop recv')
 
 def test2():
     streamhandler = StreamHandler()
@@ -26,7 +40,7 @@ def test2():
     # Configure and start
     dev = MeasurementComputingMultiSignals(streamhandler = streamhandler)
     dev.configure( board_num = 0,
-                          sampling_rate =100000.,
+                          sampling_rate =1000.,
                           buffer_length = 5.,
                           channel_indexes = range(64),
                           #~ channel_indexes = [0,4, 16],
@@ -34,30 +48,13 @@ def test2():
     dev.initialize()
     dev.start()
 
-    # Read the buffer on ZMQ socket
-    port = dev.stream['port']
-    np_array = dev.stream['shared_array'].to_numpy_array()
-    print np_array.shape # this should be (nb_channel x buffer_length*samplign_rate)
-    zmq.Context()
-    context = zmq.Context()
-    socket = context.socket(zmq.SUB)
-    socket.setsockopt(zmq.SUBSCRIBE,'')
-    socket.connect("tcp://localhost:{}".format(port))
-    t0 = time.time()
-    last_pos = 0
-    half_size = np_array.shape[1]/2
-    while time.time()-t0<30.:
-        # loop during 10s
-        message = socket.recv()
-        pos = msgpack.loads(message)
-        # pos is absolut so need modulo
-        #~ ind1 = last_pos%half_size+half_size
-        ind2 = pos%half_size+half_size
-        ind1 = ind2 - (pos-last_pos)
-        print 'pos', pos, ' time', time.time()-t0, 'np_array.shape:', np_array[:,ind1:ind2].shape
-        last_pos = pos
-        
-        
+    stop_recv = mp.Value('i', 0)
+    process = mp.Process(target= test_recv_loop, args = (dev.stream['port'],stop_recv))
+    process.start()
+    time.sleep(20.)
+    stop_recv.value = 1
+    process.join()
+    
     # Stope and release the device
     dev.stop()
     dev.close()
