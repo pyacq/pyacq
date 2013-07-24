@@ -31,10 +31,18 @@ def test1():
     dev.start()
     
     app = QtGui.QApplication([])
+    
     w1=Oscilloscope(stream = dev.stream)
     w1.show()
     w1.auto_gain_and_offset(mode = 2)
-    w1.change_param_global(xsize = 5)
+    w1.change_param_global(xsize = 1.)
+
+    w2=Oscilloscope(stream = dev.stream)
+    w2.show()
+    w2.auto_gain_and_offset(mode = 0)
+    w2.change_param_global(xsize = 5, mode = 'scroll')
+    
+
     
     app.exec_()
     

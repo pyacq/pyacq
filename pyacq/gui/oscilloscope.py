@@ -135,16 +135,11 @@ class Oscilloscope(QtGui.QWidget):
             if param.name()=='ylims':
                 continue
             if param.name()=='visible':
-                #~ continue
                 c = self.paramChannels.children().index(param.parent())
                 if data:
-                    #~ pass
                     self.curves[c].show()
-                    #~ self.curves[c].setData(self.t_vect, self.curves_data[c], copy = False)
                 else:
-                    #~ self.curves[c].setData([np.nan], [np.nan])
                     self.curves[c].hide()
-            
             if param.name()=='color':
                 i = self.paramChannels.children().index(param.parent())
                 pen = pg.mkPen(color = data)
@@ -164,11 +159,6 @@ class Oscilloscope(QtGui.QWidget):
             if param.name()=='mode':
                 self.curves_data = [ np.zeros( ( self.intsize), dtype = self.np_array.dtype) for i in range(self.stream['nb_channel']) ]
                 self.last_pos = self.thread_pos.pos
-                #~ for c, curve in enumerate(self.curves):
-                    #~ curve.setData(self.t_vect, self.curves_data[c], copy = False)
-                
-                
-                pass
 
     def autoestimate_scales(self):
         if self.thread_pos.pos is None: return None, None
@@ -181,14 +171,13 @@ class Oscilloscope(QtGui.QWidget):
         self.all_sd=  np.array([ np.median(np.abs(self.np_array[i,:pos]-self.all_mean[i])/.6745) for i in range(n) ])
         return self.all_mean, self.all_sd
 
-    #~ def refresh_new(self):
     def refresh(self):
         if self.thread_pos.pos is None: return
         pos = self.thread_pos.pos
 
         mode = self.paramGlobal['mode']
-        gains = np.array([p['gain'] for p in self.paramChannels.children()])#[:,np.newaxis]
-        offsets = np.array([p['offset'] for p in self.paramChannels.children()])#[:,np.newaxis]
+        gains = np.array([p['gain'] for p in self.paramChannels.children()])
+        offsets = np.array([p['offset'] for p in self.paramChannels.children()])
         visibles = np.array([p['visible'] for p in self.paramChannels.children()], dtype = bool)
         
         
