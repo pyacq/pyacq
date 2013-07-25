@@ -26,7 +26,7 @@ def fake_device_mainLoop(stop_flag, stream,  precomputed):
         t1 = time.time()
         #~ print 'pos', pos, 'abs_pos', abs_pos
         #double copy
-        np_arr[:,pos2:pos2+packet_size] = precomputed[:,pos:pos+packet_size]
+        np_arr[:,pos2:pos2+packet_size] = precomputed[:,pos:pos+packet_size] 
         np_arr[:,pos2+half_size:pos2+packet_size+half_size] = precomputed[:,pos:pos+packet_size]
         pos += packet_size
         pos = pos%precomputed.shape[1]
@@ -100,7 +100,7 @@ class FakeMultiSignals(DeviceBase):
     
     def start(self):
         
-        self.stop_flag = mp.Value('i', 0)
+        self.stop_flag = mp.Value('i', 0) #flag pultiproc
         
         s = self.streams[0]
         mp_arr = s['shared_array'].mp_array
