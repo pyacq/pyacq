@@ -54,13 +54,14 @@ cbw = CBW()
 
 
 
-def device_mainLoop(stop_flag, stream, board_num):
+def device_mainLoop(stop_flag, streams, board_num):
+    streamAD = self.streams[0]
     
-    packet_size = stream['packet_size']
-    sampling_rate = stream['sampling_rate']
-    np_arr = stream['shared_array'].to_numpy_array()
-    nb_total_channel = stream['nb_channel'] + 0 # +3
-    nb_channel_ad = stream['nb_channel']
+    packet_size = streamAD['packet_size']
+    sampling_rate = streamAD['sampling_rate']
+    np_arr = streamAD['shared_array'].to_numpy_array()
+    nb_total_channel = streamAD['nb_channel'] + 0 # +3
+    nb_channel_ad = streamAD['nb_channel']
     half_size = np_arr.shape[1]/2
 
     context = zmq.Context()
@@ -69,7 +70,7 @@ def device_mainLoop(stop_flag, stream, board_num):
 
     
     #~ chan_array = np.array( range(64)+[UL.FIRSTPORTA, UL.FIRSTPORTB, UL.FIRSTPORTC], dtype = np.int16)
-    chan_array = np.array( stream['channel_indexes'], dtype = np.int16)# +[UL.FIRSTPORTA, UL.FIRSTPORTB, UL.FIRSTPORTC], dtype = np.int16)
+    chan_array = np.array( streamAD['channel_indexes'], dtype = np.int16)# +[UL.FIRSTPORTA, UL.FIRSTPORTB, UL.FIRSTPORTC], dtype = np.int16)
     chan_array_type = np.array( [UL.ANALOG] * nb_channel_ad, dtype = np.int16)   #+[ UL.DIGITAL8] * 3
     gain_array = np.array( [UL.BIP10VOLTS] *nb_channel_ad, dtype = np.int16)
     real_sr = ctypes.c_long(int(sampling_rate))
@@ -281,13 +282,14 @@ class MeasurementComputingMultiSignals(DeviceBase):
         self.buffer_length = (l - l%self.packet_size)/self.sampling_rate
         print 'buffer_length', self.buffer_length
         self.name = '{} #{}'.format(info['board_name'], info['factory_id'])
-        s = self.stream = self.streamhandler.new_signals_stream(name = self.name, sampling_rate = self.sampling_rate,
+        s  = self.streamhandler.new_signals_stream(name = self.name, sampling_rate = self.sampling_rate,
                                                         nb_channel = self.nb_channel, buffer_length = self.buffer_length,
                                                         packet_size = self.packet_size, dtype = np.float64,
                                                         channel_names = self.channel_names, channel_indexes = self.channel_indexes,            
                                                         )
+        self.streams = [s, ]
 
-        arr_size = self.stream['shared_array'].shape[1]
+        arr_size = s['shared_array'].shape[1]
         assert (arr_size/2)%self.packet_size ==0, 'buffer should be a multilple of pcket_size {}/2 {}'.format(arr_size, self.packet_size)
         
         
@@ -295,9 +297,9 @@ class MeasurementComputingMultiSignals(DeviceBase):
     def start(self):
         self.stop_flag = mp.Value('i', 0)
         
-        s = self.stream
+        
         mp_arr = s['shared_array'].mp_array
-        self.process = mp.Process(target = device_mainLoop,  args=(self.stop_flag, self.stream, self.board_num) )
+        self.process = mp.Process(target = device_mainLoop,  args=(self.stop_flag, self.streams, self.board_num) )
         self.process.start()
         
         print 'MeasurementComputingMultiSignals started:', self.name

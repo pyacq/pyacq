@@ -71,13 +71,15 @@ class FakeMultiSignals(DeviceBase):
         channel_indexes = range(self.nb_channel)
         channel_names = [ 'Channel {}'.format(i) for i in channel_indexes]
         
-        s = self.stream = self.streamhandler.new_signals_stream(name = self.name, sampling_rate = self.sampling_rate,
+        s = self.streamhandler.new_signals_stream(name = self.name, sampling_rate = self.sampling_rate,
                                                         nb_channel = self.nb_channel, buffer_length = self.buffer_length,
                                                         packet_size = self.packet_size, dtype = np.float64,
                                                         channel_names = channel_names, channel_indexes = channel_indexes,            
                                                         )
         
-        arr_size = self.stream['shared_array'].shape[1]
+        self.streams = [s, ]
+        
+        arr_size = s['shared_array'].shape[1]
         #~ print arr_size
         #~ print self.arr_size%self.packet_size
         assert (arr_size/2)%self.packet_size ==0, 'buffer should be a multilple of pcket_size {}/2 {}'.format(arr_size, self.packet_size)
@@ -100,9 +102,9 @@ class FakeMultiSignals(DeviceBase):
         
         self.stop_flag = mp.Value('i', 0)
         
-        s = self.stream
+        s = self.streams[0]
         mp_arr = s['shared_array'].mp_array
-        self.process = mp.Process(target = fake_device_mainLoop,  args=(self.stop_flag, self.stream, self.precomputed) )
+        self.process = mp.Process(target = fake_device_mainLoop,  args=(self.stop_flag, s, self.precomputed) )
         self.process.start()
         
         print 'FakeMultiAnalogChannel started:', self.name

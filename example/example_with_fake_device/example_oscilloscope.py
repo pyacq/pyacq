@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-Oscilloscope example
+Oscilloscope example.
+2 instances simultaneous with differents parameters
 """
 
 from pyacq import StreamHandler, FakeMultiSignals
@@ -22,7 +23,7 @@ def test1():
     # Configure and start
     dev = FakeMultiSignals(streamhandler = streamhandler)
     dev.configure( name = 'Test dev',
-                                nb_channel = 64,
+                                nb_channel = 8,
                                 sampling_rate =1000.,
                                 buffer_length = 6.4,
                                 packet_size = 10,
@@ -32,12 +33,12 @@ def test1():
     
     app = QtGui.QApplication([])
     
-    w1=Oscilloscope(stream = dev.stream)
+    w1=Oscilloscope(stream = dev.streams[0])
     w1.show()
     w1.auto_gain_and_offset(mode = 2)
     w1.change_param_global(xsize = 1.)
 
-    w2=Oscilloscope(stream = dev.stream)
+    w2=Oscilloscope(stream = dev.streams[0])
     w2.show()
     w2.auto_gain_and_offset(mode = 0)
     w2.change_param_global(xsize = 5, mode = 'scroll')

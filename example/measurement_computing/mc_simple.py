@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
+Simple test with measurement computing.
 
-Very simple acquisition with a fake multi signal device.
 
 """
 
@@ -14,6 +14,7 @@ import time
 import multiprocessing as mp
 
 def test1():
+    # Device list
     streamhandler = StreamHandler()
     # Get devices list
     dev = MeasurementComputingMultiSignals(streamhandler = streamhandler)
@@ -21,13 +22,12 @@ def test1():
         print n ,info
     
 def test_recv_loop(port, stop_recv):
-    #~ import zmq.green as zmq
+
     print('start rcv loop',port)
     context = zmq.Context()
     socket = context.socket(zmq.SUB)
     socket.setsockopt(zmq.SUBSCRIBE,'')
     socket.connect("tcp://localhost:{}".format(port))
-    #~ for i in range(50):
     while stop_recv.value==0:
         message = socket.recv()
         pos = msgpack.loads(message)
@@ -49,7 +49,7 @@ def test2():
     dev.start()
 
     stop_recv = mp.Value('i', 0)
-    process = mp.Process(target= test_recv_loop, args = (dev.stream['port'],stop_recv))
+    process = mp.Process(target= test_recv_loop, args = (dev.streams[0]['port'],stop_recv))
     process.start()
     time.sleep(20.)
     stop_recv.value = 1

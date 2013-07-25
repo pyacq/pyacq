@@ -43,7 +43,7 @@ class ControlStartSop(QtGui.QWidget):
         self.start_buttons = [ ]
         self.stop_buttons = [ ]
         for i, dev in enumerate(self.devices):
-            grid.addWidget(QtGui.QLabel('Dev.anme {} rate {}hz Port {}'.format(dev.name, dev.sampling_rate, dev.stream['port'])),i, 0)
+            grid.addWidget(QtGui.QLabel('Dev.anme {} rate {}hz Port {}'.format(dev.name, dev.sampling_rate, dev.streams[0]['port'])),i, 0)
             
             but = QtGui.QPushButton('start #{}'.format(i))
             but.clicked.connect(self.start_device)
@@ -59,13 +59,13 @@ class ControlStartSop(QtGui.QWidget):
         i = self.start_buttons.index(self.sender())
         if not self.devices[i].running:
             self.devices[i].start()
-            self.timestampserver.follow_stream(self.devices[i].stream)
+            self.timestampserver.follow_stream(self.devices[i].streams[0])
 
     def stop_device(self):
         i = self.stop_buttons.index(self.sender())
         if  self.devices[i].running:
             self.devices[i].stop()
-            self.timestampserver.leave_stream(self.devices[i].stream)
+            self.timestampserver.leave_stream(self.devices[i].streams[0])
     
 
 class RecvThread(QtCore.QThread):

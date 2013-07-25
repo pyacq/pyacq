@@ -169,13 +169,13 @@ class TimeFreq(QtGui.QWidget):
             if param.name()=='colormap':
                 self.initialize_time_freq()
             if param.name()=='nb_column':
-                self.self.change_grid()
+                self.change_grid()
             if param.name()=='refresh_interval':
                 self.timer.setInterval(data)
        
 
     need_change_grid = pyqtSignal()
-    def change_grid(self, param):
+    def change_grid(self, param=None):
         if not self.grid_changing:
             self.need_change_grid.emit()
         
