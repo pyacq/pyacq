@@ -25,7 +25,7 @@ param_global = [
 param_timefreq = [ 
     {'name': 'f_start', 'type': 'float', 'value': 3., 'step': 1.},
     {'name': 'f_stop', 'type': 'float', 'value': 90., 'step': 1.},
-    {'name': 'deltafreq', 'type': 'float', 'value': 3., 'step': 1.,  'limits' : (0.001, 1.e6)},
+    {'name': 'deltafreq', 'type': 'float', 'value': 3., 'step': 1.,  'limits' : (0.1, 1.e6)},
     {'name': 'f0', 'type': 'float', 'value': 2.5, 'step': 0.1},
     {'name': 'normalisation', 'type': 'float', 'value': 0., 'step': 0.1},
     ]

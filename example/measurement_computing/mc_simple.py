@@ -40,10 +40,11 @@ def test2():
     # Configure and start
     dev = MeasurementComputingMultiSignals(streamhandler = streamhandler)
     dev.configure( board_num = 0,
-                          sampling_rate =1000.,
+                          sampling_rate =10000.,
                           buffer_length = 5.,
-                          channel_indexes = range(64),
+                          #~ channel_indexes = range(64),
                           #~ channel_indexes = [0,4, 16],
+                          channel_indexes = [0],
                                 )
     dev.initialize()
     dev.start()

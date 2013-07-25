@@ -55,7 +55,7 @@ cbw = CBW()
 
 
 def device_mainLoop(stop_flag, streams, board_num):
-    streamAD = self.streams[0]
+    streamAD = streams[0]
     
     packet_size = streamAD['packet_size']
     sampling_rate = streamAD['sampling_rate']
@@ -66,7 +66,7 @@ def device_mainLoop(stop_flag, streams, board_num):
 
     context = zmq.Context()
     socket = context.socket(zmq.PUB)
-    socket.bind("tcp://*:{}".format(stream['port']))
+    socket.bind("tcp://*:{}".format(streamAD['port']))
 
     
     #~ chan_array = np.array( range(64)+[UL.FIRSTPORTA, UL.FIRSTPORTB, UL.FIRSTPORTC], dtype = np.int16)
@@ -75,19 +75,24 @@ def device_mainLoop(stop_flag, streams, board_num):
     gain_array = np.array( [UL.BIP10VOLTS] *nb_channel_ad, dtype = np.int16)
     real_sr = ctypes.c_long(int(sampling_rate))
     # FIXME buffer size
-    internal_size = int(3.*sampling_rate)
+    internal_size = int(30.*sampling_rate)
     internal_size = internal_size- internal_size%packet_size
-    int16_arr = np.zeros((nb_total_channel,  internal_size), dtype = np.int16)
+    print internal_size
+    int16_arr = np.zeros(( internal_size, nb_total_channel), dtype = np.uint16)
     pretrig_count = ctypes.c_long(0)
     total_count = ctypes.c_long(int(int16_arr.size))
     # FIXME try with other card
     options = UL.BACKGROUND + UL.BLOCKIO  + UL.CONTINUOUS + UL.CONVERTDATA
+    #~ options = UL.BACKGROUND + UL.DMAIO  + UL.CONTINUOUS + UL.CONVERTDATA
+    #~ options = UL.BACKGROUND  + UL.CONTINUOUS + UL.CONVERTDATA
+    
     try:
         # this is SLOW!!!!:
         cbw.cbDaqInScan(board_num, chan_array.ctypes.data,  chan_array_type.ctypes.data,
                             gain_array.ctypes.data, nb_total_channel, byref(real_sr), byref(pretrig_count),
                              byref(total_count) ,int16_arr.ctypes.data, options)
-    except ULError:
+    except ULError as e:
+        print e
         print 'not able to cbDaqInScan properly'
         return
     
@@ -98,12 +103,14 @@ def device_mainLoop(stop_flag, streams, board_num):
     
     # TODO this
     dict_gain = {UL.BIP10VOLTS: [-10., 10.],
+                        UL.BIP1VOLTS: [-1., 1.],
                         }
     low_range = np.array([ dict_gain[g][0] for g in gain_array ])
     hight_range = np.array([ dict_gain[g][1] for g in gain_array ])
     buffer_gains = 1./(2**16)*(hight_range-low_range)
     buffer_gains = buffer_gains[ :, np.newaxis]
-    #~ buffer_offsets = 0
+    buffer_offsets = low_range
+    buffer_offsets = buffer_offsets[ :, np.newaxis]
     
     pos = abs_pos = 0
     last_index = 0
@@ -121,32 +128,35 @@ def device_mainLoop(stop_flag, streams, board_num):
                 continue
             t1 = time.time()
             if index<last_index:
-                new_size = int16_arr.shape[1] - last_index
+                new_size = int16_arr.shape[0] - last_index
                 
-                np_arr[:,pos:pos+new_size] = int16_arr[:, last_index:]
+                np_arr[:,pos:pos+new_size] = int16_arr[last_index:, :].transpose()
                 np_arr[:,pos:pos+new_size] *= buffer_gains
-                #~ np_arr[:,pos:pos+new_size] += buffer_offsets
+                np_arr[:,pos:pos+new_size] += buffer_offsets
                 
-                end = min(pos+half_size+new_size, np_arr.shape[1])
+                end = min(pos+half_size+new_size, np_arr.shape[0])
                 new_size = min(new_size, np_arr.shape[1]-(pos+half_size))
-                np_arr[:,pos+half_size:pos+half_size+new_size] = int16_arr[:, last_index:last_index+new_size]
+                np_arr[:,pos+half_size:pos+half_size+new_size] = int16_arr[ last_index:last_index+new_size, :].transpose()
                 np_arr[:,pos+half_size:pos+half_size+new_size] *= buffer_gains
-                #~ np_arr[:,pos+half_size:pos+half_size+new_size] += buffer_offsets
+                np_arr[:,pos+half_size:pos+half_size+new_size] += buffer_offsets
                 
-                pos = abs_pos%half_size
                 abs_pos += new_size
+                pos = abs_pos%half_size
                 last_index = 0
 
             new_size = index - last_index
-            np_arr[:,pos:pos+new_size] = int16_arr[:, last_index:index]
+            
+            np_arr[:,pos:pos+new_size] = int16_arr[ last_index:index, : ].transpose()
             np_arr[:,pos:pos+new_size] *= buffer_gains
+            np_arr[:,pos:pos+new_size] += buffer_offsets
             
             new_size = min(new_size, np_arr.shape[1]-(pos+half_size))
-            np_arr[:,pos+half_size:pos+new_size+half_size] = int16_arr[:, last_index:last_index+new_size]
+            np_arr[:,pos+half_size:pos+new_size+half_size] = int16_arr[ last_index:last_index+new_size, : ].transpose()
             np_arr[:,pos+half_size:pos+new_size+half_size] *= buffer_gains
+            np_arr[:,pos+half_size:pos+new_size+half_size] += buffer_offsets
             
-            pos = abs_pos%half_size
             abs_pos += new_size
+            pos = abs_pos%half_size
             last_index = index
 
             
@@ -167,6 +177,7 @@ def device_mainLoop(stop_flag, streams, board_num):
         t2 = time.time()
         #~ time.sleep(packet_size/sampling_rate)
         #~ print t2-t1, max(packet_size/sampling_rate-(t2-t1) , 0) , packet_size/sampling_rate
+        #~ print 'sleep', packet_size/sampling_rate-(t2-t1), packet_size/sampling_rate, t2-t1
         time.sleep(max(packet_size/sampling_rate-(t2-t1), 0))
         #~ print 'half sleep'
         
@@ -298,7 +309,7 @@ class MeasurementComputingMultiSignals(DeviceBase):
         self.stop_flag = mp.Value('i', 0)
         
         
-        mp_arr = s['shared_array'].mp_array
+        #~ mp_arr = s['shared_array'].mp_array
         self.process = mp.Process(target = device_mainLoop,  args=(self.stop_flag, self.streams, self.board_num) )
         self.process.start()
         

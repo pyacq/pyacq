@@ -223,12 +223,14 @@ class Oscilloscope(QtGui.QWidget):
             self.all_mean, self.all_sd = None, None
             return None, None
         pos =self.thread_pos.pos
+        head = pos%self.half_size+self.half_size
+        tail = head-self.intsize
         n = self.stream['nb_channel']
         #~ self.all_mean =  np.array([ np.mean(self.np_array[i,:pos]) for i in range(n) ])
         #~ self.all_sd = np.array([ np.std(self.np_array[i,:pos]) for i in range(n) ])
         # better than std and mean
-        self.all_mean = np.array([ np.median(self.np_array[i,:pos]) for i in range(n) ])
-        self.all_sd=  np.array([ np.median(np.abs(self.np_array[i,:pos]-self.all_mean[i])/.6745) for i in range(n) ])
+        self.all_mean = np.array([ np.median(self.np_array[i,tail:head]) for i in range(n) ])
+        self.all_sd=  np.array([ np.median(np.abs(self.np_array[i,:tail:head]-self.all_mean[i])/.6745) for i in range(n) ])
         return self.all_mean, self.all_sd
 
     
@@ -354,12 +356,18 @@ class OscilloscopeControler(QtGui.QWidget):
     
     def on_auto_gain_and_offset(self):
         mode = self.sender().mode
-        selected = self.multi.selected()
+        if self.viewer.stream['nb_channel']>1:
+            selected = self.multi.selected()
+        else:
+            selected = np.ones(1, dtype = bool)
         self.viewer.auto_gain_and_offset(mode = mode, selected = selected)
     
     def on_automatic_color(self, cmap_name = None):
         cmap_name = 'jet'
-        selected = self.multi.selected()
+        if self.viewer.stream['nb_channel']>1:
+            selected = self.multi.selected()
+        else:
+            selected = np.ones(1, dtype = bool)
         self.viewer.automatic_color(cmap_name = cmap_name, selected = selected)
             
     def on_gain_zoom(self):
