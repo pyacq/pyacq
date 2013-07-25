@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 
-from .fakemultisignals import FakeMultiSignals
+from .fakedevices import FakeMultiSignals, FakeDigital
 
 try:
     from .measurementcomputing import MeasurementComputingMultiSignals

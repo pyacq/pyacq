@@ -8,4 +8,3 @@ if sys.platform.startswith('win'):
 from oscilloscope import Oscilloscope
 from timefreq import TimeFreq
 
-from topoplot import Topoplot

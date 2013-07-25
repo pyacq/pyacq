@@ -1,5 +1,16 @@
 # -*- coding: utf-8 -*-
+"""
 
+Emotiv acquisition :
+Reverse engineering and original crack code written by
+
+    Cody Brocious (http://github.com/daeken)
+    Kyle Machulis (http://github.com/qdot)
+
+Many thanks for their contribution.
+
+
+"""
 import multiprocessing as mp
 import numpy as np
 import msgpack
@@ -57,16 +68,19 @@ class EmotivMultiSignals(DeviceBase):
     def initialize(self):
         
         self.name = 'Emo acc'
-        self.sampling_rate = 128
+        self.sampling_rate = 128.
         self.nb_gyro = 2
         self.nb_channel = 14
-        self.packet_size = 1.
+        self.packet_size = 1
         self.channel_names = [ 'F3', 'F4', 'P7', 'FC6', 'F7', 'F8','T7','P8','FC5','AF4','T8','O2','O1','FC3']  #TODO : confirm order
         self.impedances_names = [ 'Quality_F3', 'Quality_F4', 'Quality_P7', 'Quality_FC6', 'Quality_F7','Quality_F8','Quality_T7','Quality_P8','Quality_FC5','Quality_AF4','Quality_T8','Quality_O2','Quality_O1','Quality_FC3']
         self.gyro_names = [ 'X','Y']   # Unknown' sup parameter (see Daeken notes)
         
         self.sampling_rate = float(self.sampling_rate)
         self._os_decryption = False
+        
+        l = int(self.sampling_rate*self.buffer_length)
+        self.buffer_length = (l - l%self.packet_size)/self.sampling_rate
 
         # Stream Channels
         self.channel_indexes = range(self.nb_channel) 

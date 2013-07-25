@@ -36,7 +36,7 @@ def test1():
     dev.configure( name = 'Test dev',
                                 nb_channel = 10,
                                 sampling_rate =1000.,
-                                buffer_length = 6.4,
+                                buffer_length = 10.,
                                 packet_size = 128,
                                 )
     dev.initialize()

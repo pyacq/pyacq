@@ -5,13 +5,12 @@
 
 """
 
-from pyacq import StreamHandler, EmotivMultiSignals
+from pyacq import StreamHandler, FakeDigital
 
 import zmq
 import msgpack
 import time
 import multiprocessing as mp
-
 
 
 
@@ -28,12 +27,18 @@ def test_recv_loop(port, stop_recv):
     print 'stop receiver'
 
 
-def run_Emotiv():
+
+def test1():
     streamhandler = StreamHandler()
     
     # Configure and start
-    dev = EmotivMultiSignals(streamhandler = streamhandler)
-    dev.configure(buffer_length = 1800) 
+    dev = FakeDigital(streamhandler = streamhandler)
+    dev.configure( name = 'Test dev',
+                                nb_channel = 10,
+                                sampling_rate =1000.,
+                                buffer_length = 10.,
+                                packet_size = 128,
+                                )
     dev.initialize()
     dev.start()
     
@@ -45,12 +50,13 @@ def run_Emotiv():
     time.sleep(10.)
     stop_recv.value = 1
     process.join()
-        
-    # Stope and release the device
+    
+
+    # Stop and release the device
     dev.stop()
     dev.close()
 
 
 
 if __name__ == '__main__':
-    run_Emotiv()
+    test1()

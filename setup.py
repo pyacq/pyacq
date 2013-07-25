@@ -4,10 +4,11 @@ from setuptools import setup
 import os
 
 long_description = open("README.rst").read()
+import pyacq
 
 setup(
     name = "pyacq",
-    version = '0.1.0dev',
+    version = pyacq.__version__,
     packages = ['pyacq', ],
     install_requires=[
                     'numpy',

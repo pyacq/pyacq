@@ -291,7 +291,7 @@ class MeasurementComputingMultiSignals(DeviceBase):
         
         l = int(self.sampling_rate*self.buffer_length)
         self.buffer_length = (l - l%self.packet_size)/self.sampling_rate
-        print 'buffer_length', self.buffer_length
+        #~ print 'buffer_length', self.buffer_length
         self.name = '{} #{}'.format(info['board_name'], info['factory_id'])
         s  = self.streamhandler.new_signals_stream(name = self.name, sampling_rate = self.sampling_rate,
                                                         nb_channel = self.nb_channel, buffer_length = self.buffer_length,
