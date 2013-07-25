@@ -45,49 +45,58 @@ class EmotivMultiSignals(DeviceBase):
     def __init__(self,  **kargs):
         DeviceBase.__init__(self, **kargs)
     
-    def configure(self, **kargs):
-        self.params = { }
-        self.params.update(kargs)
-        self.__dict__.update(kargs)
-        
-        self.sampling_rate = 128
-        self.nb_gyro = 2
-        
+    
+    def configure(self, buffer_length= 5.12,
+                                    ):
+        self.params = {
+                                'buffer_length' : buffer_length,
+                                }
+        self.__dict__.update(self.params)
         self.configured = True
 
     def initialize(self):
+        
+        self.name = 'Emo acc'
+        self.sampling_rate = 128
+        self.nb_gyro = 2
+        self.nb_channel = 14
+        self.packet_size = 1.
+        self.channel_names = [ 'F3', 'F4', 'P7', 'FC6', 'F7', 'F8','T7','P8','FC5','AF4','T8','O2','O1','FC3']  #TODO : confirm order
+        self.impedances_names = [ 'Quality_F3', 'Quality_F4', 'Quality_P7', 'Quality_FC6', 'Quality_F7','Quality_F8','Quality_T7','Quality_P8','Quality_FC5','Quality_AF4','Quality_T8','Quality_O2','Quality_O1','Quality_FC3']
+        self.gyro_names = [ 'X','Y']   # Unknown' sup parameter (see Daeken notes)
         
         self.sampling_rate = float(self.sampling_rate)
         self._os_decryption = False
 
         # Stream Channels
-        channel_indexes = range(self.nb_channel) 
-        channel_names = [ 'F3', 'F4', 'P7', 'FC6', 'F7', 'F8','T7','P8','FC5','AF4','T8','O2','O1','FC3']  #TODO : confirm order
-        s_chan = self.stream = self.streamhandler.new_signals_stream(name = self.name, sampling_rate = self.sampling_rate,
+        self.channel_indexes = range(self.nb_channel) 
+        s_chan = self.streamhandler.new_signals_stream(name = self.name, sampling_rate = self.sampling_rate,
                                                         nb_channel = self.nb_channel, buffer_length = self.buffer_length,
                                                         packet_size = self.packet_size, dtype = np.float64,
-                                                        channel_names = channel_names, channel_indexes = channel_indexes,            
+                                                        channel_names = self.channel_names, channel_indexes = self.channel_indexes,            
                                                         )
-        arr_size = self.stream['shared_array'].shape[1]
+        
+        
+        arr_size = s_chan['shared_array'].shape[1]
         assert (arr_size/2)%self.packet_size ==0, 'buffer should be a multilple of pcket_size {}/2 {}'.format(arr_size, self.packet_size)
         
         # Stream Impedances
-        impedances_indexes = range(self. nb_channel)
-        impedances_names = [ 'Quality_F3', 'Quality_F4', 'Quality_P7', 'Quality_FC6', 'Quality_F7','Quality_F8','Quality_T7','Quality_P8','Quality_FC5','Quality_AF4','Quality_T8','Quality_O2','Quality_O1','Quality_FC3']
-        s_imp = self.stream2 = self.streamhandler.new_signals_stream(name = self.name, sampling_rate = self.sampling_rate,
+        self.impedances_indexes = range(self. nb_channel)
+        s_imp = self.streamhandler.new_signals_stream(name = self.name, sampling_rate = self.sampling_rate,
                                                         nb_channel = self.nb_channel, buffer_length = self.buffer_length,
                                                         packet_size = self.packet_size, dtype = np.float64,
-                                                        channel_names = impedances_names, channel_indexes = impedances_indexes,            
+                                                        channel_names = self.impedances_names, channel_indexes = self.impedances_indexes,            
                                                         )
                                                         
         # Stream Gyro
-        gyro_indexes = range(self. nb_gyro)
-        gyro_names = [ 'X','Y']   # Unknown' sup parameter (see Daeken notes)
-        s_gyro = self.stream3 = self.streamhandler.new_signals_stream(name = self.name, sampling_rate = self.sampling_rate,
+        self.gyro_indexes = range(self. nb_gyro)
+        s_gyro = self.streamhandler.new_signals_stream(name = self.name, sampling_rate = self.sampling_rate,
                                                         nb_channel = self.nb_gyro, buffer_length = self.buffer_length,
                                                         packet_size = self.packet_size, dtype = np.float64,
-                                                        channel_names = gyro_names, channel_indexes = gyro_indexes,            
+                                                        channel_names = self.gyro_names, channel_indexes = self.gyro_indexes,            
                                                         )
+        
+        self.streams = [s_chan, s_imp, s_gyro,  ]
         
         if windows:
             self.setupWin()
@@ -123,11 +132,13 @@ class EmotivMultiSignals(DeviceBase):
         
         self.stop_flag = mp.Value('i', 0) #flag pultiproc  = global 
         
-        s_chan = self.stream
-        s_imp = self.stream2
+        s_chan = self.streams[0]
+        s_imp = self.streams[1]
+        s_gyro = self.streams[2]
+        #s_imp = self.stream2
         mp_arrChan = s_chan['shared_array'].mp_array
         mp_arrImp = s_imp['shared_array'].mp_array
-        self.process = mp.Process(target = emotiv_mainLoop,  args=(self.stop_flag, self.stream, self.stream2, self.hidraw, self._os_decryption, self.cipher, self.sensors, self.nb_channel) )
+        self.process = mp.Process(target = emotiv_mainLoop,  args=(self.stop_flag, s_chan, s_imp, s_gyro, self.hidraw, self._os_decryption, self.cipher, self.sensors, self.nb_channel) )
         self.process.start()
    
         print 'FakeMultiAnalogChannel started:', self.name
@@ -272,7 +283,7 @@ class EmotivMultiSignals(DeviceBase):
 
 
 
-def emotiv_mainLoop(stop_flag, streamChan, streamImp, hidraw, _os_decryption, cipher, sensors, nb_channel):
+def emotiv_mainLoop(stop_flag, streamChan, streamImp, streamGyro, hidraw, _os_decryption, cipher, sensors, nb_channel):
     import zmq
     pos = 0
     abs_pos = pos2 = 0
@@ -287,8 +298,7 @@ def emotiv_mainLoop(stop_flag, streamChan, streamImp, hidraw, _os_decryption, ci
     half_size = np_arr.shape[1]/2
     
     precomputed = np.array(1, dtype = np.int32)
-    
-    print("main loop")
+
     
     # Linux Style
     while True:

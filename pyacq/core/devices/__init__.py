@@ -2,4 +2,14 @@
 
 
 from .fakemultisignals import FakeMultiSignals
-from .emotiv import EmotivMultiSignals
+
+try:
+    from .measurementcomputing import MeasurementComputingMultiSignals
+except :
+    pass
+
+
+try:
+    from .emotiv import EmotivMultiSignals
+except :
+    pass

@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-Oscilloscope example
+Oscilloscope  and tfr example
 """
 
-from pyacq import StreamHandler, FakeMultiSignals, TimestampServer
+from pyacq import StreamHandler, FakeMultiSignals
+from pyacq.gui import Oscilloscope
 from pyacq.gui import TimeFreq
 
 import msgpack
@@ -22,17 +23,25 @@ def test1():
     # Configure and start
     dev = FakeMultiSignals(streamhandler = streamhandler)
     dev.configure( name = 'Test dev',
-                                nb_channel = 64,
+                                nb_channel = 32,
                                 sampling_rate =1000.,
                                 buffer_length = 64.,
-                                packet_size = 128,
+                                packet_size = 16,
                                 )
     dev.initialize()
     dev.start()
     
     app = QtGui.QApplication([])
-    w1=TimeFreq(stream = dev.stream)
+    w1=Oscilloscope(stream = dev.streams[0])
+    w1.change_param_global(refresh_interval = 40,
+                                                        xsize = 2.)
+    w1.auto_gain_and_offset(mode = 2)
     w1.show()
+    
+    w2 = TimeFreq(stream = dev.streams[0], max_visible_on_open = 4)
+    w2.change_param_global(refresh_interval = 40,
+                                                        xsize = 2., nb_column = 1)
+    w2.show()
     
     app.exec_()
     

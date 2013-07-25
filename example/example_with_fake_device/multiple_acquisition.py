@@ -5,33 +5,33 @@ Use gevent for threading so need green version of zmq.
 
 """
 
-from pyacq import StreamHandler, FakeMultiSignals, TimestampServer
+from pyacq import StreamHandler, FakeMultiSignals
 import msgpack
 import gevent
 import zmq.green as zmq
 
 
-def test_recv_loop(device):
+
+
+def test_recv_loop(port, stop):
     import zmq.green as zmq
-    print('start rcv loop', device.stream['port'])
+    print 'start receiver loop' , port
     context = zmq.Context()
     socket = context.socket(zmq.SUB)
     socket.setsockopt(zmq.SUBSCRIBE,'')
-    socket.connect("tcp://localhost:{}".format(device.stream['port']))
-    for i in range(50):
+    socket.connect("tcp://localhost:{}".format(port))
+    while not stop.is_set():
         message = socket.recv()
         pos = msgpack.loads(message)
-        #~ print('On port {} read pos is {}'.format( device.stream['port'], pos))
+        print 'On port {} read pos is {}'.format( port, pos)
+    print 'stop receiver'
 
-
-def print_sampling_rate(timestampserver, port):
-    sr = timestampserver.estimate_sampling_rate(port)
-    print('On port {} samplingrate is {}'.format( port, sr))
 
 
 def test1():
     streamhandler = StreamHandler()
-    timestampserver = TimestampServer()
+    #~ timestampserver = timestampserver()
+    n= 4 
     devices = [ ]
     sampling_rates = [10., 500., 1000., 10000.]
     packet_sizes =  [4, 32, 64, 128]
@@ -47,7 +47,7 @@ def test1():
                                     )
         dev.initialize()
         devices.append(dev)
-        timestampserver.follow_stream(dev.stream)
+        #~ timestampserver.follow_stream(dev.stream)
         
     
     gevent.sleep(1)
@@ -56,11 +56,13 @@ def test1():
         dev.start()
     gevent.sleep(1)
     
-    greenlets = [ gevent.spawn(test_recv_loop, dev) for dev in devices ]
-    for i in range(4):
-        gevent.spawn_later(2., print_sampling_rate, timestampserver, devices[i] .stream['port'])
+    stops = [ gevent.event.Event() for dev in devices ]
+    greenlets = [ gevent.spawn(test_recv_loop, dev.streams[0]['port'], stop) for dev, stop in zip(devices, stops) ]
     gevent.sleep(5)
+    for stop in stops:
+        stop.set()
     
+    gevent.sleep(1.)
     
     for i, dev in enumerate(devices):
         dev.stop()

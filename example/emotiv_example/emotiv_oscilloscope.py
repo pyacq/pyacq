@@ -3,7 +3,7 @@
 Oscilloscope example
 """
 
-from pyacq import StreamHandler, FakeMultiSignals, TimestampServer, EmotivMultiSignals
+from pyacq import StreamHandler, FakeMultiSignals, EmotivMultiSignals
 from pyacq.gui import Oscilloscope, TimeFreq
 
 import msgpack
@@ -21,24 +21,19 @@ def emotiv_oscillo():
     
     # Configure and start
     dev = EmotivMultiSignals(streamhandler = streamhandler)
-    dev.configure( name = 'Emo Acc',
-                                nb_channel = 14,
-                                buffer_length = 1800,    # doit être un multiple du packet size
-                                packet_size = 1,
-                                )
+    dev.configure(buffer_length = 1800)   # doit être un multiple du packet size
     dev.initialize()
     dev.start()
     
     app = QtGui.QApplication([])
-    w1=Oscilloscope(stream = dev.stream)
+    w1=Oscilloscope(stream = dev.streams[0])
     w1.show()
-    print"ok"
 
-    w2=Oscilloscope(stream = dev.stream)
+    w2=Oscilloscope(stream = dev.streams[0])
     w2.show()
 
 
-    w3=TimeFreq(stream = dev.stream)
+    w3=TimeFreq(stream = dev.streams[0])
     w3.show()    
     
     app.exec_()

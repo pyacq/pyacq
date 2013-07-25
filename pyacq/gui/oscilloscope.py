@@ -13,21 +13,15 @@ from matplotlib.colors import ColorConverter
 
 
 param_global = [
-    #~ {'name': 'xsize', 'type': 'logfloat', 'value': 10., 'step': 0.1},
     {'name': 'xsize', 'type': 'logfloat', 'value': 1., 'step': 0.1},
     {'name': 'ylims', 'type': 'range', 'value': [-10., 10.] },
     {'name': 'background_color', 'type': 'color', 'value': 'k' },
     {'name': 'refresh_interval', 'type': 'int', 'value': 100 , 'limits':[5, 1000]},
+    {'name': 'mode', 'type': 'list', 'value': 'scan' , 'values' : ['scan', 'scroll'] },
     ]
 
 param_by_channel = [ 
-    #~ {'name': 'channel_name', 'type': 'str', 'value': '','readonly' : True},
-    #~ {'name': 'channel_index', 'type': 'str', 'value': '','readonly' : True},
-    {'name': 'color', 'type': 'color', 'value': "FF0"},
-    #~ {'name': 'width', 'type': 'float', 'value': 1. , 'step': 0.1},
-    #~ {'name': 'style', 'type': 'list', 
-                #~ 'values': OrderedDict([ ('SolidLine', Qt.SolidLine), ('DotLine', Qt.DotLine), ('DashLine', Qt.DashLine),]), 
-                #~ 'value': Qt.SolidLine},
+    {'name': 'color', 'type': 'color', 'value': '#7FFF00'},
     {'name': 'gain', 'type': 'float', 'value': 1, 'step': 0.1},
     {'name': 'offset', 'type': 'float', 'value': 0., 'step': 0.1},
     {'name': 'visible', 'type': 'bool', 'value': True},
@@ -80,6 +74,9 @@ class Oscilloscope(QtGui.QWidget):
         self.thread_pos = RecvPosThread(socket = self.socket, port = self.stream['port'])
         self.thread_pos.start()
         
+        self.last_pos = 0
+        self.all_mean, self.all_sd = None, None
+        
         self.timer = QtCore.QTimer(interval = 100)
         self.timer.timeout.connect(self.refresh)
         self.timer.start()
@@ -105,15 +102,18 @@ class Oscilloscope(QtGui.QWidget):
         
         self.paramControler = OscilloscopeControler(parent = self)
         self.paramControler.setWindowFlags(Qt.Window)
-        self.viewBox.zoom.connect(self.paramControler.gain_zoom)
+        self.viewBox.zoom.connect(self.gain_zoom)
 
         
         # Create curve items
         self.curves = [ ]
         for i, channel_index, channel_name in zip(range(n), stream['channel_indexes'], stream['channel_names']):
-            color = self.paramChannels.children()[i].param('color').value()
-            curve = self.plot.plot([np.nan], [np.nan], pen = color)
-            self.curves.append(curve)            
+            color = self.paramChannels.children()[i]['color']
+            #~ curve = self.plot.plot([np.nan], [np.nan], pen = color)
+            #~ self.curves.append(curve)
+            curve = pg.PlotCurveItem(pen = color)
+            self.plot.addItem(curve)
+            self.curves.append(curve)
         
         self.paramGlobal.param('xsize').setValue(3)
 
@@ -132,7 +132,16 @@ class Oscilloscope(QtGui.QWidget):
     def on_param_change(self, params, changes):
         for param, change, data in changes:
             if change != 'value': continue
-            if param.name() in ['gain', 'offset', 'visible', 'ylims']: continue # done in refresh
+            if param.name() in ['gain', 'offset']: 
+                self.last_pos = self.thread_pos.pos - self.intsize
+            if param.name()=='ylims':
+                continue
+            if param.name()=='visible':
+                c = self.paramChannels.children().index(param.parent())
+                if data:
+                    self.curves[c].show()
+                else:
+                    self.curves[c].hide()
             if param.name()=='color':
                 i = self.paramChannels.children().index(param.parent())
                 pen = pg.mkPen(color = data)
@@ -143,44 +152,148 @@ class Oscilloscope(QtGui.QWidget):
                 xsize = data
                 sr = self.stream['sampling_rate']
                 self.intsize = int(xsize*sr)
-                self.t_vect = np.arange(self.intsize, dtype = np.float64)/sr
+                self.t_vect = np.arange(self.intsize, dtype = self.np_array.dtype)/sr
                 self.t_vect -= self.t_vect[-1]
+                self.curves_data = [ np.zeros( ( self.intsize), dtype = self.np_array.dtype) for i in range(self.stream['nb_channel']) ]
+                
             if param.name()=='refresh_interval':
                 self.timer.setInterval(data)
+            if param.name()=='mode':
+                self.curves_data = [ np.zeros( ( self.intsize), dtype = self.np_array.dtype) for i in range(self.stream['nb_channel']) ]
+                self.last_pos = self.thread_pos.pos
 
+
+    def refresh(self):
+        if self.thread_pos.pos is None: return
+        pos = self.thread_pos.pos
+
+        mode = self.paramGlobal['mode']
+        gains = np.array([p['gain'] for p in self.paramChannels.children()])
+        offsets = np.array([p['offset'] for p in self.paramChannels.children()])
+        visibles = np.array([p['visible'] for p in self.paramChannels.children()], dtype = bool)
+        
+        
+        if mode=='scroll':
+            head = pos%self.half_size+self.half_size
+            tail = head-self.intsize
+            np_arr = self.np_array[:, tail:head]
+            for c, g, o,v in zip(range(gains.size), gains, offsets, visibles):
+                if v :
+                    self.curves_data[c] = np_arr[c,:]*g+o
+        else:
+            new = (pos-self.last_pos)
+            if new>=self.intsize: new = self.intsize-1
+            head = pos%self.half_size+self.half_size
+            tail = head - new
+            np_arr = self.np_array[:, tail:head]
+            i1 = (pos-new)%self.intsize
+            i2 = pos%self.intsize
+            if i1>i2:
+                for c in range(gains.size):
+                    if visibles[c]:
+                        self.curves_data[c][i1:] = np_arr[c,:self.intsize-i1]*gains[c]+offsets[c]
+                        if i2!=0:
+                            self.curves_data[c][:i2] = np_arr[c,-i2:]*gains[c]+offsets[c]
+            else:
+                for c in range(gains.size):
+                    if visibles[c]:
+                        self.curves_data[c][i1:i2] = np_arr[c,:]*gains[c]+offsets[c]
+            self.last_pos = pos
+        
+        for c, curve in enumerate(self.curves):
+            p = self.paramChannels.children()[c]
+            if not p['visible']:  continue
+            curve.setData(self.t_vect, self.curves_data[c], antialias = False)
+            # Does this optmize ???
+            #~ curve.path = None
+            #~ curve.fillPath = None            
+            #~ curve.update()            
+            
+            
+        self.plot.setXRange( self.t_vect[0], self.t_vect[-1])
+        ylims  =self.paramGlobal['ylims']
+        self.plot.setYRange( *ylims )
+    
+    
+            
+    
+    #
     def autoestimate_scales(self):
-        if self.thread_pos.pos is None: return None, None
+        if self.thread_pos.pos is None: 
+            self.all_mean, self.all_sd = None, None
+            return None, None
         pos =self.thread_pos.pos
+        head = pos%self.half_size+self.half_size
+        tail = head-self.intsize
         n = self.stream['nb_channel']
         #~ self.all_mean =  np.array([ np.mean(self.np_array[i,:pos]) for i in range(n) ])
         #~ self.all_sd = np.array([ np.std(self.np_array[i,:pos]) for i in range(n) ])
         # better than std and mean
-        self.all_mean = np.array([ np.median(self.np_array[i,:pos]) for i in range(n) ])
-        self.all_sd=  np.array([ np.median(np.abs(self.np_array[i,:pos]-self.all_mean[i])/.6745) for i in range(n) ])
+        self.all_mean = np.array([ np.median(self.np_array[i,tail:head]) for i in range(n) ])
+        self.all_sd=  np.array([ np.median(np.abs(self.np_array[i,:tail:head]-self.all_mean[i])/.6745) for i in range(n) ])
         return self.all_mean, self.all_sd
 
     
-    def refresh(self):
-        if self.thread_pos.pos is None: return
-        head = self.thread_pos.pos%self.half_size+self.half_size
-        tail = head-self.intsize
-        np_arr = self.np_array[:,tail:head]
+    def auto_gain_and_offset(self, mode = 0, selected = None):
+        """
+        mode = 0, 1, 2
+        """
+        nb_channel = self.stream['nb_channel']
+        if selected is None:
+            selected = np.ones(nb_channel, dtype = bool)
         
-        for c, curve in enumerate(self.curves):
-            p = self.paramChannels.children()[c]
-            if not p.param('visible').value():
-                curve.setData([np.nan], [np.nan])
-                continue
-            
-            g = p.param('gain').value()
-            o = p.param('offset').value()
-            curve.setData(self.t_vect, np_arr[c,:]*g+o)
+        n = np.sum(selected)
+        if n==0: return
         
-        self.plot.setXRange( self.t_vect[0], self.t_vect[-1])
-        ylims  = self.paramGlobal.param('ylims').value()
-        self.plot.setYRange( *ylims )
+        av, sd = self.autoestimate_scales()
+        if av is None: return
         
+        if mode==0:
+            ylims = [np.min(av[selected]-3*sd[selected]), np.max(av[selected]+3*sd[selected]) ]
+            gains = np.ones(nb_channel, dtype = float)
+            offsets = np.zeros(nb_channel, dtype = float)
+        elif mode in [1, 2]:
+            ylims  = [-.5, n-.5 ]
+            gains = np.zeros(nb_channel, dtype = float)
+            if mode==1:
+                gains = np.ones(nb_channel, dtype = float) * 1./(6*max(sd[selected]))
+            elif mode==2:
+                gains = 1/(6*sd)
+            offsets = np.zeros(nb_channel, dtype = float)
+            offsets[selected] = range(n)[::-1] - av[selected]*gains[selected]
+        
+        # apply
+        for i in range(nb_channel):
+            self.change_param_channel(i, 
+                                                                        gain = gains[i],
+                                                                        offset =offsets[i],
+                                                                        visible =selected[i],)
+        self.paramGlobal.param('ylims').setValue(ylims)
 
+    def automatic_color(self, cmap_name = None, selected = None):
+        nb_channel = self.stream['nb_channel']
+        if selected is None:
+            selected = np.ones(nb_channel, dtype = bool)
+        
+        if cmap_name is None:
+            cmap_name = 'jet'
+        n = np.sum(selected)
+        if n==0: return
+        cmap = get_cmap(cmap_name , n)
+        s=0
+        for i in range(self.stream['nb_channel']):
+            if selected[i]:
+                color = [ int(c*255) for c in ColorConverter().to_rgb(cmap(s)) ]
+                self.change_param_channel(i,  color = color)
+                s += 1
+
+    def gain_zoom(self, factor):
+        for i, p in enumerate(self.paramChannels.children()):
+            if self.all_mean is not None:
+                p['offset'] = p['offset'] + self.all_mean[i]*p['gain'] - self.all_mean[i]*p['gain']*factor
+            p['gain'] = p['gain']*factor
+            
+            
 
 
 
@@ -225,11 +338,11 @@ class OscilloscopeControler(QtGui.QWidget):
             but = QPushButton(text)
             v.addWidget(but)
             but.mode = i
-            but.clicked.connect(self.auto_gain_and_offset)
+            but.clicked.connect(self.on_auto_gain_and_offset)
 
         v.addWidget(QLabel(self.tr('<b>Automatic color on selection:<\b>'),self))
         but = QPushButton('Progressive')
-        but.clicked.connect(lambda : self.automatic_color(cmap_name = None))
+        but.clicked.connect(self.on_automatic_color)
         v.addWidget(but)
 
         v.addWidget(QLabel(self.tr('<b>Gain zoom (mouse wheel on graph):<\b>'),self))
@@ -238,59 +351,26 @@ class OscilloscopeControler(QtGui.QWidget):
         for label, factor in [ ('--', 1./10.), ('-', 1./1.3), ('+', 1.3), ('++', 10.),]:
             but = QPushButton(label)
             but.factor = factor
-            but.clicked.connect(self.gain_zoom)
+            but.clicked.connect(self.on_gain_zoom)
             h.addWidget(but)
     
-    def auto_gain_and_offset(self):
+    def on_auto_gain_and_offset(self):
         mode = self.sender().mode
-
-        nb_channel = self.viewer.stream['nb_channel']
-        selected = self.multi.selected()
-        n = np.sum(selected)
-        if n==0: return
-        
-        av, sd = self.viewer.autoestimate_scales()
-        if mode==0:
-            ylims = [np.min(av[selected]-3*sd[selected]), np.max(av[selected]+3*sd[selected]) ]
-            gains = np.ones(nb_channel, dtype = float)
-            offsets = np.zeros(nb_channel, dtype = float)
-        elif mode in [1, 2]:
-            ylims  = [-.5, n-.5 ]
-            gains = np.zeros(nb_channel, dtype = float)
-            if mode==1:
-                gains = np.ones(nb_channel, dtype = float) * 1./n/max(sd[selected])
-            elif mode==2:
-                gains = .6/n/sd
-                #~ gains = 1./n/sd
-            offsets = np.zeros(nb_channel, dtype = float)
-            offsets[selected] = range(n)[::-1] - av[selected]*gains[selected]
-        
-        # apply
-        for i in range(nb_channel):
-            self.viewer.change_param_channel(i, 
-                                                                        gain = gains[i],
-                                                                        offset =offsets[i],
-                                                                        visible =selected[i],)
-        self.viewer.paramGlobal.param('ylims').setValue(ylims)
+        if self.viewer.stream['nb_channel']>1:
+            selected = self.multi.selected()
+        else:
+            selected = np.ones(1, dtype = bool)
+        self.viewer.auto_gain_and_offset(mode = mode, selected = selected)
     
-    
-    def automatic_color(self, cmap_name = None):
-        if cmap_name is None:
-            cmap_name = 'jet'
-        selected = self.multi.selected()
-        n = np.sum(selected)
-        if n==0: return
-        cmap = get_cmap(cmap_name , n)
-        s=0
-        for i in range(self.viewer.stream['nb_channel']):
-            if selected[i]:
-                color = [ int(c*255) for c in ColorConverter().to_rgb(cmap(s)) ]
-                self.viewer.change_param_channel(i,  color = color)
-                s += 1
-    
-    def gain_zoom(self, factor):
-        if type(factor) is bool:# button
-            factor = self.sender().factor
-        for i, p in enumerate(self.viewer.paramChannels.children()):
-            p.param('gain').setValue(p.param('gain').value()*factor)
+    def on_automatic_color(self, cmap_name = None):
+        cmap_name = 'jet'
+        if self.viewer.stream['nb_channel']>1:
+            selected = self.multi.selected()
+        else:
+            selected = np.ones(1, dtype = bool)
+        self.viewer.automatic_color(cmap_name = cmap_name, selected = selected)
+            
+    def on_gain_zoom(self):
+        factor = self.sender().factor
+        self.viewer.gain_zoom(factor)
 

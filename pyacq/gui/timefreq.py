@@ -25,7 +25,7 @@ param_global = [
 param_timefreq = [ 
     {'name': 'f_start', 'type': 'float', 'value': 3., 'step': 1.},
     {'name': 'f_stop', 'type': 'float', 'value': 90., 'step': 1.},
-    {'name': 'deltafreq', 'type': 'float', 'value': 3., 'step': 1.,  'limits' : (0.001, 1.e6)},
+    {'name': 'deltafreq', 'type': 'float', 'value': 3., 'step': 1.,  'limits' : (0.1, 1.e6)},
     {'name': 'f0', 'type': 'float', 'value': 2.5, 'step': 0.1},
     {'name': 'normalisation', 'type': 'float', 'value': 0., 'step': 0.1},
     ]
@@ -169,13 +169,13 @@ class TimeFreq(QtGui.QWidget):
             if param.name()=='colormap':
                 self.initialize_time_freq()
             if param.name()=='nb_column':
-                self.self.change_grid()
+                self.change_grid()
             if param.name()=='refresh_interval':
                 self.timer.setInterval(data)
        
 
     need_change_grid = pyqtSignal()
-    def change_grid(self, param):
+    def change_grid(self, param=None):
         if not self.grid_changing:
             self.need_change_grid.emit()
         
