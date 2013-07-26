@@ -24,7 +24,7 @@ def test_recv_loop(port, stop_recv):
     while stop_recv.value==0:
         message = socket.recv()
         pos = msgpack.loads(message)
-        print 'On port {} read pos is {}'.format( port, pos)
+        print 'On port {} read pos is {}'.format(port, pos)
     print 'stop receiver'
 
 
@@ -38,13 +38,24 @@ def run_Emotiv():
     dev.start()
     
     # Create and starts receiver with multuprocessing
-    stream0 = dev.streams[0]
+    stream_chan = dev.streams[0]
+    stream_imp = dev.streams[1]
+    stream_gyro = dev.streams[2]
     stop_recv = mp.Value('i', 0)
-    process = mp.Process(target= test_recv_loop, args = (stream0['port'],stop_recv))
-    process.start()
+    process_chan = mp.Process(target= test_recv_loop, args = (stream_chan['port'],stop_recv))
+    process_imp = mp.Process(target= test_recv_loop, args = (stream_imp['port'],stop_recv))
+    process_gyro = mp.Process(target= test_recv_loop, args = (stream_gyro['port'],stop_recv))
+    
+    process_chan.start()
+    process_imp.start()
+    process_gyro.start()
+    
     time.sleep(10.)
     stop_recv.value = 1
-    process.join()
+    
+    process_chan.join()
+    process_imp.join()
+    process_gyro.join()
         
     # Stope and release the device
     dev.stop()
