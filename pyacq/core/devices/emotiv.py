@@ -90,7 +90,6 @@ class EmotivMultiSignals(DeviceBase):
                                                         channel_names = self.channel_names, channel_indexes = self.channel_indexes,            
                                                         )
         
-        
         arr_size = s_chan['shared_array'].shape[1]
         assert (arr_size/2)%self.packet_size ==0, 'buffer should be a multilple of pcket_size {}/2 {}'.format(arr_size, self.packet_size)
         
@@ -118,7 +117,7 @@ class EmotivMultiSignals(DeviceBase):
             self.setupPosix()
 
         self._goOn = True   
-        print 'FakeMultiAnalogChannel initialized:', self.name, 'Data Channel: ', s_chan['port'], ' Impedances: ', s_imp['port']
+        print 'Emotiv initialized:', self.name, 'Data Channel: ', s_chan['port'], ' Impedances: ', s_imp['port'], ' Gyrostat: ',s_gyro['port']
 
 
         self.sensors = {
@@ -150,9 +149,9 @@ class EmotivMultiSignals(DeviceBase):
         s_imp = self.streams[1]
         s_gyro = self.streams[2]
         #s_imp = self.stream2
-        mp_arrChan = s_chan['shared_array'].mp_array
-        mp_arrImp = s_imp['shared_array'].mp_array
-        self.process = mp.Process(target = emotiv_mainLoop,  args=(self.stop_flag, s_chan, s_imp, s_gyro, self.hidraw, self._os_decryption, self.cipher, self.sensors, self.nb_channel) )
+        #mp_arrChan = s_chan['shared_array'].mp_array
+        #mp_arrImp = s_imp['shared_array'].mp_array
+        self.process = mp.Process(target = emotiv_mainLoop,  args=(self.stop_flag, s_chan, s_imp, s_gyro, self.hidraw, self._os_decryption, self.cipher, self.sensors, self.nb_channel, self.nb_gyro) )
         self.process.start()
    
         print 'FakeMultiAnalogChannel started:', self.name
@@ -297,28 +296,43 @@ class EmotivMultiSignals(DeviceBase):
 
 
 
-def emotiv_mainLoop(stop_flag, streamChan, streamImp, streamGyro, hidraw, _os_decryption, cipher, sensors, nb_channel):
+def emotiv_mainLoop(stop_flag, streamChan, streamImp, streamGyro, hidraw, _os_decryption, cipher, sensors, nb_channel, nb_gyro):
     import zmq
     pos = 0
     abs_pos = pos2 = 0
-    ################ TODO ##################### second socket and second flow for impedances
+    
+    #Data channels socket
     context = zmq.Context()
-    socket = context.socket(zmq.PUB)
-    socket.bind("tcp://*:{}".format(streamChan['port']))
+    socket_chan = context.socket(zmq.PUB)
+    socket_chan.bind("tcp://*:{}".format(streamChan['port']))
+    
+    #Impedance channels socket
+    socket_imp = context.socket(zmq.PUB)
+    socket_imp.bind("tcp://*:{}".format(streamImp['port']))
+    
+    #Gyro channels socket
+    socket_gyro = context.socket(zmq.PUB)
+    socket_gyro.bind("tcp://*:{}".format(streamGyro['port']))
     
     packet_size = streamChan['packet_size']
     sampling_rate = streamChan['sampling_rate']
-    np_arr = streamChan['shared_array'].to_numpy_array()
-    half_size = np_arr.shape[1]/2
     
-    precomputed = np.array(1, dtype = np.int32)
-
+    np_arr_chan = streamChan['shared_array'].to_numpy_array()
+    chanData = np.array(1, dtype = np.int32)
+    
+    np_arr_imp = streamImp['shared_array'].to_numpy_array()   
+    impData = np.array(1, dtype = np.int32)
+    
+    np_arr_gyro = streamGyro['shared_array'].to_numpy_array()   
+    impGyro = np.array(1, dtype = np.int32)
+    
+    half_size = np_arr_chan.shape[1]/2    # same for the others 
     
     # Linux Style
     while True:
         t1 = time.time()
         try:
-            rawData = hidraw.read(32)
+            rawData = hidraw.read(32)  # blocant ?
             if rawData != "":
                 if _os_decryption:
                     # TODO check if correct
@@ -330,24 +344,33 @@ def emotiv_mainLoop(stop_flag, streamChan, streamImp, streamGyro, hidraw, _os_de
             print("Data not received")
             stop_flag.value = 1
         
-        # Get Channels data
+        print data.sensors
+        # Get Channels data, impedances and gyro
         for name in 'F3 F4 P7 FC6 F7 F8 T7 P8 FC5 AF4 T8 O2 O1 AF3'.split(' '):	
-            precomputed = np.append(precomputed, data.sensors[name]['value'] )
-        precomputed = precomputed[-nb_channel:].reshape(nb_channel,1)
-         #double copy For Chan Data
-        np_arr[:,pos2:pos2+packet_size] = precomputed
-        np_arr[:,pos2+half_size:pos2+packet_size+half_size] = precomputed
+            chanData = np.append(chanData, data.sensors[name]['value'] )
+            impData = np.append(impData, data.sensors[name]['quality'] )
+        chanData = chanData[-nb_channel:].reshape(nb_channel,1)
+        impData = impData[-nb_channel:].reshape(nb_channel,1)
+        gyroData = np.array([data.gyroX, data.gyroY]).reshape(nb_gyro,1)
+        
+        #double copy
+        np_arr_chan[:,pos2:pos2+packet_size] = chanData
+        np_arr_chan[:,pos2+half_size:pos2+packet_size+half_size] = chanData
+        np_arr_imp[:,pos2:pos2+packet_size] = impData
+        np_arr_imp[:,pos2+half_size:pos2+packet_size+half_size] = impData
+        np_arr_gyro[:,pos2:pos2+packet_size] = gyroData
+        np_arr_gyro[:,pos2+half_size:pos2+packet_size+half_size] = gyroData
+        
         pos += packet_size
-        pos = pos%precomputed.shape[1]
+        pos = pos%chanData.shape[1]
         abs_pos += packet_size
         pos2 = abs_pos%half_size
-        socket.send(msgpack.dumps(abs_pos))
         
-        #TODO
-        #Get Channels impedances
+        socket_chan.send(msgpack.dumps(abs_pos))
+        socket_imp.send(msgpack.dumps(abs_pos))
+        socket_gyro.send(msgpack.dumps(abs_pos))
         
-        #Get X and Y gyro data 
-
+        
         if stop_flag.value:
             print 'will stop'
             break
