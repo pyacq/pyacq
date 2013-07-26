@@ -54,43 +54,52 @@ cbw = CBW()
 
 
 
-def device_mainLoop(stop_flag, streams, board_num):
+def device_mainLoop(stop_flag, streams, board_num, ul_dig_ports ):
     streamAD = streams[0]
+    streamDIG = streams[1]
     
     packet_size = streamAD['packet_size']
     sampling_rate = streamAD['sampling_rate']
-    np_arr = streamAD['shared_array'].to_numpy_array()
-    nb_total_channel = streamAD['nb_channel'] + 0 # +3
-    nb_channel_ad = streamAD['nb_channel']
-    half_size = np_arr.shape[1]/2
-
-    context = zmq.Context()
-    socket = context.socket(zmq.PUB)
-    socket.bind("tcp://*:{}".format(streamAD['port']))
-
+    arr_ad = streamAD['shared_array'].to_numpy_array()
     
-    #~ chan_array = np.array( range(64)+[UL.FIRSTPORTA, UL.FIRSTPORTB, UL.FIRSTPORTC], dtype = np.int16)
-    chan_array = np.array( streamAD['channel_indexes'], dtype = np.int16)# +[UL.FIRSTPORTA, UL.FIRSTPORTB, UL.FIRSTPORTC], dtype = np.int16)
-    chan_array_type = np.array( [UL.ANALOG] * nb_channel_ad, dtype = np.int16)   #+[ UL.DIGITAL8] * 3
-    gain_array = np.array( [UL.BIP10VOLTS] *nb_channel_ad, dtype = np.int16)
+    nb_channel_ad = streamAD['nb_channel']
+    half_size = arr_ad.shape[1]/2
+    
+    nb_port_dig = len(ul_dig_ports)
+    arr_dig = streamDIG['shared_array'].to_numpy_array()
+    
+    nb_total_channel = streamAD['nb_channel'] + nb_port_dig
+    
+    context = zmq.Context()
+    socketAD = context.socket(zmq.PUB)
+    socketAD.bind("tcp://*:{}".format(streamAD['port']))
+
+    socketDIG = context.socket(zmq.PUB)
+    socketDIG.bind("tcp://*:{}".format(streamDIG['port']))
+    
+    print 'ul_dig_ports', ul_dig_ports
+    
+    chan_array = np.array( streamAD['channel_indexes']+ul_dig_ports, dtype = np.int16)
+    chan_array_type = np.array( [UL.ANALOG] * nb_channel_ad +[ UL.DIGITAL8] *nb_port_dig  , dtype = np.int16)
+    gain_array = np.array( [UL.BIP10VOLTS] *nb_channel_ad + [0] *nb_port_dig, dtype = np.int16)
     real_sr = ctypes.c_long(int(sampling_rate))
-    # FIXME buffer size
+
     internal_size = int(30.*sampling_rate)
     internal_size = internal_size- internal_size%packet_size
-    print internal_size
-    int16_arr = np.zeros(( internal_size, nb_total_channel), dtype = np.uint16)
+    
+    raw_arr = np.zeros(( internal_size, nb_total_channel), dtype = np.uint16)
     pretrig_count = ctypes.c_long(0)
-    total_count = ctypes.c_long(int(int16_arr.size))
+    total_count = ctypes.c_long(int(raw_arr.size))
     # FIXME try with other card
-    options = UL.BACKGROUND + UL.BLOCKIO  + UL.CONTINUOUS + UL.CONVERTDATA
+    #~ options = UL.BACKGROUND + UL.BLOCKIO  + UL.CONTINUOUS + UL.CONVERTDATA
     #~ options = UL.BACKGROUND + UL.DMAIO  + UL.CONTINUOUS + UL.CONVERTDATA
-    #~ options = UL.BACKGROUND  + UL.CONTINUOUS + UL.CONVERTDATA
+    options = UL.BACKGROUND  + UL.CONTINUOUS + UL.CONVERTDATA
     
     try:
         # this is SLOW!!!!:
         cbw.cbDaqInScan(board_num, chan_array.ctypes.data,  chan_array_type.ctypes.data,
                             gain_array.ctypes.data, nb_total_channel, byref(real_sr), byref(pretrig_count),
-                             byref(total_count) ,int16_arr.ctypes.data, options)
+                             byref(total_count) ,raw_arr.ctypes.data, options)
     except ULError as e:
         print e
         print 'not able to cbDaqInScan properly'
@@ -105,8 +114,8 @@ def device_mainLoop(stop_flag, streams, board_num):
     dict_gain = {UL.BIP10VOLTS: [-10., 10.],
                         UL.BIP1VOLTS: [-1., 1.],
                         }
-    low_range = np.array([ dict_gain[g][0] for g in gain_array ])
-    hight_range = np.array([ dict_gain[g][1] for g in gain_array ])
+    low_range = np.array([ dict_gain[g][0] for g in gain_array[:nb_channel_ad] ])
+    hight_range = np.array([ dict_gain[g][1] for g in gain_array[:nb_channel_ad] ])
     buffer_gains = 1./(2**16)*(hight_range-low_range)
     buffer_gains = buffer_gains[ :, np.newaxis]
     buffer_offsets = low_range
@@ -114,62 +123,76 @@ def device_mainLoop(stop_flag, streams, board_num):
     
     pos = abs_pos = 0
     last_index = 0
-    
+    ad_mask = np.zeros(nb_total_channel, dtype = bool)
+    ad_mask[:nb_channel_ad] = True
+    dig_mask = ~ad_mask
     
     while True:
-        #~ try:
-        if True:
+        try:
+        #~ if True:
             cbw.cbGetIOStatus( ctypes.c_int(board_num), byref(status),
                       byref(cur_count), byref(cur_index), ctypes.c_int(function))
             
-            index = cur_index.value/nb_channel_ad
+            index = cur_index.value/nb_total_channel
             if index ==-1: continue
             if index == last_index : 
                 continue
             t1 = time.time()
             if index<last_index:
-                new_size = int16_arr.shape[0] - last_index
+                new_size = raw_arr.shape[0] - last_index
                 
-                np_arr[:,pos:pos+new_size] = int16_arr[last_index:, :].transpose()
-                np_arr[:,pos:pos+new_size] *= buffer_gains
-                np_arr[:,pos:pos+new_size] += buffer_offsets
+                #Analog
+                arr_ad[:,pos:pos+new_size] = raw_arr[last_index:, ad_mask].transpose()
+                arr_ad[:,pos:pos+new_size] *= buffer_gains
+                arr_ad[:,pos:pos+new_size] += buffer_offsets
                 
-                end = min(pos+half_size+new_size, np_arr.shape[0])
-                new_size = min(new_size, np_arr.shape[1]-(pos+half_size))
-                np_arr[:,pos+half_size:pos+half_size+new_size] = int16_arr[ last_index:last_index+new_size, :].transpose()
-                np_arr[:,pos+half_size:pos+half_size+new_size] *= buffer_gains
-                np_arr[:,pos+half_size:pos+half_size+new_size] += buffer_offsets
+                end = min(pos+half_size+new_size, arr_ad.shape[0])
+                new_size2 = min(new_size, arr_ad.shape[1]-(pos+half_size))
+                arr_ad[:,pos+half_size:pos+half_size+new_size2] = raw_arr[ last_index:last_index+new_size2, ad_mask].transpose()
+                arr_ad[:,pos+half_size:pos+half_size+new_size2] *= buffer_gains
+                arr_ad[:,pos+half_size:pos+half_size+new_size2] += buffer_offsets
+                
+                # Digital
+                arr_dig[:,pos:pos+new_size] = raw_arr[last_index:, dig_mask].transpose().astype(np.uint8)
+                arr_dig[:,pos+half_size:pos+half_size+new_size2] = raw_arr[ last_index:last_index+new_size2, dig_mask].transpose().astype(np.uint8)
                 
                 abs_pos += new_size
                 pos = abs_pos%half_size
                 last_index = 0
-
             new_size = index - last_index
             
-            np_arr[:,pos:pos+new_size] = int16_arr[ last_index:index, : ].transpose()
-            np_arr[:,pos:pos+new_size] *= buffer_gains
-            np_arr[:,pos:pos+new_size] += buffer_offsets
+            #Analog
+            arr_ad[:,pos:pos+new_size] = raw_arr[ last_index:index, ad_mask ].transpose()
+            arr_ad[:,pos:pos+new_size] *= buffer_gains
+            arr_ad[:,pos:pos+new_size] += buffer_offsets
             
-            new_size = min(new_size, np_arr.shape[1]-(pos+half_size))
-            np_arr[:,pos+half_size:pos+new_size+half_size] = int16_arr[ last_index:last_index+new_size, : ].transpose()
-            np_arr[:,pos+half_size:pos+new_size+half_size] *= buffer_gains
-            np_arr[:,pos+half_size:pos+new_size+half_size] += buffer_offsets
+            new_size2 = min(new_size, arr_ad.shape[1]-(pos+half_size))
+            arr_ad[:,pos+half_size:pos+new_size2+half_size] = raw_arr[ last_index:last_index+new_size2, ad_mask ].transpose()
+            arr_ad[:,pos+half_size:pos+new_size2+half_size] *= buffer_gains
+            arr_ad[:,pos+half_size:pos+new_size2+half_size] += buffer_offsets
+            
+            
+            # Digital
+            arr_dig[:,pos:pos+new_size] = raw_arr[ last_index:index, dig_mask ].transpose().astype(np.uint8)
+            arr_dig[:,pos+half_size:pos+new_size2+half_size] = raw_arr[ last_index:last_index+new_size2, dig_mask ].transpose().astype(np.uint8)
             
             abs_pos += new_size
             pos = abs_pos%half_size
             last_index = index
 
             
-            abs_pos += index - last_index
-            socket.send(msgpack.dumps(abs_pos))
+            socketAD.send(msgpack.dumps(abs_pos))
+            socketDIG.send(msgpack.dumps(abs_pos))
+
+
             
             last_index = index
-        #~ except ULError as e:
-            #~ print 'Problem ULError in acquisition loop', e
-            #~ break
-        #~ except :
-            #~ print 'Problem in acquisition loop'
-            #~ break
+        except ULError as e:
+            print 'Problem ULError in acquisition loop', e
+            break
+        except :
+            print 'Problem in acquisition loop'
+            break
             
         if stop_flag.value:
             print 'should stop properly'
@@ -187,8 +210,6 @@ def device_mainLoop(stop_flag, streams, board_num):
     except ULError:
         print 'not able to stop cbStopBackground properly'
         
-        #~ time.sleep(packet_size/sampling_rate)
-        #~ gevent.sleep(packet_size/sampling_rate)
 
 
 
@@ -261,12 +282,17 @@ class MeasurementComputingMultiSignals(DeviceBase):
     def configure(self, board_num = 0, 
                                     channel_indexes = None,
                                     channel_names = None,
+                                    digital_port = None,
+                                    dig_channel_names = None,
                                     buffer_length= 5.12,
-                                     sampling_rate =1000.,
+                                    sampling_rate =1000.,
+                                    
                                     ):
         self.params = {'board_num' : board_num,
                                 'channel_indexes' : channel_indexes,
                                 'channel_names' : channel_names,
+                                'digital_port' : digital_port,
+                                'dig_channel_names' : dig_channel_names,
                                 'buffer_length' : buffer_length,
                                 'sampling_rate' : sampling_rate
                                 }
@@ -291,14 +317,29 @@ class MeasurementComputingMultiSignals(DeviceBase):
         
         l = int(self.sampling_rate*self.buffer_length)
         self.buffer_length = (l - l%self.packet_size)/self.sampling_rate
-        #~ print 'buffer_length', self.buffer_length
         self.name = '{} #{}'.format(info['board_name'], info['factory_id'])
-        s  = self.streamhandler.new_signals_stream(name = self.name, sampling_rate = self.sampling_rate,
+        s  = self.streamhandler.new_signals_stream(name = self.name+' Analog', sampling_rate = self.sampling_rate,
                                                         nb_channel = self.nb_channel, buffer_length = self.buffer_length,
                                                         packet_size = self.packet_size, dtype = np.float64,
                                                         channel_names = self.channel_names, channel_indexes = self.channel_indexes,            
                                                         )
-        self.streams = [s, ]
+        
+        
+        # Digital
+        if self.digital_port is None:
+            self.digital_port = range(info['nb_channel_dig'])
+        print self.digital_port
+        all_ports = [ UL.FIRSTPORTA, UL.FIRSTPORTB, UL.FIRSTPORTC]
+        port_names = ['A', 'B', 'C' ]
+        self.ul_dig_ports = [ all_ports[p] for p in self.digital_port]
+        if self.dig_channel_names is None:
+            self.dig_channel_names = [ '{} {}'.format(port_names[p], c) for p in self.digital_port  for c in range(8) ]
+        print self.dig_channel_names
+        s2 = self.streamhandler.new_digital_stream(name = self.name+' Digital', sampling_rate = self.sampling_rate,
+                                                        nb_channel = len(self.digital_port)*8, buffer_length = self.buffer_length,
+                                                        packet_size = self.packet_size, channel_names = self.dig_channel_names)
+        
+        self.streams = [s, s2 ]
 
         arr_size = s['shared_array'].shape[1]
         assert (arr_size/2)%self.packet_size ==0, 'buffer should be a multilple of pcket_size {}/2 {}'.format(arr_size, self.packet_size)
@@ -308,9 +349,7 @@ class MeasurementComputingMultiSignals(DeviceBase):
     def start(self):
         self.stop_flag = mp.Value('i', 0)
         
-        
-        #~ mp_arr = s['shared_array'].mp_array
-        self.process = mp.Process(target = device_mainLoop,  args=(self.stop_flag, self.streams, self.board_num) )
+        self.process = mp.Process(target = device_mainLoop,  args=(self.stop_flag, self.streams, self.board_num, self.ul_dig_ports) )
         self.process.start()
         
         print 'MeasurementComputingMultiSignals started:', self.name
