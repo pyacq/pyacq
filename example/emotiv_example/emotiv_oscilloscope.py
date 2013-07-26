@@ -25,16 +25,22 @@ def emotiv_oscillo():
     dev.initialize()
     dev.start()
     
+    #Chan
     app = QtGui.QApplication([])
     w1=Oscilloscope(stream = dev.streams[0])
     w1.show()
-
-    w2=Oscilloscope(stream = dev.streams[0])
+    
+    #Imp
+    w2=Oscilloscope(stream = dev.streams[1])
     w2.show()
+    
+    #Gyro
+    w3=Oscilloscope(stream = dev.streams[2])
+    w3.show()
 
-
-    w3=TimeFreq(stream = dev.streams[0])
-    w3.show()    
+    #Tf chan
+    wTf=TimeFreq(stream = dev.streams[0])
+    wTf.show()    
     
     app.exec_()
     
