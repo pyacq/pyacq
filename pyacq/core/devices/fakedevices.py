@@ -179,8 +179,6 @@ class FakeDigital(DeviceBase):
         l = int(self.sampling_rate*self.buffer_length)
         self.buffer_length = (l - l%self.packet_size)/self.sampling_rate
         
-        print self.streamhandler
-        
         s = self.streamhandler.new_digital_stream(name = self.name, sampling_rate = self.sampling_rate,
                                                         nb_channel = self.nb_channel, buffer_length = self.buffer_length,
                                                         packet_size = self.packet_size, channel_names = channel_names)
