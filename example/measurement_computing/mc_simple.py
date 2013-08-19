@@ -106,10 +106,10 @@ def test3():
     process = mp.Process(target= print_digital_port, args = (stop_recv, dev.streams[1]))
     process.start()
     
-    
     time.sleep(20.)
     stop_recv.value = 1
     process.join()
+    
     
     # Stope and release the device
     dev.stop()

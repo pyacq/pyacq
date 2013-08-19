@@ -49,7 +49,7 @@ class MyViewBox(pg.ViewBox):
 def extract_bit(chan, arr):
     b = chan//8
     mask = 1<<(chan%8)
-    return (arr[b,:]*mask>0).astype(float)
+    return (arr[b,:]&mask>0).astype(float)
 
 class OscilloscopeDigital(QtGui.QWidget):
     def __init__(self, stream = None, parent = None,):

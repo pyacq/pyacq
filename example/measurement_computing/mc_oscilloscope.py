@@ -4,7 +4,7 @@ Oscilloscope example
 """
 
 from pyacq import StreamHandler, MeasurementComputingMultiSignals
-from pyacq.gui import Oscilloscope, TimeFreq
+from pyacq.gui import Oscilloscope, TimeFreq, OscilloscopeDigital
 
 import msgpack
 
@@ -20,12 +20,12 @@ def test1():
     # Configure and start
     dev = MeasurementComputingMultiSignals(streamhandler = streamhandler)
     dev.configure( board_num = 0,
-                          sampling_rate =10000.,
+                          sampling_rate =1000.,
                           #~ sampling_rate =1000.,
                           buffer_length = 60.,
                           #~ channel_indexes = range(64),
-                          #~ channel_indexes = range(32),
-                          channel_indexes = [0,12,25,56],
+                          channel_indexes = range(8),
+                          #~ channel_indexes = [0,12,25,56],
                           #~ digital_port = [0, 1, 2],
                           digital_port = [],
                                 )
@@ -41,6 +41,10 @@ def test1():
     w2 = TimeFreq(stream = dev.streams[0], max_visible_on_open = 4)
     w2.change_param_global(refresh_interval = 100, xsize = 2.)
     w2.show()
+    
+    w3=OscilloscopeDigital(stream = dev.streams[1])
+    w3.change_param_global(xsize = 20, mode = 'scan')    
+    w3.show()
     
     app.exec_()
     

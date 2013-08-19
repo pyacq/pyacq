@@ -40,7 +40,6 @@ def decorate_with_error(f):
         errno = f(*args)
         if errno!=UL.NOERRORS:
             raise ULError(errno)
-        #~ assert errno==0, ULError(errno)
         return errno
     return func_with_error
 
@@ -100,10 +99,13 @@ def device_mainLoop(stop_flag, streams, board_num, ul_dig_ports ):
         cbw.cbDaqInScan(board_num, chan_array.ctypes.data,  chan_array_type.ctypes.data,
                             gain_array.ctypes.data, nb_total_channel, byref(real_sr), byref(pretrig_count),
                              byref(total_count) ,raw_arr.ctypes.data, options)
+        #~ cbw.cbAInScan(board_num, 0, nb_channel-1, int(int16_arr.size),
+              #~ ctypes.byref(real_sr), gain, int16_arr.ctypes.data, options)
+                             
     except ULError as e:
-        print e
-        print 'not able to cbDaqInScan properly'
+        print 'Not able to cbDaqInScan properly', e
         return
+        #TODO : retry when bacground already running.
     
     status = ctypes.c_int(0)
     cur_count = ctypes.c_long(0)

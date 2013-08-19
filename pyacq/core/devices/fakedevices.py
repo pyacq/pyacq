@@ -191,14 +191,20 @@ class FakeDigital(DeviceBase):
         # private precomuted array of 20s = each channel have a diffrent period
         n = int(self.sampling_rate*20./self.packet_size)*self.packet_size
         t = np.arange(n, dtype = np.float64)/self.sampling_rate
-        self.precomputed = np.random.rand(s['shared_array'].shape[0], n)
+        #~ self.precomputed = np.random.rand(s['shared_array'].shape[0], n)
+        self.precomputed = np.zeros((s['shared_array'].shape[0], n), dtype = np.uint8)
         for i in range(self.nb_channel):
             b = i//8
             mask =  1 << i%8
-            cycle_size = int((i+1)*self.sampling_rate/2)
-            period = np.concatenate([np.ones(cycle_size, dtype = np.uint8), np.zeros(cycle_size, dtype = np.uint8)] * (n/cycle_size/2))
-            self.precomputed[b, :period.size] = self.precomputed[b, :period.size] + period*mask
             
+            cycle_size = int((i+1)*self.sampling_rate/2)
+            #~ print i, b, mask, cycle_size
+            period = np.concatenate([np.ones(cycle_size, dtype = np.uint8), np.zeros(cycle_size, dtype = np.uint8)] * (1+n/cycle_size/2))[:n]
+            #~ self.precomputed[b, :period.size] = self.precomputed[b, :period.size] + period*mask
+            self.precomputed[b, :] = self.precomputed[b, :] + period*mask
+            #~ print (period*mask)[:cycle_size*2]
+            #~ print self.precomputed[b,:cycle_size*2]
+            print n , period.size
         print 'FakeDigital initialized:', self.name, s['port']
     
     def start(self):
