@@ -1,7 +1,7 @@
 pyacq
 =====
 
-Simple Framework for data acquisition, syncronisation and real time visualisation (signal, video,..) in pure python.
+Simple Framework for data acquisition, syncronisation and visualisation (signal, video,..) in pure python.
 
 
 

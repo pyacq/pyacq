@@ -23,7 +23,7 @@ def test1():
     dev = FakeDigital(streamhandler = streamhandler)
     dev.configure( name = 'Test dev',
                                 nb_channel = 10,
-                                sampling_rate =1000.,
+                                sampling_rate =100.,
                                 buffer_length = 60.,
                                 packet_size = 20,
                                 )

@@ -45,6 +45,12 @@ class MyViewBox(pg.ViewBox):
         self.zoom.emit(z)
         ev.accept()
 
+
+def extract_bit(chan, arr):
+    b = chan//8
+    mask = 1<<(chan%8)
+    return (arr[b,:]*mask>0).astype(float)
+
 class OscilloscopeDigital(QtGui.QWidget):
     def __init__(self, stream = None, parent = None,):
         QtGui.QWidget.__init__(self, parent)
@@ -148,12 +154,12 @@ class OscilloscopeDigital(QtGui.QWidget):
                 self.intsize = int(xsize*sr)
                 self.t_vect = np.arange(self.intsize, dtype = float)/sr
                 self.t_vect -= self.t_vect[-1]
-                self.curves_data = [ np.zeros( ( self.intsize), dtype =np.uint8) for i in range(self.stream['nb_channel']) ]
+                self.curves_data = [ np.zeros( ( self.intsize), dtype =float) for i in range(self.stream['nb_channel']) ]
                 
             if param.name()=='refresh_interval':
                 self.timer.setInterval(data)
             if param.name()=='mode':
-                self.curves_data = [ np.zeros( ( self.intsize), dtype = np.uint8) for i in range(self.stream['nb_channel']) ]
+                self.curves_data = [ np.zeros( ( self.intsize), dtype =float) for i in range(self.stream['nb_channel']) ]
                 self.last_pos = self.thread_pos.pos
 
 
@@ -164,11 +170,6 @@ class OscilloscopeDigital(QtGui.QWidget):
         mode = self.paramGlobal['mode']
         visibles = np.array([p['visible'] for p in self.paramChannels.children()], dtype = bool)
         n = np.sum(visibles)
-        
-        def extract_bit(chan, arr):
-            b = chan//8
-            mask = 1<<(chan%8)
-            return (arr[b,:]*mask>0).astype(np.float32)
         
         if mode=='scroll':
             head = pos%self.half_size+self.half_size
@@ -191,22 +192,21 @@ class OscilloscopeDigital(QtGui.QWidget):
                 o = n-1
                 for c in range(visibles.size):
                     if visibles[c]:
-                        self.curves_data[c][i1:] = extract_bit(c,np_arr[:,:self.intsize-i1])*.8+o  #np_arr[c,:self.intsize-i1]*gains[c]+offsets[c]
+                        self.curves_data[c][i1:] = extract_bit(c,np_arr[:,:self.intsize-i1])*.8+o
                         if i2!=0:
-                            self.curves_data[c][:i2] = extract_bit(c, np_arr[:,-i2:])*.8+o#np_arr[c,-i2:]*gains[c]+offsets[c]
-                        o -=1 
+                            self.curves_data[c][:i2] = extract_bit(c, np_arr[:,-i2:])*.8+o
+                        o -= 1 
             else:
+                o = n-1
                 for c in range(visibles.size):
-                    o = n-1
                     if visibles[c]:
-                        self.curves_data[c][i1:i2] = extract_bit(c,np_arr)*.8+o   # np_arr[c,:]*gains[c]+offsets[c]
-                    o -=1 
+                        self.curves_data[c][i1:i2] = extract_bit(c,np_arr)*.8+o
+                        o -= 1 
             self.last_pos = pos
         
         for c, curve in enumerate(self.curves):
-            p = self.paramChannels.children()[c]
-            if not p['visible']:  continue
-            curve.setData(self.t_vect, self.curves_data[c], antialias = False)
+            if visibles[c]: 
+                curve.setData(self.t_vect, self.curves_data[c], antialias = False)
         
         self.plot.setXRange( self.t_vect[0], self.t_vect[-1])
         self.plot.setYRange( -.5,n+.5  )
