@@ -23,11 +23,10 @@ def test1():
                           sampling_rate =1000.,
                           #~ sampling_rate =1000.,
                           buffer_length = 60.,
-                          #~ channel_indexes = range(64),
-                          channel_indexes = range(8),
+                          channel_indexes = range(64),
                           #~ channel_indexes = [0,12,25,56],
-                          #~ digital_port = [0, 1, 2],
-                          digital_port = [],
+                          digital_port = [0, 1, 2],
+                          #~ digital_port = [],
                                 )
     dev.initialize()
     dev.start()
@@ -35,12 +34,12 @@ def test1():
     app = QtGui.QApplication([])
     w1=Oscilloscope(stream = dev.streams[0])
     w1.auto_gain_and_offset(mode = 2)
-    w1.change_param_global(xsize = 5., refresh_interval = 100, mode = 'scan', ylims = [-8., 8.])
+    w1.change_param_global(xsize = 20., refresh_interval = 100, mode = 'scan', ylims = [-8., 8.])
     w1.show()
     
-    w2 = TimeFreq(stream = dev.streams[0], max_visible_on_open = 4)
-    w2.change_param_global(refresh_interval = 100, xsize = 2.)
-    w2.show()
+    #~ w2 = TimeFreq(stream = dev.streams[0], max_visible_on_open = 4)
+    #~ w2.change_param_global(refresh_interval = 100, xsize = 2.)
+    #~ w2.show()
     
     w3=OscilloscopeDigital(stream = dev.streams[1])
     w3.change_param_global(xsize = 20, mode = 'scan')    

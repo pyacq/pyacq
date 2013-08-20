@@ -53,7 +53,7 @@ cbw = CBW()
 
 
 
-def device_mainLoop(stop_flag, streams, board_num, ul_dig_ports ):
+def device_mainLoop(stop_flag, streams, board_num, ul_dig_ports, device_info ):
     streamAD = streams[0]
     streamDIG = streams[1]
     
@@ -84,7 +84,10 @@ def device_mainLoop(stop_flag, streams, board_num, ul_dig_ports ):
     real_sr = ctypes.c_long(int(sampling_rate))
 
     internal_size = int(30.*sampling_rate)
-    internal_size = internal_size- internal_size%packet_size
+    #~ internal_size = internal_size- internal_size%packet_size
+    internal_size = internal_size- internal_size%(device_info['device_packet_size'])
+    print 'internal_size', internal_size
+    
     
     raw_arr = np.zeros(( internal_size, nb_total_channel), dtype = np.uint16)
     pretrig_count = ctypes.c_long(0)
@@ -99,18 +102,35 @@ def device_mainLoop(stop_flag, streams, board_num, ul_dig_ports ):
         cbw.cbDaqInScan(board_num, chan_array.ctypes.data,  chan_array_type.ctypes.data,
                             gain_array.ctypes.data, nb_total_channel, byref(real_sr), byref(pretrig_count),
                              byref(total_count) ,raw_arr.ctypes.data, options)
-        #~ cbw.cbAInScan(board_num, 0, nb_channel-1, int(int16_arr.size),
-              #~ ctypes.byref(real_sr), gain, int16_arr.ctypes.data, options)
+        function = UL.DAQIFUNCTION
                              
     except ULError as e:
-        print 'Not able to cbDaqInScan properly', e
-        return
+        print e.errno, e.errno == UL.BADBOARDTYPE
+        if e.errno == UL.BADBOARDTYPE:
+            try:
+                chan_indexes = streamAD['channel_indexes']
+                assert np.all(np.diff(chan_indexes) == 1), 'For this card you must select continuous cannel indexes'
+                assert nb_port_dig ==0, 'You can not sample digital ports'
+                assert np.all(gain_array[0]==gain_array), 'For this card gain must be identical'
+                
+                low_chan = int(min(chan_indexes))
+                high_chan = int(max(chan_indexes))
+                cbw.cbAInScan(board_num, low_chan, high_chan, int(raw_arr.size),
+                      ctypes.byref(real_sr), int(gain_array[0]), raw_arr.ctypes.data, options)
+                function = UL.AIFUNCTION
+                
+            except ULError as e:
+                print 'Not able to cbDaqInScan properly', e
+                return
+        else:
+            print 'Not able to cbDaqInScan properly', e
+            return
         #TODO : retry when bacground already running.
     
     status = ctypes.c_int(0)
     cur_count = ctypes.c_long(0)
     cur_index = ctypes.c_long(0)
-    function = UL.DAQIFUNCTION
+    #~ function = UL.DAQIFUNCTION
     
     # TODO this
     dict_gain = {UL.BIP10VOLTS: [-10., 10.],
@@ -307,7 +327,7 @@ class MeasurementComputingMultiSignals(DeviceBase):
         
         # TODO card by card
         info = self.device_info = get_info(self.board_num)
-        
+        print info
         if self.channel_indexes is None:
             self.channel_indexes = range(info['nb_channel_ad'])
         if self.channel_names is None:
@@ -351,7 +371,7 @@ class MeasurementComputingMultiSignals(DeviceBase):
     def start(self):
         self.stop_flag = mp.Value('i', 0)
         
-        self.process = mp.Process(target = device_mainLoop,  args=(self.stop_flag, self.streams, self.board_num, self.ul_dig_ports) )
+        self.process = mp.Process(target = device_mainLoop,  args=(self.stop_flag, self.streams, self.board_num, self.ul_dig_ports, self.device_info) )
         self.process.start()
         
         print 'MeasurementComputingMultiSignals started:', self.name
