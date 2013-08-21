@@ -158,6 +158,7 @@ def device_mainLoop(stop_flag, streams, board_num, ul_dig_ports, device_info ):
             index = cur_index.value/nb_total_channel
             if index ==-1: continue
             if index == last_index : 
+                # TODO sleep here
                 continue
             t1 = time.time()
             if index<last_index:
@@ -170,9 +171,10 @@ def device_mainLoop(stop_flag, streams, board_num, ul_dig_ports, device_info ):
                 
                 end = min(pos+half_size+new_size, arr_ad.shape[0])
                 new_size2 = min(new_size, arr_ad.shape[1]-(pos+half_size))
-                arr_ad[:,pos+half_size:pos+half_size+new_size2] = raw_arr[ last_index:last_index+new_size2, ad_mask].transpose()
-                arr_ad[:,pos+half_size:pos+half_size+new_size2] *= buffer_gains
-                arr_ad[:,pos+half_size:pos+half_size+new_size2] += buffer_offsets
+                #~ arr_ad[:,pos+half_size:pos+half_size+new_size2] = raw_arr[ last_index:last_index+new_size2, ad_mask].transpose()
+                #~ arr_ad[:,pos+half_size:pos+half_size+new_size2] *= buffer_gains
+                #~ arr_ad[:,pos+half_size:pos+half_size+new_size2] += buffer_offsets
+                arr_ad[:,pos+half_size:pos+half_size+new_size2] = arr_ad[:,pos:pos+new_size2]
                 
                 # Digital
                 arr_dig[:,pos:pos+new_size] = raw_arr[last_index:, dig_mask].transpose().astype(np.uint8)
@@ -207,8 +209,6 @@ def device_mainLoop(stop_flag, streams, board_num, ul_dig_ports, device_info ):
             socketDIG.send(msgpack.dumps(abs_pos))
 
 
-            
-            last_index = index
         except ULError as e:
             print 'Problem ULError in acquisition loop', e
             break
@@ -331,7 +331,7 @@ class MeasurementComputingMultiSignals(DeviceBase):
         if self.channel_indexes is None:
             self.channel_indexes = range(info['nb_channel_ad'])
         if self.channel_names is None:
-            self.channel_names = [ 'Channel {}'.format(i) for i in self.channel_indexes]
+            self.channel_names = [ 'AIn Channel {}'.format(i) for i in self.channel_indexes]
         self.nb_channel = len(self.channel_indexes)
         self.packet_size = int(info['device_packet_size']/self.nb_channel)
         print 'self.packet_size', self.packet_size

@@ -30,6 +30,7 @@ class MyViewBox(pg.ViewBox):
     zoom = QtCore.pyqtSignal(float)
     def __init__(self, *args, **kwds):
         pg.ViewBox.__init__(self, *args, **kwds)
+        self.disableAutoRange()
     def mouseClickEvent(self, ev):
         ev.accept()
     def mouseDoubleClickEvent(self, ev):

@@ -8,6 +8,11 @@ try:
 except :
     pass
 
+try:
+    from .comedidevices import ComediMultiSignals
+except :
+    pass
+
 
 try:
     from .emotiv import EmotivMultiSignals
