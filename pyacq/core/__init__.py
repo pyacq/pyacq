@@ -6,3 +6,4 @@ except:
     pass
 from .tools import SharedArray
 from .devices import *
+from .stramconverter import 

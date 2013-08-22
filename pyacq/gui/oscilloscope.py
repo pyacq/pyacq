@@ -53,7 +53,7 @@ class Oscilloscope(QtGui.QWidget):
     def __init__(self, stream = None, parent = None,):
         QtGui.QWidget.__init__(self, parent)
         
-        assert stream['type'] == 'signals_stream_sharedmem'
+        assert type(stream).__name__ == 'AnalogSignalSharedMemStream'
         
         self.stream = stream
         

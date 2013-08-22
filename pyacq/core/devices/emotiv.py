@@ -84,7 +84,7 @@ class EmotivMultiSignals(DeviceBase):
 
         # Stream Channels
         self.channel_indexes = range(self.nb_channel) 
-        s_chan = self.streamhandler.new_signals_stream(name = self.name, sampling_rate = self.sampling_rate,
+        s_chan = self.streamhandler.new_AnalogSignalSharedMemStream(name = self.name, sampling_rate = self.sampling_rate,
                                                         nb_channel = self.nb_channel, buffer_length = self.buffer_length,
                                                         packet_size = self.packet_size, dtype = np.float64,
                                                         channel_names = self.channel_names, channel_indexes = self.channel_indexes,            

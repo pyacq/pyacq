@@ -238,7 +238,7 @@ class ComediMultiSignals(DeviceBase):
         #~ print l, l - l%self.packet_size, (l - l%self.packet_size)/self.sampling_rate
         self.buffer_length = (l - l%self.packet_size)/self.sampling_rate
         self.name = '{} #{}'.format(info['board_name'], info['device_path'].replace('/dev/comedi', ''))
-        s  = self.streamhandler.new_signals_stream(name = self.name+' Analog', sampling_rate = self.sampling_rate,
+        s  = self.streamhandler.new_AnalogSignalSharedMemStream(name = self.name+' Analog', sampling_rate = self.sampling_rate,
                                                         nb_channel = self.nb_channel, buffer_length = self.buffer_length,
                                                         packet_size = self.packet_size, dtype = np.float64,
                                                         channel_names = self.channel_names, channel_indexes = self.channel_indexes,            

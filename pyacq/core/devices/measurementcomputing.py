@@ -340,7 +340,7 @@ class MeasurementComputingMultiSignals(DeviceBase):
         l = int(self.sampling_rate*self.buffer_length)
         self.buffer_length = (l - l%self.packet_size)/self.sampling_rate
         self.name = '{} #{}'.format(info['board_name'], info['factory_id'])
-        s  = self.streamhandler.new_signals_stream(name = self.name+' Analog', sampling_rate = self.sampling_rate,
+        s  = self.streamhandler.new_AnalogSignalSharedMemStream(name = self.name+' Analog', sampling_rate = self.sampling_rate,
                                                         nb_channel = self.nb_channel, buffer_length = self.buffer_length,
                                                         packet_size = self.packet_size, dtype = np.float64,
                                                         channel_names = self.channel_names, channel_indexes = self.channel_indexes,            
@@ -357,7 +357,7 @@ class MeasurementComputingMultiSignals(DeviceBase):
         if self.dig_channel_names is None:
             self.dig_channel_names = [ '{} {}'.format(port_names[p], c) for p in self.digital_port  for c in range(8) ]
         print self.dig_channel_names
-        s2 = self.streamhandler.new_digital_stream(name = self.name+' Digital', sampling_rate = self.sampling_rate,
+        s2 = self.streamhandler.new_DigitalSignalSharedMemStream(name = self.name+' Digital', sampling_rate = self.sampling_rate,
                                                         nb_channel = len(self.digital_port)*8, buffer_length = self.buffer_length,
                                                         packet_size = self.packet_size, channel_names = self.dig_channel_names)
         
