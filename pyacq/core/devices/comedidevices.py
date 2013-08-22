@@ -40,31 +40,32 @@ def device_mainLoop(stop_flag, streams, device_path, device_info ):
     dev.open()
 
     ai_subdevice = dev.find_subdevice_by_type(SUBDEVICE_TYPE.ai, factory=StreamingSubdevice)
-
-    ai_channels = [ ai_subdevice.channel(i, factory=AnalogChannel, aref=AREF.diff) for i in channel_indexes]
+    
+    #~ aref = AREF.diff
+    #~ aref = AREF.ground
+    aref = AREF.common
+    
+    ai_channels = [ ai_subdevice.channel(i, factory=AnalogChannel, aref=aref) for i in channel_indexes]
 
     dt = ai_subdevice.get_dtype()
     itemsize = np.dtype(dt).itemsize
 
-    #~ print ai_subdevice.get_max_buffer_size()
+    #~ ai_subdevice.set_max_buffer_size(2**24) # need to be sudo
+    #~ print 'max_buffer_size', ai_subdevice.get_max_buffer_size()
     
-    internal_size = int(ai_subdevice.get_max_buffer_size()/nb_channel_ad/itemsize)
+    internal_size = int(ai_subdevice.get_max_buffer_size()//nb_channel_ad//itemsize)
     ai_subdevice.set_buffer_size(internal_size*nb_channel_ad*itemsize)
-    print 'internal_size', internal_size, 'in second', internal_size/sampling_rate/nb_channel_ad/itemsize
+    #~ print 'internal_size', internal_size, 'in second', internal_size/sampling_rate/nb_channel_ad/itemsize
 
-    #~ ai_buffer = np.zeros((internal_size, nb_channel_ad), dtype=dt)
-    #~ print ai_buffer.shape
     ai_buffer = np.memmap(dev.file, dtype = dt, mode = 'r', shape = (internal_size, nb_channel_ad))
-    #~ m = mmap.mmap(dev.fileno(), internal_size*itemsize, flags= mmap.MAP_SHARED, access=  mmap.PROT_READ)
+    #m = mmap.mmap(dev.fileno(), internal_size*itemsize, flags= mmap.MAP_SHARED, access=  mmap.PROT_READ)
     
 
     scan_period_ns = int(1e9 / sampling_rate)
-    print  sampling_rate, 'real rate',  1e9/scan_period_ns
+    #~ print  sampling_rate, 'real rate',  1e9/scan_period_ns
     ai_cmd = ai_subdevice.get_cmd_generic_timed(len(ai_channels), scan_period_ns)
     ai_cmd.chanlist = ai_channels
-    print ai_cmd
-    #~ ai_cmd.start_src = TRIG_SRC.int
-    #~ ai_cmd.start_arg = 0
+    #~ print ai_cmd
     ai_cmd.start_src = TRIG_SRC.now
     ai_cmd.start_arg = 0
     ai_cmd.stop_src = TRIG_SRC.none
@@ -77,7 +78,7 @@ def device_mainLoop(stop_flag, streams, device_path, device_info ):
         if rc is not None:
             print 'Not able to command_test properly'
             return
-
+    
     
     converters = [c.get_converter() for c in ai_channels]
     
@@ -92,9 +93,9 @@ def device_mainLoop(stop_flag, streams, device_path, device_info ):
         #~ try:
         if 1:
             new_bytes =  ai_subdevice.get_buffer_contents()
-            # FIXME: Is this util ?
+            
             new_bytes = new_bytes - new_bytes%(nb_channel_ad*itemsize)
-            print new_bytes
+            
             
             if new_bytes ==0:
                 time.sleep(sleep_time/4.)
@@ -107,23 +108,22 @@ def device_mainLoop(stop_flag, streams, device_path, device_info ):
                 time.sleep(sleep_time/4.)
                 continue
             
-            # buggy???
-            #if index>=internal_size:
-            #    new_bytes = (internal_size-last_index)*itemsize*nb_channel_ad
-            #    index = internal_size
-            #
-            
             if index>=internal_size:
-                new_samp = internal_size - last_index
-                new_samp2 = min(new_samp, arr_ad.shape[1]-(pos+half_size))
-                for i,c in enumerate(converters):
-                    arr_ad[i,pos:pos+new_samp] = c.to_physical(ai_buffer[ last_index:internal_size, i ])
-                    arr_ad[i,pos+half_size:pos+new_samp2+half_size] = arr_ad[i,pos:pos+new_samp2]
+                new_bytes = (internal_size-last_index)*itemsize*nb_channel_ad
+                index = internal_size
+            
+            
+            #~ if index>=internal_size:
+                #~ new_samp = internal_size - last_index
+                #~ new_samp2 = min(new_samp, arr_ad.shape[1]-(pos+half_size))
+                #~ for i,c in enumerate(converters):
+                    #~ arr_ad[i,pos:pos+new_samp] = c.to_physical(ai_buffer[ last_index:internal_size, i ])
+                    #~ arr_ad[i,pos+half_size:pos+new_samp2+half_size] = arr_ad[i,pos:pos+new_samp2]
                 
-                last_index = 0
-                index = index%internal_size
-                abs_pos += new_samp
-                pos = abs_pos%half_size
+                #~ last_index = 0
+                #~ index = index%internal_size
+                #~ abs_pos += new_samp
+                #~ pos = abs_pos%half_size
 
             new_samp = index - last_index
             new_samp2 = min(new_samp, arr_ad.shape[1]-(pos+half_size))
@@ -138,21 +138,6 @@ def device_mainLoop(stop_flag, streams, device_path, device_info ):
             pos = abs_pos%half_size
             last_index = index%internal_size
 
-            ###TEST avec mmap.read()
-            #~ buf = np.fromstring(m.read(new_bytes), dtype=dt)
-            #~ new_samp = buf.size/nb_channel_ad
-            #~ if new_samp==0: continue
-            #~ print buf.shape, new_samp, new_bytes
-            #~ buf = buf.reshape(-1, nb_channel_ad)
-            #~ new_samp2 = min(new_samp, arr_ad.shape[1]-(pos+half_size))
-            #~ for i,c in enumerate(converters):
-                #~ arr_ad[i,pos:pos+new_samp] = c.to_physical(buf[ :, i ])
-                #~ arr_ad[i,pos+half_size:pos+new_samp2+half_size] = arr_ad[i,pos:pos+new_samp2]
-            #~ abs_pos += new_samp
-            #~ pos = abs_pos%half_size
-            #~ last_index = index%internal_size
-            ###test
-            
             socketAD.send(msgpack.dumps(abs_pos))
             
             ai_subdevice.mark_buffer_read(new_bytes)

@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
 from .streamhandler import StreamHandler
-#from .timestampserver  import TimestampServer 
+try:
+    from .timestampserver  import TimestampServer 
+except:
+    pass
 from .tools import SharedArray
 from .devices import *
