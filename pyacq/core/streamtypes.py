@@ -161,8 +161,7 @@ class AnalogSignalPlainDataStream(Stream):
     
     
     """
-    def __init__(self, name = '', sampling_rate = 100.,
-                                        nb_channel = 2, buffer_length = 8.192,
+    def __init__(self, name = '', sampling_rate = 100.,  nb_channel = 2,
                                         packet_size = None, dtype = np.float32,
                                         channel_names = None, channel_indexes = None,
                                         compress = 'blosc', port = None, 
@@ -173,21 +172,16 @@ class AnalogSignalPlainDataStream(Stream):
         
         s = self._params = { }
         s['name'] = name
-        #~ s['type'] = 'digital_stream_sharedmem'
         s['sampling_rate'] = sampling_rate
         s['nb_channel'] = nb_channel
+        s['nb_channel'] = nb_channel
         s['packet_size'] = packet_size
-        s['buffer_length'] = buffer_length
+        s['dtype'] = dtype
         s['channel_names'] = channel_names
+        s['channel_indexes'] = channel_indexes
+        s['compress'] = compress
         
-        l = int(sampling_rate*buffer_length)
-        if packet_size is not None:
-            assert l%packet_size ==0, 'buffer should be a multilple of packet_size {} {}'.format(l, packet_size)
         
-        n_bytes = int(np.ceil(nb_channel/8.))
-        
-        shape = (n_bytes, l*2)
-        s['shared_array'] = SharedArray(shape = shape, dtype = np.uint8)
         s['port'] = port
 
 
