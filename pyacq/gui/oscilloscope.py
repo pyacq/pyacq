@@ -167,6 +167,12 @@ class Oscilloscope(QtGui.QWidget):
     def refresh(self):
         if self.thread_pos.pos is None: return
         pos = self.thread_pos.pos
+        
+        if self.last_pos>pos:
+            # the stream have restart from zeros
+            self.last_pos = 0
+            for curve_data in self.curves_data:
+                curve_data[:] = 0.
 
         mode = self.paramGlobal['mode']
         gains = np.array([p['gain'] for p in self.paramChannels.children()])
@@ -199,7 +205,7 @@ class Oscilloscope(QtGui.QWidget):
                 for c in range(gains.size):
                     if visibles[c]:
                         self.curves_data[c][i1:i2] = np_arr[c,:]*gains[c]+offsets[c]
-            self.last_pos = pos
+        self.last_pos = pos
         
         for c, curve in enumerate(self.curves):
             p = self.paramChannels.children()[c]
@@ -255,11 +261,11 @@ class Oscilloscope(QtGui.QWidget):
             offsets = np.zeros(nb_channel, dtype = float)
         elif mode in [1, 2]:
             ylims  = [-.5, n-.5 ]
-            gains = np.zeros(nb_channel, dtype = float)
-            if mode==1:
+            gains = np.ones(nb_channel, dtype = float)
+            if mode==1 and max(sd[selected])!=0:
                 gains = np.ones(nb_channel, dtype = float) * 1./(6*max(sd[selected]))
-            elif mode==2:
-                gains = 1/(6*sd)
+            elif mode==2 :
+                gains[sd!=0] = 1./(6*sd[sd!=0])
             offsets = np.zeros(nb_channel, dtype = float)
             offsets[selected] = range(n)[::-1] - av[selected]*gains[selected]
         

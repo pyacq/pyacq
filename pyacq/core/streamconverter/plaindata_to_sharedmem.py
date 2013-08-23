@@ -18,22 +18,31 @@ class AnaSigPlainData_to_AnaSigSharedMem:
     """
     This class take a AnalogSignalPlainDataStream  and generate a AnalogSignalSharedMemStream.
     
+    The mechanism is this one:
+       * listen with zmq.REG the info adress of the stream
+       * get info dict on that stream
+       * start a socket on new givien the info['port']
+       * loop for get chink of data
+       * if a timeout is too big between data restart the stream
+    
+    
     
     """
     def __init__(self, streamhandler,  plaindata_info_addr, buffer_length = 10.,
-                                        autostart = True,):
+                                        autostart = True, timeout_reconnect = .5):
         
         self.plaindata_info_addr = plaindata_info_addr
         self.streamhandler = streamhandler
         self.buffer_length = buffer_length
+        self.timeout_reconnect = timeout_reconnect
         
         self.running = True
-        
+        self.sharedmem_stream = None
         if autostart:
-            self.start()
+            self.start(first_start = True)
     
     
-    def start(self):
+    def start(self, first_start = True):
         context = zmq.Context()
         
         
@@ -45,13 +54,19 @@ class AnaSigPlainData_to_AnaSigSharedMem:
         info = info_socket.recv_json()
         
         # create stream socket : send and recv
+        
         kargs = dict(info)
         self.compress = kargs.pop('compress')
         kargs['buffer_length'] = self.buffer_length
         kargs['port'] = None
-        self.sharedmem_stream = self.streamhandler.new_AnalogSignalSharedMemStream(**kargs)
-        self.send_socket = context.socket(zmq.PUB)
-        self.send_socket.bind("tcp://*:{}".format(self.sharedmem_stream['port']))
+        if first_start:
+            # first start
+            self.sharedmem_stream = self.streamhandler.new_AnalogSignalSharedMemStream(**kargs)
+            self.send_socket = context.socket(zmq.PUB)
+            self.send_socket.bind("tcp://*:{}".format(self.sharedmem_stream['port']))
+        else:
+            #restart
+            assert self.sharedmem_stream['nb_channel'] == info['nb_channel'], 'recv stream have change nb_channel'
         
         self.recv_socket = context.socket(zmq.SUB)
         self.recv_socket.setsockopt(zmq.SUBSCRIBE,'')
@@ -59,12 +74,15 @@ class AnaSigPlainData_to_AnaSigSharedMem:
         while not addr.endswith(':'):
             addr = addr[:-1]
         addr += str(info['port'])
-        
         self.recv_socket.connect(addr)
         
-        self.thread_recv = threading.Thread(target = self.recv_loop)
-        self.thread_recv.start()
-
+        self.last_packet_time = time.time()
+        self.last_pos = 0
+        
+        if first_start:
+            self.thread_recv = threading.Thread(target = self.recv_loop)
+            self.thread_recv.start()
+        
 
 
     def stop(self):
@@ -79,17 +97,22 @@ class AnaSigPlainData_to_AnaSigSharedMem:
         half_size = np_array.shape[1]/2
         n = self.sharedmem_stream['nb_channel']
         while self.running:
-            
             events = self.recv_socket.poll(50)
             if events ==0:
-                time.sleep(.1)
+                time.sleep(.05)
+                if time.time()- self.last_packet_time>self.timeout_reconnect:
+                    np_array[:]=0
+                    self.start(first_start = False)
                 continue
-            
-            #~ print 'ici1'
             m0,m1 = self.recv_socket.recv_multipart()
-            #~ print 'ici2'
+            self.last_packet_time = time.time()
             
             abs_pos = msgpack.loads(m0)
+            if self.last_pos>abs_pos:
+                print 'restart because last not googd'
+                self.start(first_start = False)
+                
+                continue
             
             if self.compress is None:
                 buf = buffer(m1)
@@ -103,13 +126,18 @@ class AnaSigPlainData_to_AnaSigSharedMem:
             head = abs_pos%half_size+half_size
             tail = head - new
             np_array[:,  tail:head] = chunk
+
+            head = abs_pos%half_size+half_size
+            tail = head - new
+            np_array[:,  tail:head] = chunk
             head2 = abs_pos%half_size
             tail2 = max(head2 - new, 0)
             new2 = head2-tail2
-            np_array[:,  tail:head] = chunk[:, -new2:]
-            
+            if new2!=0:
+                np_array[:,  tail2:head2] = chunk[:, -new2:]
+
             self.send_socket.send(msgpack.dumps(abs_pos))
-            
+            self.last_pos = abs_pos
             
             
             

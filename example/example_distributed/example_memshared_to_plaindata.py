@@ -38,7 +38,7 @@ def on_pc1():
                                                                                                     compress = 'blosc',
                                                                                                     channel_mask = channel_mask,
                                                                                                     )
-    time.sleep(30.)
+    time.sleep(20.)
     
     converter1.stop()
     
@@ -50,15 +50,16 @@ def on_pc1():
 def on_pc2():
     streamhandler = StreamHandler()
     
-    converter2 = AnaSigPlainData_to_AnaSigSharedMem(streamhandler, "tcp://localhost:{}".format(info_port))
+    converter2 = AnaSigPlainData_to_AnaSigSharedMem(streamhandler, "tcp://localhost:{}".format(info_port),
+                                                                buffer_length = 20., timeout_reconnect = .5)
     
     app = QtGui.QApplication([])
     
     w1=Oscilloscope(stream = converter2.sharedmem_stream)
     w1.show()
     
-    w1.auto_gain_and_offset(mode = 2)
-    w1.change_param_global(xsize = 5.)
+    w1.auto_gain_and_offset(mode = 1)
+    w1.change_param_global(xsize = 5., mode = 'scan')
 
     app.exec_()
 
@@ -78,11 +79,12 @@ if __name__ == '__main__':
     
     
     p1.join()
-    time.sleep(2.)
+    time.sleep(5.)
     print 'restart one'
     p1 = mp.Process(target = on_pc1)
     p1.start()
     p1.join()
-    
-    
-    
+
+
+
+
