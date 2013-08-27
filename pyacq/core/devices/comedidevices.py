@@ -87,6 +87,7 @@ def device_mainLoop(stop_flag, streams, device_path, device_info ):
     
     pos = abs_pos = 0
     last_index = 0
+    socketAD.send(msgpack.dumps(abs_pos))
     
     sleep_time = 0.05
     while True:

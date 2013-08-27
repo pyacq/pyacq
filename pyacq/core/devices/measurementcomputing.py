@@ -145,6 +145,9 @@ def device_mainLoop(stop_flag, streams, board_num, ul_dig_ports, device_info ):
     
     pos = abs_pos = 0
     last_index = 0
+    socketAD.send(msgpack.dumps(abs_pos))
+    socketDIG.send(msgpack.dumps(abs_pos))
+    
     ad_mask = np.zeros(nb_total_channel, dtype = bool)
     ad_mask[:nb_channel_ad] = True
     dig_mask = ~ad_mask

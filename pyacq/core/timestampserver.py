@@ -25,8 +25,8 @@ class TimestampServer:
         port =  stream['port']
         self.streams[port] = stream
         
-        stream['timestamp'] = SharedArray( shape = 10000, dtype = [('pos', np.uint64), ('time', np.float64)])
-        stream['timestamp_pos'] = 0
+        stream._params['timestamp'] = SharedArray( shape = 10000, dtype = [('pos', np.uint64), ('time', np.float64)])
+        stream._params['timestamp_pos'] = 0
         #~ print 'follow_stream', port
         self.greenlets[port] = gevent.spawn(self.start_loop, port)
         
@@ -45,7 +45,7 @@ class TimestampServer:
             t = time.time()
             pos = msgpack.loads(message)
             timestamp[ts_pos] = (pos, t)
-            stream['timestamp_pos'] += 1
+            stream._params['timestamp_pos'] += 1
             #~ print stream['timestamp_pos']
     
     def leave_stream(self, stream):

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
  
- 
-from .core import *
+from .version import version as __version__
 
-import version
-__version__ = version.version
+from .core import *
+from .rec import *
+

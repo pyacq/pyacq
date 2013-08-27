@@ -19,6 +19,8 @@ def fake_multisignal_mainLoop(stop_flag, stream,  precomputed):
     socket = context.socket(zmq.PUB)
     socket.bind("tcp://*:{}".format(stream['port']))
     
+    socket.send(msgpack.dumps(abs_pos))
+    
     packet_size = stream['packet_size']
     sampling_rate = stream['sampling_rate']
     np_arr = stream['shared_array'].to_numpy_array()
@@ -204,8 +206,8 @@ class FakeDigital(DeviceBase):
             self.precomputed[b, :] = self.precomputed[b, :] + period*mask
             #~ print (period*mask)[:cycle_size*2]
             #~ print self.precomputed[b,:cycle_size*2]
-            print n , period.size
-        print 'FakeDigital initialized:', self.name, s['port']
+            #~ print n , period.size
+        #~ print 'FakeDigital initialized:', self.name, s['port']
     
     def start(self):
         
@@ -216,13 +218,13 @@ class FakeDigital(DeviceBase):
         self.process = mp.Process(target = fake_digital_mainLoop,  args=(self.stop_flag, s, self.precomputed) )
         self.process.start()
         
-        print 'FakeDigital started:', self.name
+        #~ print 'FakeDigital started:', self.name
         self.running = True
     
     def stop(self):
         self.stop_flag.value = 1
         self.process.join()
-        print 'FakeDigital stopped:', self.name
+        #~ print 'FakeDigital stopped:', self.name
         
         self.running = False
     
