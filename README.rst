@@ -22,8 +22,8 @@ pyacq also propose some basic visualisation with Qt4 widget to be embeded in Qt 
 More information
 ----------------
 
-- github: http://neuralensemble.org/neo
-- Mailing list: https://groups.google.com/forum/?fromgroups#!forum/neuralensemble
+- github: https://github.com/samuelgarcia/pyacq
+- Mailing list: 
 - Documentation: http://packages.python.org/pyacq/
 
 For installation instructions, see doc/source/install.rst
