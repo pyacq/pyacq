@@ -65,7 +65,7 @@ class TimeFreq(QtGui.QWidget):
                             max_visible_on_open = 4,):
         QtGui.QWidget.__init__(self, parent)
         
-        assert stream['type'] == 'signals_stream_sharedmem'
+        assert type(stream).__name__ == 'AnalogSignalSharedMemStream'
         
         self.stream = stream
         

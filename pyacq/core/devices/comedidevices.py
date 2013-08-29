@@ -7,12 +7,14 @@ import time
 
 import zmq
 
+
 from pycomedi.device import Device
 from pycomedi.subdevice import StreamingSubdevice
 from pycomedi.channel import AnalogChannel
 from pycomedi.chanspec import ChanSpec
 from pycomedi.constant import (AREF, CMDF, INSN, SUBDEVICE_TYPE, TRIG_SRC, UNIT)
 from pycomedi.utility import inttrig_insn, Reader, Writer, MMapReader
+from pycomedi import PyComediError
 
 import mmap
 
@@ -166,6 +168,26 @@ def get_info(device_path):
     dev.open()    
     info['device_path'] = device_path
     info['board_name'] = dev.get_board_name()
+    info['subdevices'] = [ ]
+    for sub in dev.subdevices():
+        d = {  SUBDEVICE_TYPE.ai : 'AnalogInput',
+                            #~ SUBDEVICE_TYPE.di : 'DigitalInput',
+                            
+                            }
+        if sub.get_type() not in d : continue
+        info_sub = { }
+        info_sub['type'] = d[sub.get_type()]
+        info_sub['nb_channel'] = sub.get_n_channels()
+        info_sub['global_default_param'] = { 
+                                                                                        }
+        info_sub['by_channel_default_param'] = {
+                                                                                                }
+        
+        info['subdevices'].append(info_sub)
+        
+        
+                
+
     
     ai_subdevice = dev.find_subdevice_by_type(SUBDEVICE_TYPE.ai, factory=StreamingSubdevice)
     info['nb_channel_ad'] = ai_subdevice.get_n_channels()
@@ -199,7 +221,38 @@ class ComediMultiSignals(DeviceBase):
     @classmethod
     def get_available_devices(cls):
         devices = OrderedDict()
-        
+        i = 0
+        while True:
+            device_path = '/dev/comedi{}'.format(i)
+            dev = Device(device_path)
+            try:
+                dev.open()
+            except PyComediError:
+                break
+            
+            info_devices = { }
+            info_devices['board_name'] = dev.get_board_name()
+            
+            
+            for sub in dev.subdevices():
+                
+                d = {  SUBDEVICE_TYPE.ai : 'AnalogInput',
+                            #~ SUBDEVICE_TYPE.di : 'DigitalInput',
+                            
+                            }
+                if sub.get_type() not in d : continue
+                d[sub.get_type()]
+                    
+                
+                
+                if sub.get_type() == SUBDEVICE_TYPE.ai:
+                    type
+                
+            devices[dev.get_board_name()+str(i)] = info_devices
+                
+            dev.close()
+            i += 1
+            
         return devices
 
     def configure(self, device_path = '/dev/comedi0',

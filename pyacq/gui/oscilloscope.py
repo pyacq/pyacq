@@ -233,11 +233,12 @@ class Oscilloscope(QtGui.QWidget):
         head = pos%self.half_size+self.half_size
         tail = head-self.intsize
         n = self.stream['nb_channel']
-        #~ self.all_mean =  np.array([ np.mean(self.np_array[i,:pos]) for i in range(n) ])
-        #~ self.all_sd = np.array([ np.std(self.np_array[i,:pos]) for i in range(n) ])
+        #~ self.all_mean =  np.array([ np.mean(self.np_array[i,tail:head]) for i in range(n) ])
+        self.all_sd = np.array([ np.std(self.np_array[i,tail:head]) for i in range(n) ])
         # better than std and mean
         self.all_mean = np.array([ np.median(self.np_array[i,tail:head]) for i in range(n) ])
-        self.all_sd=  np.array([ np.median(np.abs(self.np_array[i,:tail:head]-self.all_mean[i])/.6745) for i in range(n) ])
+        #~ self.all_sd=  np.array([ np.median(np.abs(self.np_array[i,:tail:head]-self.all_mean[i])/.6745) for i in range(n) ])
+        #~ print self.all_mean, self.all_sd
         return self.all_mean, self.all_sd
 
     
@@ -263,9 +264,9 @@ class Oscilloscope(QtGui.QWidget):
             ylims  = [-.5, n-.5 ]
             gains = np.ones(nb_channel, dtype = float)
             if mode==1 and max(sd[selected])!=0:
-                gains = np.ones(nb_channel, dtype = float) * 1./(6*max(sd[selected]))
+                gains = np.ones(nb_channel, dtype = float) * 1./(6.*max(sd[selected]))
             elif mode==2 :
-                gains[sd!=0] = 1./(6*sd[sd!=0])
+                gains[sd!=0] = 1./(6.*sd[sd!=0])
             offsets = np.zeros(nb_channel, dtype = float)
             offsets[selected] = range(n)[::-1] - av[selected]*gains[selected]
         
