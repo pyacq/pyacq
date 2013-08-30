@@ -15,6 +15,8 @@ import multiprocessing as mp
 import numpy as np
 import msgpack
 import time
+from collections import OrderedDict
+
 
 from .base import DeviceBase
  
@@ -64,6 +66,12 @@ class EmotivMultiSignals(DeviceBase):
                                 }
         self.__dict__.update(self.params)
         self.configured = True
+
+    @classmethod
+    def get_available_devices(cls):
+        devices = OrderedDict()
+        #TODO info device here
+        return devices
 
     def initialize(self):
         

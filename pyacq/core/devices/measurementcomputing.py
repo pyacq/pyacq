@@ -4,6 +4,7 @@ import multiprocessing as mp
 import numpy as np
 import msgpack
 import time
+from collections import OrderedDict
 
 import zmq
 
@@ -242,9 +243,9 @@ def get_info(board_num):
     
     config_val = ctypes.c_int(0)
     l = [ ('nb_channel_ad', UL.BOARDINFO, UL.BINUMADCHANS),
-                ('nb_channel_da', UL.BOARDINFO, UL.BINUMDACHANS),
-                ('BINUMIOPORTS', UL.BOARDINFO, UL.BINUMIOPORTS),
-                ('nb_channel_dig', UL.BOARDINFO, UL.BIDINUMDEVS),
+                ('nb_ai_channel', UL.BOARDINFO, UL.BINUMDACHANS),
+                #~ ('BINUMIOPORTS', UL.BOARDINFO, UL.BINUMIOPORTS),
+                ('nb_di_channel', UL.BOARDINFO, UL.BIDINUMDEVS),
                 ('serial_num', UL.BOARDINFO, UL.BISERIALNUM),
                 ('factory_id', UL.BOARDINFO, UL.BIFACTORYID),
                 ]
@@ -253,6 +254,7 @@ def get_info(board_num):
     cbw.cbGetBoardName(board_num, byref(board_name))# this is very SLOW!!!!!!!
     
     info['board_name'] = board_name.value
+    info['class'] = MeasurementComputingMultiSignals
     for name, info_type, config_item in l:
         cbw.cbGetConfig(info_type, board_num, 0, config_item, byref(config_val))
         info[name] = config_val.value
@@ -264,6 +266,40 @@ def get_info(board_num):
                 'PCI-1602/16' : 64,
                 }
     info['device_packet_size'] = dict_packet_size.get(info['board_name'], 512)
+    
+    info['subdevices'] = [ ]
+    info['global_params'] = {
+                                                        'sampling_rate' : 1000.,
+                                                        'buffer_length' : 60.,
+                                                        }
+    if info['nb_ai_channel']>0:
+        sub = {
+                    'type' : 'AnalogInput',
+                    'nb_channel' : info['nb_ai_channel'],
+                    'params' :{ },
+                    'by_channel_params' : { 
+                                            'ai_channel_indexes' : range(n),
+                                            'ai_channel_names' : [ 'AI Channel {}'.format(i) for i in range(n)],
+                                        },
+                        }
+        info['subdevices'].append(sub)
+
+    if info['nb_di_channel']>0:
+        #FIXME 
+        sub = {
+                    'type' : 'DigitalInput',
+                    'nb_channel' : info['nb_di_channel'],#FIXME
+                    'params' :{ },
+                    'by_channel_params' : { 
+                                            'ai_channel_indexes' : range(n),
+                                            'ai_channel_names' : [ 'DI Channel {}'.format(i) for i in range(n)],
+                                        },
+                        }
+        info['subdevices'].append(sub)
+        
+        #FIXME compute the number of digital input
+        #cbw.cbGetConfig(UL.DIGITALINFO, board_num, 0, UL.DINUMBITS, byref(config_val))
+        #nbits = config_val.value
     
     return info
 
@@ -298,10 +334,9 @@ class MeasurementComputingMultiSignals(DeviceBase):
         for board_num in range(board_nums):
             try:
                 info = get_info(board_num)
-                devices[board_num] = info
+                devices[info['board_name']+str(board_num)] = info
             except ULError:
                 pass
-        
         return devices
 
     def configure(self, board_num = 0, 

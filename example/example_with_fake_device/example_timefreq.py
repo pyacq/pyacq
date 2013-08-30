@@ -31,7 +31,7 @@ def test1():
     dev.start()
     
     app = QtGui.QApplication([])
-    w1=TimeFreq(stream = dev.stream)
+    w1=TimeFreq(stream = dev.streams[0])
     w1.show()
     
     app.exec_()

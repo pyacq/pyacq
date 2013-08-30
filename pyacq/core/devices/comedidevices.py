@@ -5,6 +5,8 @@ import numpy as np
 import msgpack
 import time
 
+from collections import OrderedDict
+
 import zmq
 
 
@@ -166,8 +168,13 @@ def get_info(device_path):
     info = { }
     dev = Device(device_path)
     dev.open()    
+    info['class'] = 'ComediMultiSignals'
     info['device_path'] = device_path
     info['board_name'] = dev.get_board_name()
+    info['global_params'] = {
+                                            'sampling_rate' : 1000.,
+                                            'buffer_length' : 60.,
+                                            }
     info['subdevices'] = [ ]
     for sub in dev.subdevices():
         d = {  SUBDEVICE_TYPE.ai : 'AnalogInput',
@@ -177,23 +184,18 @@ def get_info(device_path):
         if sub.get_type() not in d : continue
         info_sub = { }
         info_sub['type'] = d[sub.get_type()]
-        info_sub['nb_channel'] = sub.get_n_channels()
-        info_sub['global_default_param'] = { 
-                                                                                        }
-        info_sub['by_channel_default_param'] = {
-                                                                                                }
+        n = sub.get_n_channels()
+        info_sub['nb_channel'] = n
+        info_sub['params'] = { },
+        info_sub['by_channel_params'] = {
+                                                                        'ai_channel_indexes' : range(n),
+                                                                        'ai_channel_names' : [ 'AI Channel {}'.format(i) for i in range(n)],
+                                                                        'ai_channel_range' : [ [-10., 10] for i in range(n) ],
+                                                                        }
         
         info['subdevices'].append(info_sub)
-        
-        
-                
-
-    
-    ai_subdevice = dev.find_subdevice_by_type(SUBDEVICE_TYPE.ai, factory=StreamingSubdevice)
-    info['nb_channel_ad'] = ai_subdevice.get_n_channels()
     info['device_packet_size'] = 512
     dev.close()
-    
     return info
 
 class ComediMultiSignals(DeviceBase):
@@ -224,35 +226,12 @@ class ComediMultiSignals(DeviceBase):
         i = 0
         while True:
             device_path = '/dev/comedi{}'.format(i)
-            dev = Device(device_path)
             try:
-                dev.open()
+                info = get_info(device_path)
+                devices[info['board_name']+str(i)] = info
             except PyComediError:
                 break
-            
-            info_devices = { }
-            info_devices['board_name'] = dev.get_board_name()
-            
-            
-            for sub in dev.subdevices():
-                
-                d = {  SUBDEVICE_TYPE.ai : 'AnalogInput',
-                            #~ SUBDEVICE_TYPE.di : 'DigitalInput',
-                            
-                            }
-                if sub.get_type() not in d : continue
-                d[sub.get_type()]
-                    
-                
-                
-                if sub.get_type() == SUBDEVICE_TYPE.ai:
-                    type
-                
-            devices[dev.get_board_name()+str(i)] = info_devices
-                
-            dev.close()
             i += 1
-            
         return devices
 
     def configure(self, device_path = '/dev/comedi0',

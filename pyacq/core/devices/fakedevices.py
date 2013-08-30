@@ -4,6 +4,7 @@ import multiprocessing as mp
 import numpy as np
 import msgpack
 import time
+from collections import OrderedDict
 
 from .base import DeviceBase
 
@@ -67,6 +68,35 @@ class FakeMultiSignals(DeviceBase):
     """
     def __init__(self,  **kargs):
         DeviceBase.__init__(self, **kargs)
+
+    @classmethod
+    def get_available_devices(cls):
+        devices = OrderedDict()
+        
+        for n in [4,8,16, 64]:
+            name = 'fake {} analog input'.format(n)
+            info = {'board_name' : name,
+                        'class' : 'FakeMultiSignals',
+                        'global_params' : {
+                                                        'sampling_rate' : 1000.,
+                                                        'buffer_length' : 60.,
+                                                        'packet_size' : 10,
+                                                        },
+                        'subdevices' : [ {
+                                                    'type' : 'AnalogInput',
+                                                    'nb_channel' : n,
+                                                    'params' :{  }, 
+                                                    'by_channel_params' : { 
+                                                                            'ai_channel_indexes' : range(n),
+                                                                            'ai_channel_names' : [ 'AI Channel {}'.format(i) for i in range(n)],
+                                                        },
+                                                },
+                            ]
+                        }
+            devices[name] = info
+
+        return devices
+        
 
     def initialize(self, streamhandler = None):
         self.sampling_rate = float(self.sampling_rate)
@@ -172,7 +202,35 @@ class FakeDigital(DeviceBase):
     """
     def __init__(self,  **kargs):
         DeviceBase.__init__(self, **kargs)
+        
+    
+    @classmethod
+    def get_available_devices(cls):
+        devices = OrderedDict()
+        
+        for n in [8, 32]:
+            name = 'fake {} digital input'.format(n)
+            info = {'board_name' : name,
+                        'class' : 'FakeDigital',
+                        'global_params' : {
+                                                    'sampling_rate' : 1000.,
+                                                    'buffer_length' : 60.,
+                                                    'packet_size' : 10,
+                                                    },
+                        'subdevices' : [ {
+                                                    'type' : 'DigitalInput',
+                                                    'nb_channel' : n,
+                                                    'params' :{ },
+                                                    'by_channel_params' : { 
+                                                                            'di_channel_indexes' : range(n),
+                                                                            'di_channel_names' : [ 'DI Channel {}'.format(i) for i in range(n)],
+                                                        },
+                                                },
+                            ]
+                        }
+            devices[name] = info
 
+        return devices
     def initialize(self, streamhandler = None):
         self.sampling_rate = float(self.sampling_rate)
 
