@@ -81,6 +81,7 @@ class FakeMultiSignals(DeviceBase):
                                                         'sampling_rate' : 1000.,
                                                         'buffer_length' : 60.,
                                                         'packet_size' : 10,
+                                                        'nb_channel' : n,
                                                         },
                         'subdevices' : [ {
                                                     'type' : 'AnalogInput',
@@ -107,7 +108,8 @@ class FakeMultiSignals(DeviceBase):
         l = int(self.sampling_rate*self.buffer_length)
         self.buffer_length = (l - l%self.packet_size)/self.sampling_rate
         
-        s = self.streamhandler.new_AnalogSignalSharedMemStream(name = self.name, sampling_rate = self.sampling_rate,
+        #FIXME : name
+        s = self.streamhandler.new_AnalogSignalSharedMemStream(name = 'yep', sampling_rate = self.sampling_rate,
                                                         nb_channel = self.nb_channel, buffer_length = self.buffer_length,
                                                         packet_size = self.packet_size, dtype = np.float64,
                                                         channel_names = channel_names, channel_indexes = channel_indexes,            
@@ -130,7 +132,7 @@ class FakeMultiSignals(DeviceBase):
             self.precomputed[i,:] *= np.random.rand()*10 # add random gain
             
             
-        print 'FakeMultiAnalogChannel initialized:', self.name, s['port']
+        print 'FakeMultiAnalogChannel initialized:',  s['port']
     
     def start(self):
         
@@ -141,13 +143,13 @@ class FakeMultiSignals(DeviceBase):
         self.process = mp.Process(target = fake_multisignal_mainLoop,  args=(self.stop_flag, s, self.precomputed) )
         self.process.start()
         
-        print 'FakeMultiAnalogChannel started:', self.name
+        print 'FakeMultiAnalogChannel started:'
         self.running = True
     
     def stop(self):
         self.stop_flag.value = 1
         self.process.join()
-        print 'FakeMultiAnalogChannel stopped:', self.name
+        print 'FakeMultiAnalogChannel stopped:'
         
         self.running = False
     
@@ -216,6 +218,7 @@ class FakeDigital(DeviceBase):
                                                     'sampling_rate' : 1000.,
                                                     'buffer_length' : 60.,
                                                     'packet_size' : 10,
+                                                    'nb_channel' : n,
                                                     },
                         'subdevices' : [ {
                                                     'type' : 'DigitalInput',
@@ -239,7 +242,7 @@ class FakeDigital(DeviceBase):
         l = int(self.sampling_rate*self.buffer_length)
         self.buffer_length = (l - l%self.packet_size)/self.sampling_rate
         
-        s = self.streamhandler.new_DigitalSignalSharedMemStream(name = self.name, sampling_rate = self.sampling_rate,
+        s = self.streamhandler.new_DigitalSignalSharedMemStream(name = 'yep', sampling_rate = self.sampling_rate,
                                                         nb_channel = self.nb_channel, buffer_length = self.buffer_length,
                                                         packet_size = self.packet_size, channel_names = channel_names)
         
