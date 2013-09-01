@@ -55,8 +55,13 @@ cbw = CBW()
 
 
 def device_mainLoop(stop_flag, streams, board_num, ul_dig_ports, device_info ):
-    streamAD = streams[0]
-    streamDIG = streams[1]
+    streamAD = None
+    streamDIG = None
+    for s in streams:
+        if type(s).__name__ == 'AnalogSignalSharedMemStream':
+            streamAD = s
+        elif type(s).__name__ == 'DigitalSignalSharedMemStream':
+            streamDIG = s
     
     packet_size = streamAD['packet_size']
     sampling_rate = streamAD['sampling_rate']
@@ -66,16 +71,18 @@ def device_mainLoop(stop_flag, streams, board_num, ul_dig_ports, device_info ):
     half_size = arr_ad.shape[1]/2
     
     nb_port_dig = len(ul_dig_ports)
-    arr_dig = streamDIG['shared_array'].to_numpy_array()
+    if streamDIG is not None:
+        arr_dig = streamDIG['shared_array'].to_numpy_array()
     
     nb_total_channel = streamAD['nb_channel'] + nb_port_dig
     
     context = zmq.Context()
     socketAD = context.socket(zmq.PUB)
     socketAD.bind("tcp://*:{}".format(streamAD['port']))
-
-    socketDIG = context.socket(zmq.PUB)
-    socketDIG.bind("tcp://*:{}".format(streamDIG['port']))
+    
+    if streamDIG is not None:
+        socketDIG = context.socket(zmq.PUB)
+        socketDIG.bind("tcp://*:{}".format(streamDIG['port']))
     
     #~ print 'ul_dig_ports', ul_dig_ports
     
@@ -147,7 +154,8 @@ def device_mainLoop(stop_flag, streams, board_num, ul_dig_ports, device_info ):
     pos = abs_pos = 0
     last_index = 0
     socketAD.send(msgpack.dumps(abs_pos))
-    socketDIG.send(msgpack.dumps(abs_pos))
+    if streamDIG is not None:
+        socketDIG.send(msgpack.dumps(abs_pos))
     
     ad_mask = np.zeros(nb_total_channel, dtype = bool)
     ad_mask[:nb_ai_channel] = True
@@ -181,8 +189,9 @@ def device_mainLoop(stop_flag, streams, board_num, ul_dig_ports, device_info ):
                 arr_ad[:,pos+half_size:pos+half_size+new_size2] = arr_ad[:,pos:pos+new_size2]
                 
                 # Digital
-                arr_dig[:,pos:pos+new_size] = raw_arr[last_index:, dig_mask].transpose().astype(np.uint8)
-                arr_dig[:,pos+half_size:pos+half_size+new_size2] = raw_arr[ last_index:last_index+new_size2, dig_mask].transpose().astype(np.uint8)
+                if streamDIG is not None:
+                    arr_dig[:,pos:pos+new_size] = raw_arr[last_index:, dig_mask].transpose().astype(np.uint8)
+                    arr_dig[:,pos+half_size:pos+half_size+new_size2] = raw_arr[ last_index:last_index+new_size2, dig_mask].transpose().astype(np.uint8)
                 
                 abs_pos += new_size
                 pos = abs_pos%half_size
@@ -201,8 +210,9 @@ def device_mainLoop(stop_flag, streams, board_num, ul_dig_ports, device_info ):
             
             
             # Digital
-            arr_dig[:,pos:pos+new_size] = raw_arr[ last_index:index, dig_mask ].transpose().astype(np.uint8)
-            arr_dig[:,pos+half_size:pos+new_size2+half_size] = raw_arr[ last_index:last_index+new_size2, dig_mask ].transpose().astype(np.uint8)
+            if streamDIG is not None:
+                arr_dig[:,pos:pos+new_size] = raw_arr[ last_index:index, dig_mask ].transpose().astype(np.uint8)
+                arr_dig[:,pos+half_size:pos+new_size2+half_size] = raw_arr[ last_index:last_index+new_size2, dig_mask ].transpose().astype(np.uint8)
             
             abs_pos += new_size
             pos = abs_pos%half_size
@@ -210,7 +220,8 @@ def device_mainLoop(stop_flag, streams, board_num, ul_dig_ports, device_info ):
 
             
             socketAD.send(msgpack.dumps(abs_pos))
-            socketDIG.send(msgpack.dumps(abs_pos))
+            if streamDIG is not None:
+                socketDIG.send(msgpack.dumps(abs_pos))
 
 
         except ULError as e:
@@ -389,13 +400,14 @@ class MeasurementComputingMultiSignals(DeviceBase):
         
         self.name = '{} #{}'.format(info['board_name'], info['factory_id'])
         self.streams = []
+        self.ul_dig_ports =  []
         for sub in self.subdevices:
-            if s['type'] == 'AnalogInput':
+            if sub['type'] == 'AnalogInput':
                 sel = sub['by_channel_params']['channel_selection']
-                self.nb_ai_channel = np.sum(sel)
-                channel_indexes = [e   for e, s in zip(sub0['by_channel_params']['channel_indexes'], sel) if s]
-                channel_names = [e  for e, s in zip(sub0['by_channel_params']['channel_names'], sel) if s]
-                self.packet_size = int(info['device_packet_size']/self.nb_channel)
+                self.nb_ai_channel = int(np.sum(sel))
+                channel_indexes = [e   for e, s in zip(sub['by_channel_params']['channel_indexes'], sel) if s]
+                channel_names = [e  for e, s in zip(sub['by_channel_params']['channel_names'], sel) if s]
+                self.packet_size = int(info['device_packet_size']/self.nb_ai_channel)
         
                 l = int(self.sampling_rate*self.buffer_length)
                 self.buffer_length = (l - l%self.packet_size)/self.sampling_rate
@@ -403,13 +415,13 @@ class MeasurementComputingMultiSignals(DeviceBase):
                 stream  = self.streamhandler.new_AnalogSignalSharedMemStream(name = self.name+' AnalogInput', sampling_rate = self.sampling_rate,
                                                                 nb_channel = self.nb_ai_channel, buffer_length = self.buffer_length,
                                                                 packet_size = self.packet_size, dtype = np.float64,
-                                                                channel_names = self.channel_names, channel_indexes = self.channel_indexes,            
+                                                                channel_names = channel_names, channel_indexes = channel_indexes,            
                                                                 )
                 self.streams.append(stream)
                 
-            elif s['type'] == 'DigitalInput':
-                channel_names = sub0['by_channel_params']['channel_names']
-                channel_indexes = sub0['by_channel_params']['channel_indexes']
+            elif sub['type'] == 'DigitalInput':
+                channel_names = sub['by_channel_params']['channel_names']
+                channel_indexes = sub['by_channel_params']['channel_indexes']
                 self.nb_di_channel = len(channel_names)
                 self.ul_dig_ports = info['list_di_port']
                 stream = self.streamhandler.new_DigitalSignalSharedMemStream(name = self.name+' DigitalInput', sampling_rate = self.sampling_rate,
