@@ -45,6 +45,11 @@ class Stream(object):
             return self._params[k]
         else:
             return object.__getattribute__(self, name)
+    def __getstate__(self):
+        return self._params
+    def __setstate__(self, kargs):
+        self._params     = {}
+        self._params.update(kargs)
 
     
 

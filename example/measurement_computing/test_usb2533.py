@@ -37,9 +37,9 @@ def test1():
     w1.change_param_global(xsize = 20., refresh_interval = 100, mode = 'scan', ylims = [-8., 8.])
     w1.show()
     
-    #~ w2 = TimeFreq(stream = dev.streams[0], max_visible_on_open = 4)
-    #~ w2.change_param_global(refresh_interval = 100, xsize = 2.)
-    #~ w2.show()
+    w2 = TimeFreq(stream = dev.streams[0], max_visible_on_open = 4)
+    w2.change_param_global(refresh_interval = 100, xsize = 2.)
+    w2.show()
     
     w3=OscilloscopeDigital(stream = dev.streams[1])
     w3.change_param_global(xsize = 20, mode = 'scan')    

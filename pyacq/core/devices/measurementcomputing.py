@@ -21,11 +21,11 @@ from ctypes import byref
 ## Wrapper on Universal Library with ctypes with error handling
 try:
     _cbw = ctypes.windll.cbw32
-    print 'cbw32'
+    #~ print 'cbw32'
 except WindowsError:
     _cbw = ctypes.windll.cbw64
     #~ _cbw = ctypes.WinDLL('cbw64.dll')
-    print 'cbw64'
+    #~ print 'cbw64'
 
 class ULError( Exception ):
     def __init__(self, errno):
@@ -62,7 +62,7 @@ def device_mainLoop(stop_flag, streams, board_num, ul_dig_ports, device_info ):
     sampling_rate = streamAD['sampling_rate']
     arr_ad = streamAD['shared_array'].to_numpy_array()
     
-    nb_channel_ad = streamAD['nb_channel']
+    nb_ai_channel = streamAD['nb_channel']
     half_size = arr_ad.shape[1]/2
     
     nb_port_dig = len(ul_dig_ports)
@@ -80,8 +80,8 @@ def device_mainLoop(stop_flag, streams, board_num, ul_dig_ports, device_info ):
     print 'ul_dig_ports', ul_dig_ports
     
     chan_array = np.array( streamAD['channel_indexes']+ul_dig_ports, dtype = np.int16)
-    chan_array_type = np.array( [UL.ANALOG] * nb_channel_ad +[ UL.DIGITAL8] *nb_port_dig  , dtype = np.int16)
-    gain_array = np.array( [UL.BIP10VOLTS] *nb_channel_ad + [0] *nb_port_dig, dtype = np.int16)
+    chan_array_type = np.array( [UL.ANALOG] * nb_ai_channel +[ UL.DIGITAL8] *nb_port_dig  , dtype = np.int16)
+    gain_array = np.array( [UL.BIP10VOLTS] *nb_ai_channel + [0] *nb_port_dig, dtype = np.int16)
     real_sr = ctypes.c_long(int(sampling_rate))
 
     internal_size = int(30.*sampling_rate)
@@ -137,8 +137,8 @@ def device_mainLoop(stop_flag, streams, board_num, ul_dig_ports, device_info ):
     dict_gain = {UL.BIP10VOLTS: [-10., 10.],
                         UL.BIP1VOLTS: [-1., 1.],
                         }
-    low_range = np.array([ dict_gain[g][0] for g in gain_array[:nb_channel_ad] ])
-    hight_range = np.array([ dict_gain[g][1] for g in gain_array[:nb_channel_ad] ])
+    low_range = np.array([ dict_gain[g][0] for g in gain_array[:nb_ai_channel] ])
+    hight_range = np.array([ dict_gain[g][1] for g in gain_array[:nb_ai_channel] ])
     buffer_gains = 1./(2**16)*(hight_range-low_range)
     buffer_gains = buffer_gains[ :, np.newaxis]
     buffer_offsets = low_range
@@ -150,7 +150,7 @@ def device_mainLoop(stop_flag, streams, board_num, ul_dig_ports, device_info ):
     socketDIG.send(msgpack.dumps(abs_pos))
     
     ad_mask = np.zeros(nb_total_channel, dtype = bool)
-    ad_mask[:nb_channel_ad] = True
+    ad_mask[:nb_ai_channel] = True
     dig_mask = ~ad_mask
     
     while True:
@@ -242,10 +242,10 @@ def device_mainLoop(stop_flag, streams, board_num, ul_dig_ports, device_info ):
 def get_info(board_num):
     
     config_val = ctypes.c_int(0)
-    l = [ ('nb_channel_ad', UL.BOARDINFO, UL.BINUMADCHANS),
-                ('nb_ai_channel', UL.BOARDINFO, UL.BINUMDACHANS),
+    l = [ ('nb_ai_channel', UL.BOARDINFO, UL.BINUMADCHANS),
+                ('nb_ao_channel', UL.BOARDINFO, UL.BINUMDACHANS),
                 #~ ('BINUMIOPORTS', UL.BOARDINFO, UL.BINUMIOPORTS),
-                ('nb_di_channel', UL.BOARDINFO, UL.BIDINUMDEVS),
+                ('nb_di_port', UL.BOARDINFO, UL.BIDINUMDEVS),
                 ('serial_num', UL.BOARDINFO, UL.BISERIALNUM),
                 ('factory_id', UL.BOARDINFO, UL.BIFACTORYID),
                 ]
@@ -254,7 +254,7 @@ def get_info(board_num):
     cbw.cbGetBoardName(board_num, byref(board_name))# this is very SLOW!!!!!!!
     
     info['board_name'] = board_name.value
-    info['class'] = MeasurementComputingMultiSignals
+    info['class'] = 'MeasurementComputingMultiSignals'
     for name, info_type, config_item in l:
         cbw.cbGetConfig(info_type, board_num, 0, config_item, byref(config_val))
         info[name] = config_val.value
@@ -272,7 +272,9 @@ def get_info(board_num):
                                                         'sampling_rate' : 1000.,
                                                         'buffer_length' : 60.,
                                                         }
+    print info['nb_ai_channel']
     if info['nb_ai_channel']>0:
+        n = info['nb_ai_channel']
         sub = {
                     'type' : 'AnalogInput',
                     'nb_channel' : info['nb_ai_channel'],
@@ -283,12 +285,21 @@ def get_info(board_num):
                                         },
                         }
         info['subdevices'].append(sub)
-
-    if info['nb_di_channel']>0:
+    
+    
+    if info['nb_di_port']>0:
         #FIXME 
+        info['nb_di_channel'] = 0
+        for num_dev in range(info['nb_di_port']):
+            cbw.cbGetConfig(UL.DIGITALINFO, board_num, num_dev, UL.DINUMBITS, byref(config_val))
+            nbits = config_val.value
+            info['nb_di_channel'] += nbits
+            #~ print num_dev, nbits
+            
+        n = info['nb_di_channel']
         sub = {
                     'type' : 'DigitalInput',
-                    'nb_channel' : info['nb_di_channel'],#FIXME
+                    'nb_channel' : info['nb_di_channel'],
                     'params' :{ },
                     'by_channel_params' : { 
                                             'ai_channel_indexes' : range(n),
@@ -324,7 +335,6 @@ class MeasurementComputingMultiSignals(DeviceBase):
     
     @classmethod
     def get_available_devices(cls):
-        print cls
         devices = OrderedDict()
         
         
@@ -334,7 +344,7 @@ class MeasurementComputingMultiSignals(DeviceBase):
         for board_num in range(board_nums):
             try:
                 info = get_info(board_num)
-                devices[info['board_name']+str(board_num)] = info
+                devices[info['board_name']+' #'+str(board_num)] = info
             except ULError:
                 pass
         return devices
@@ -367,7 +377,7 @@ class MeasurementComputingMultiSignals(DeviceBase):
         info = self.device_info = get_info(self.board_num)
         print info
         if self.channel_indexes is None:
-            self.channel_indexes = range(info['nb_channel_ad'])
+            self.channel_indexes = range(info['nb_ai_channel'])
         if self.channel_names is None:
             self.channel_names = [ 'AIn Channel {}'.format(i) for i in self.channel_indexes]
         self.nb_channel = len(self.channel_indexes)
@@ -387,8 +397,8 @@ class MeasurementComputingMultiSignals(DeviceBase):
         
         # Digital
         if self.digital_port is None:
-            self.digital_port = range(info['nb_channel_dig'])
-        print self.digital_port
+            self.digital_port = range(info['nb_di_port'])
+        #~ print self.digital_port
         all_ports = [ UL.FIRSTPORTA, UL.FIRSTPORTB, UL.FIRSTPORTC]
         port_names = ['A', 'B', 'C' ]
         self.ul_dig_ports = [ all_ports[p] for p in self.digital_port]
