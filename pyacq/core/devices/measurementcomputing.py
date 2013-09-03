@@ -77,7 +77,7 @@ def device_mainLoop(stop_flag, streams, board_num, ul_dig_ports, device_info ):
     socketDIG = context.socket(zmq.PUB)
     socketDIG.bind("tcp://*:{}".format(streamDIG['port']))
     
-    print 'ul_dig_ports', ul_dig_ports
+    #~ print 'ul_dig_ports', ul_dig_ports
     
     chan_array = np.array( streamAD['channel_indexes']+ul_dig_ports, dtype = np.int16)
     chan_array_type = np.array( [UL.ANALOG] * nb_ai_channel +[ UL.DIGITAL8] *nb_port_dig  , dtype = np.int16)
@@ -87,7 +87,7 @@ def device_mainLoop(stop_flag, streams, board_num, ul_dig_ports, device_info ):
     internal_size = int(30.*sampling_rate)
     #~ internal_size = internal_size- internal_size%packet_size
     internal_size = internal_size- internal_size%(device_info['device_packet_size'])
-    print 'internal_size', internal_size
+    #~ print 'internal_size', internal_size
     
     
     raw_arr = np.zeros(( internal_size, nb_total_channel), dtype = np.uint16)
@@ -104,7 +104,7 @@ def device_mainLoop(stop_flag, streams, board_num, ul_dig_ports, device_info ):
                             gain_array.ctypes.data, nb_total_channel, byref(real_sr), byref(pretrig_count),
                              byref(total_count) ,raw_arr.ctypes.data, options)
         function = UL.DAQIFUNCTION
-                             
+        
     except ULError as e:
         print e.errno, e.errno == UL.BADBOARDTYPE
         if e.errno == UL.BADBOARDTYPE:
@@ -272,7 +272,7 @@ def get_info(board_num):
                                                         'sampling_rate' : 1000.,
                                                         'buffer_length' : 60.,
                                                         }
-    print info['nb_ai_channel']
+    #~ print info['nb_ai_channel']
     if info['nb_ai_channel']>0:
         n = info['nb_ai_channel']
         sub = {
@@ -291,26 +291,28 @@ def get_info(board_num):
         #FIXME 
         info['nb_di_channel'] = 0
         for num_dev in range(info['nb_di_port']):
+            cbw.cbGetConfig(UL.DIGITALINFO, board_num, num_dev, UL.DIDEVTYPE, byref(config_val))
+            didevtype =   config_val.value
+            if didevtype==UL.AUXPORT : 
+                # This port is not samplable
+                info['nb_di_port'] -= 1
+                continue
             cbw.cbGetConfig(UL.DIGITALINFO, board_num, num_dev, UL.DINUMBITS, byref(config_val))
             nbits = config_val.value
             info['nb_di_channel'] += nbits
-            #~ print num_dev, nbits
-            
-        n = info['nb_di_channel']
-        sub = {
-                    'type' : 'DigitalInput',
-                    'nb_channel' : info['nb_di_channel'],
-                    'params' :{ },
-                    'by_channel_params' : { 
-                                            'ai_channel_indexes' : range(n),
-                                            'ai_channel_names' : [ 'DI Channel {}'.format(i) for i in range(n)],
-                                        },
-                        }
-        info['subdevices'].append(sub)
         
-        #FIXME compute the number of digital input
-        #cbw.cbGetConfig(UL.DIGITALINFO, board_num, 0, UL.DINUMBITS, byref(config_val))
-        #nbits = config_val.value
+        n = info['nb_di_channel']            
+        if n>0:
+            sub = {
+                        'type' : 'DigitalInput',
+                        'nb_channel' : info['nb_di_channel'],
+                        'params' :{ },
+                        'by_channel_params' : { 
+                                                'ai_channel_indexes' : range(n),
+                                                'ai_channel_names' : [ 'DI Channel {}'.format(i) for i in range(n)],
+                                            },
+                            }
+            info['subdevices'].append(sub)
     
     return info
 
