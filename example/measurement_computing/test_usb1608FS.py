@@ -22,9 +22,7 @@ def test1():
     dev.configure( board_num = 0,
                           sampling_rate =10000.,
                           buffer_length = 60.,
-                          channel_indexes = range(3),
-                          digital_port = [],
-                                )
+                            )
     dev.initialize()
     dev.start()
     

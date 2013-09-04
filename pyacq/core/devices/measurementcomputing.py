@@ -287,20 +287,23 @@ def get_info(board_num):
                         }
         info['subdevices'].append(sub)
     
-    
+    info['list_di_port'] = []
     if info['nb_di_port']>0:
         #FIXME 
         info['nb_di_channel'] = 0
         for num_dev in range(info['nb_di_port']):
             cbw.cbGetConfig(UL.DIGITALINFO, board_num, num_dev, UL.DIDEVTYPE, byref(config_val))
             didevtype =   config_val.value
-            if didevtype==UL.AUXPORT : 
-                # This port is not samplable
-                info['nb_di_port'] -= 1
-                continue
             cbw.cbGetConfig(UL.DIGITALINFO, board_num, num_dev, UL.DINUMBITS, byref(config_val))
             nbits = config_val.value
-            info['nb_di_channel'] += nbits
+            
+            # FIXME deal only with 8 bits at the moment
+            if didevtype==UL.AUXPORT or nbits!=8: 
+                # This port is not samplable
+                info['nb_di_port'] -= 1
+            else:
+                info['nb_di_channel'] += nbits
+                info['list_di_port'].append(didevtype)
         
         n = info['nb_di_channel']            
         if n>0:
@@ -309,8 +312,8 @@ def get_info(board_num):
                         'nb_channel' : info['nb_di_channel'],
                         'params' :{ },
                         'by_channel_params' : { 
-                                                'ai_channel_indexes' : range(n),
-                                                'ai_channel_names' : [ 'DI Channel {}'.format(i) for i in range(n)],
+                                                'channel_indexes' : range(n),
+                                                'channel_names' : [ 'DI Channel {}'.format(i) for i in range(n)],
                                             },
                             }
             info['subdevices'].append(sub)
@@ -353,22 +356,25 @@ class MeasurementComputingMultiSignals(DeviceBase):
         return devices
 
     def configure(self, board_num = 0, 
-                                    channel_indexes = None,
-                                    channel_names = None,
-                                    digital_port = None,
-                                    dig_channel_names = None,
+                                    #~ channel_indexes = None,
+                                    #~ channel_names = None,
+                                    #~ digital_port = None,
+                                    #~ dig_channel_names = None,
                                     buffer_length= 5.12,
                                     sampling_rate =1000.,
+                                    subdevices = None,
                                     
                                     ):
         self.params = {'board_num' : board_num,
-                                'channel_indexes' : channel_indexes,
-                                'channel_names' : channel_names,
-                                'digital_port' : digital_port,
-                                'dig_channel_names' : dig_channel_names,
+                                #~ 'channel_indexes' : channel_indexes,
+                                #~ 'channel_names' : channel_names,
+                                #~ 'digital_port' : digital_port,
+                                #~ 'dig_channel_names' : dig_channel_names,
                                 'buffer_length' : buffer_length,
-                                'sampling_rate' : sampling_rate
+                                'sampling_rate' : sampling_rate,
+                                'subdevices' : subdevices,
                                 }
+        print self.params
         self.__dict__.update(self.params)
         self.configured = True
 
@@ -378,45 +384,41 @@ class MeasurementComputingMultiSignals(DeviceBase):
         
         # TODO card by card
         info = self.device_info = get_info(self.board_num)
+        if self.subdevices is None:
+            self.subdevices = info['subdevices']
         
-        if self.channel_indexes is None:
-            self.channel_indexes = range(info['nb_ai_channel'])
-        if self.channel_names is None:
-            self.channel_names = [ 'AIn Channel {}'.format(i) for i in self.channel_indexes]
-        self.nb_channel = len(self.channel_indexes)
-        self.packet_size = int(info['device_packet_size']/self.nb_channel)
-        
-        
-        
-        l = int(self.sampling_rate*self.buffer_length)
-        self.buffer_length = (l - l%self.packet_size)/self.sampling_rate
         self.name = '{} #{}'.format(info['board_name'], info['factory_id'])
-        s  = self.streamhandler.new_AnalogSignalSharedMemStream(name = self.name+' Analog', sampling_rate = self.sampling_rate,
-                                                        nb_channel = self.nb_channel, buffer_length = self.buffer_length,
-                                                        packet_size = self.packet_size, dtype = np.float64,
-                                                        channel_names = self.channel_names, channel_indexes = self.channel_indexes,            
-                                                        )
+        self.streams = []
+        for sub in self.subdevices:
+            if s['type'] == 'AnalogInput':
+                sel = sub['by_channel_params']['channel_selection']
+                self.nb_ai_channel = np.sum(sel)
+                channel_indexes = [e   for e, s in zip(sub0['by_channel_params']['channel_indexes'], sel) if s]
+                channel_names = [e  for e, s in zip(sub0['by_channel_params']['channel_names'], sel) if s]
+                self.packet_size = int(info['device_packet_size']/self.nb_channel)
         
-        
-        # Digital
-        if self.digital_port is None:
-            self.digital_port = range(info['nb_di_port'])
-        #~ print self.digital_port
-        all_ports = [ UL.FIRSTPORTA, UL.FIRSTPORTB, UL.FIRSTPORTC]
-        port_names = ['A', 'B', 'C' ]
-        self.ul_dig_ports = [ all_ports[p] for p in self.digital_port]
-        if self.dig_channel_names is None:
-            self.dig_channel_names = [ '{} {}'.format(port_names[p], c) for p in self.digital_port  for c in range(8) ]
-        print self.dig_channel_names
-        s2 = self.streamhandler.new_DigitalSignalSharedMemStream(name = self.name+' Digital', sampling_rate = self.sampling_rate,
-                                                        nb_channel = len(self.digital_port)*8, buffer_length = self.buffer_length,
-                                                        packet_size = self.packet_size, channel_names = self.dig_channel_names)
-        
-        self.streams = [s, s2 ]
+                l = int(self.sampling_rate*self.buffer_length)
+                self.buffer_length = (l - l%self.packet_size)/self.sampling_rate
+                
+                stream  = self.streamhandler.new_AnalogSignalSharedMemStream(name = self.name+' AnalogInput', sampling_rate = self.sampling_rate,
+                                                                nb_channel = self.nb_ai_channel, buffer_length = self.buffer_length,
+                                                                packet_size = self.packet_size, dtype = np.float64,
+                                                                channel_names = self.channel_names, channel_indexes = self.channel_indexes,            
+                                                                )
+                self.streams.append(stream)
+                
+            elif s['type'] == 'DigitalInput':
+                channel_names = sub0['by_channel_params']['channel_names']
+                channel_indexes = sub0['by_channel_params']['channel_indexes']
+                self.nb_di_channel = len(channel_names)
+                self.ul_dig_ports = info['list_di_port']
+                stream = self.streamhandler.new_DigitalSignalSharedMemStream(name = self.name+' DigitalInput', sampling_rate = self.sampling_rate,
+                                                                nb_channel = self.nb_di_channel, buffer_length = self.buffer_length,
+                                                                packet_size = self.packet_size, channel_names = channel_names)
+                self.streams.append(stream)
 
-        arr_size = s['shared_array'].shape[1]
+        arr_size = self.streams[0]['shared_array'].shape[1]
         assert (arr_size/2)%self.packet_size ==0, 'buffer should be a multilple of pcket_size {}/2 {}'.format(arr_size, self.packet_size)
-        
         
     
     def start(self):

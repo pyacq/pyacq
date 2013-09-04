@@ -21,12 +21,7 @@ def test1():
     dev = MeasurementComputingMultiSignals(streamhandler = streamhandler)
     dev.configure( board_num = 0,
                           sampling_rate =1000.,
-                          #~ sampling_rate =1000.,
                           buffer_length = 60.,
-                          channel_indexes = range(64),
-                          #~ channel_indexes = [0,12,25,56],
-                          digital_port = [0, 1, 2],
-                          #~ digital_port = [],
                                 )
     dev.initialize()
     dev.start()

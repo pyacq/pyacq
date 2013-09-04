@@ -45,11 +45,6 @@ def test2():
     dev.configure( board_num = 0,
                           sampling_rate =10000.,
                           buffer_length = 5.,
-                          #~ channel_indexes = range(64),
-                          channel_indexes = [0,4,7,  16],
-                          #~ channel_indexes = [0],
-                          digital_port = [0, 1, 2],
-                          #~ digital_port = [],
                                 )
     dev.initialize()
     dev.start()
@@ -94,10 +89,6 @@ def test3():
     dev.configure( board_num = 0,
                           sampling_rate =10000.,
                           buffer_length = 5.,
-                          channel_indexes = [0, ],
-                          #~ channel_indexes = [0],
-                          digital_port = [0, 1, 2],
-                          #~ digital_port = [],
                                 )
     dev.initialize()
     dev.start()
