@@ -280,8 +280,9 @@ def get_info(board_num):
                     'nb_channel' : info['nb_ai_channel'],
                     'params' :{ },
                     'by_channel_params' : { 
-                                            'ai_channel_indexes' : range(n),
-                                            'ai_channel_names' : [ 'AI Channel {}'.format(i) for i in range(n)],
+                                            'channel_indexes' : range(n),
+                                            'channel_names' : [ 'AI Channel {}'.format(i) for i in range(n)],
+                                            'channel_selection' : [True]*n,
                                         },
                         }
         info['subdevices'].append(sub)
@@ -377,14 +378,14 @@ class MeasurementComputingMultiSignals(DeviceBase):
         
         # TODO card by card
         info = self.device_info = get_info(self.board_num)
-        print info
+        
         if self.channel_indexes is None:
             self.channel_indexes = range(info['nb_ai_channel'])
         if self.channel_names is None:
             self.channel_names = [ 'AIn Channel {}'.format(i) for i in self.channel_indexes]
         self.nb_channel = len(self.channel_indexes)
         self.packet_size = int(info['device_packet_size']/self.nb_channel)
-        print 'self.packet_size', self.packet_size
+        
         
         
         l = int(self.sampling_rate*self.buffer_length)

@@ -47,6 +47,19 @@ def fake_multisignal_mainLoop(stop_flag, stream,  precomputed):
         time.sleep(packet_size/sampling_rate)
         #~ gevent.sleep(packet_size/sampling_rate)
 
+def create_analog_subdevice_param(n):
+    d = {
+                'type' : 'AnalogInput',
+                'nb_channel' : n,
+                'params' :{  }, 
+                'by_channel_params' : { 
+                                        'channel_indexes' : range(n),
+                                        'channel_names' : [ 'AI Channel {}'.format(i) for i in range(n)],
+                                        'channel_selection' : [True]*n,
+                                        }
+            }
+    return d
+    
 class FakeMultiSignals(DeviceBase):
     """
     Usage:
@@ -68,6 +81,27 @@ class FakeMultiSignals(DeviceBase):
     """
     def __init__(self,  **kargs):
         DeviceBase.__init__(self, **kargs)
+    
+    def configure(self, 
+                                    buffer_length= 10.,
+                                    sampling_rate =1000.,
+                                    packet_size = 10,
+                                    subdevices =[ create_analog_subdevice_param(4) ],
+                                    
+                                    # if subdevices is None
+                                    nb_channel = None,
+                                    ):
+        
+        if nb_channel is not None:
+            subdevices = [create_analog_subdevice_param(nb_channel), ]
+        self.params = {
+                                'buffer_length' : buffer_length,
+                                'sampling_rate' : sampling_rate,
+                                'packet_size' : packet_size,
+                                'subdevices' : subdevices,
+                                }
+        self.__dict__.update(self.params)
+        self.configured = True
 
     @classmethod
     def get_available_devices(cls):
@@ -77,22 +111,11 @@ class FakeMultiSignals(DeviceBase):
             name = 'fake {} analog input'.format(n)
             info = {'board_name' : name,
                         'class' : 'FakeMultiSignals',
-                        'global_params' : {
-                                                        'sampling_rate' : 1000.,
-                                                        'buffer_length' : 60.,
-                                                        'packet_size' : 10,
-                                                        'nb_channel' : n,
+                        'global_params' : {'sampling_rate' : 1000.,
+                                                                 'buffer_length' : 60.,
+                                                                 'packet_size' : 10,
                                                         },
-                        'subdevices' : [ {
-                                                    'type' : 'AnalogInput',
-                                                    'nb_channel' : n,
-                                                    'params' :{  }, 
-                                                    'by_channel_params' : { 
-                                                                            'ai_channel_indexes' : range(n),
-                                                                            'ai_channel_names' : [ 'AI Channel {}'.format(i) for i in range(n)],
-                                                        },
-                                                },
-                            ]
+                        'subdevices' : [ create_analog_subdevice_param(n),],
                         }
             devices[name] = info
 
@@ -101,15 +124,21 @@ class FakeMultiSignals(DeviceBase):
 
     def initialize(self, streamhandler = None):
         self.sampling_rate = float(self.sampling_rate)
-
-        channel_indexes = range(self.nb_channel)
-        channel_names = [ 'Channel {}'.format(i) for i in channel_indexes]
+        
+        sub0 = self.subdevices[0]
+        sel = sub0['by_channel_params']['channel_selection']
+        self.nb_channel = np.sum(sel)
+        
+        channel_indexes = [e   for e, s in zip(sub0['by_channel_params']['channel_indexes'], sel) if s]
+        channel_names = [e  for e, s in zip(sub0['by_channel_params']['channel_names'], sel) if s]
+        
 
         l = int(self.sampling_rate*self.buffer_length)
         self.buffer_length = (l - l%self.packet_size)/self.sampling_rate
         
+        name = 'fake {} analog input'.format(self.nb_channel)
         #FIXME : name
-        s = self.streamhandler.new_AnalogSignalSharedMemStream(name = 'yep', sampling_rate = self.sampling_rate,
+        s = self.streamhandler.new_AnalogSignalSharedMemStream(name = name, sampling_rate = self.sampling_rate,
                                                         nb_channel = self.nb_channel, buffer_length = self.buffer_length,
                                                         packet_size = self.packet_size, dtype = np.float64,
                                                         channel_names = channel_names, channel_indexes = channel_indexes,            
@@ -197,6 +226,18 @@ def fake_digital_mainLoop(stop_flag, stream,  precomputed):
 
 
 
+def create_digital_subdevice_param(n):
+    d = {
+                'type' : 'DigitalInput',
+                'nb_channel' : n,
+                'params' :{  }, 
+                'by_channel_params' : { 
+                                        'channel_indexes' : range(n),
+                                        'channel_names' : [ 'AI Channel {}'.format(i) for i in range(n)],
+                                        }
+            }
+    return d
+
 class FakeDigital(DeviceBase):
     """
     
@@ -204,6 +245,27 @@ class FakeDigital(DeviceBase):
     """
     def __init__(self,  **kargs):
         DeviceBase.__init__(self, **kargs)
+
+    def configure(self, 
+                                    buffer_length= 10.,
+                                    sampling_rate =1000.,
+                                    packet_size = 10,
+                                    subdevices =[ create_analog_subdevice_param(4) ],
+                                    
+                                    # if subdevices is None
+                                    nb_channel = None,
+                                    ):
+        
+        if nb_channel is not None:
+            subdevices = [create_digital_subdevice_param(nb_channel), ]
+        self.params = {
+                                'buffer_length' : buffer_length,
+                                'sampling_rate' : sampling_rate,
+                                'packet_size' : packet_size,
+                                'subdevices' : subdevices,
+                                }
+        self.__dict__.update(self.params)
+        self.configured = True
         
     
     @classmethod
@@ -220,25 +282,21 @@ class FakeDigital(DeviceBase):
                                                     'packet_size' : 10,
                                                     'nb_channel' : n,
                                                     },
-                        'subdevices' : [ {
-                                                    'type' : 'DigitalInput',
-                                                    'nb_channel' : n,
-                                                    'params' :{ },
-                                                    'by_channel_params' : { 
-                                                                            'di_channel_indexes' : range(n),
-                                                                            'di_channel_names' : [ 'DI Channel {}'.format(i) for i in range(n)],
-                                                        },
-                                                },
-                            ]
+                        'subdevices' : [ create_digital_subdevice_param(n)],
                         }
             devices[name] = info
-
+        
         return devices
+        
     def initialize(self, streamhandler = None):
         self.sampling_rate = float(self.sampling_rate)
+        
 
-        channel_names = [ 'Channel {}'.format(i) for i in range(self.nb_channel)]
-
+        sub0 = self.subdevices[0]
+        channel_names = sub0['by_channel_params']['channel_names']
+        channel_indexes = sub0['by_channel_params']['channel_indexes']
+        self.nb_channel = len(channel_names)
+        
         l = int(self.sampling_rate*self.buffer_length)
         self.buffer_length = (l - l%self.packet_size)/self.sampling_rate
         

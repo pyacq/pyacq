@@ -24,8 +24,6 @@ def test1():
     dev.configure( device_path = '/dev/comedi0',
                                 sampling_rate =10000.,
                                 buffer_length = 5.,
-                                channel_indexes = range(16),
-                                #~ channel_indexes = range(1),
                             )
     dev.initialize()
     dev.start()
@@ -33,7 +31,7 @@ def test1():
     app = QtGui.QApplication([])
     w1=Oscilloscope(stream = dev.streams[0])
     #w1.auto_gain_and_offset(mode = 0)
-    for i in range(len(dev.channel_indexes)):
+    for i in range(dev.nb_channel):
         w1.change_param_channel(i, visible = i==0)
     w1.change_param_global(xsize = 3., refresh_interval = 100, mode = 'scan', ylims = [-1., 1.])
     w1.show()

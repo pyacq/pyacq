@@ -168,6 +168,13 @@ class OscilloscopeDigital(QtGui.QWidget):
         if self.thread_pos.pos is None: return
         pos = self.thread_pos.pos
 
+        if self.last_pos>pos:
+            # the stream have restart from zeros
+            self.last_pos = 0
+            for curve_data in self.curves_data:
+                curve_data[:] = 0.
+        
+
         mode = self.paramGlobal['mode']
         visibles = np.array([p['visible'] for p in self.paramChannels.children()], dtype = bool)
         n = np.sum(visibles)

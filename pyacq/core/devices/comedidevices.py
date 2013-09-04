@@ -26,14 +26,13 @@ from .base import DeviceBase
 
 def device_mainLoop(stop_flag, streams, device_path, device_info ):
     streamAD = streams[0]
-
     
     packet_size = streamAD['packet_size']
     sampling_rate = streamAD['sampling_rate']
     arr_ad = streamAD['shared_array'].to_numpy_array()
-    channel_indexes = streamAD['channel_indexes']
+    ai_channel_indexes = streamAD['channel_indexes']
     
-    nb_channel_ad = streamAD['nb_channel']
+    nb_ai_channel = streamAD['nb_channel']
     half_size = arr_ad.shape[1]/2
     
     context = zmq.Context()
@@ -49,7 +48,7 @@ def device_mainLoop(stop_flag, streams, device_path, device_info ):
     #~ aref = AREF.ground
     aref = AREF.common
     
-    ai_channels = [ ai_subdevice.channel(i, factory=AnalogChannel, aref=aref) for i in channel_indexes]
+    ai_channels = [ ai_subdevice.channel(i, factory=AnalogChannel, aref=aref) for i in ai_channel_indexes]
 
     dt = ai_subdevice.get_dtype()
     itemsize = np.dtype(dt).itemsize
@@ -57,11 +56,11 @@ def device_mainLoop(stop_flag, streams, device_path, device_info ):
     #~ ai_subdevice.set_max_buffer_size(2**24) # need to be sudo
     #~ print 'max_buffer_size', ai_subdevice.get_max_buffer_size()
     
-    internal_size = int(ai_subdevice.get_max_buffer_size()//nb_channel_ad//itemsize)
-    ai_subdevice.set_buffer_size(internal_size*nb_channel_ad*itemsize)
-    #~ print 'internal_size', internal_size, 'in second', internal_size/sampling_rate/nb_channel_ad/itemsize
+    internal_size = int(ai_subdevice.get_max_buffer_size()//nb_ai_channel//itemsize)
+    ai_subdevice.set_buffer_size(internal_size*nb_ai_channel*itemsize)
+    #~ print 'internal_size', internal_size, 'in second', internal_size/sampling_rate/nb_ai_channel/itemsize
 
-    ai_buffer = np.memmap(dev.file, dtype = dt, mode = 'r', shape = (internal_size, nb_channel_ad))
+    ai_buffer = np.memmap(dev.file, dtype = dt, mode = 'r', shape = (internal_size, nb_ai_channel))
     #m = mmap.mmap(dev.fileno(), internal_size*itemsize, flags= mmap.MAP_SHARED, access=  mmap.PROT_READ)
     
 
@@ -91,6 +90,7 @@ def device_mainLoop(stop_flag, streams, device_path, device_info ):
     
     pos = abs_pos = 0
     last_index = 0
+    
     socketAD.send(msgpack.dumps(abs_pos))
     
     sleep_time = 0.05
@@ -99,7 +99,7 @@ def device_mainLoop(stop_flag, streams, device_path, device_info ):
         if 1:
             new_bytes =  ai_subdevice.get_buffer_contents()
             
-            new_bytes = new_bytes - new_bytes%(nb_channel_ad*itemsize)
+            new_bytes = new_bytes - new_bytes%(nb_ai_channel*itemsize)
             
             
             if new_bytes ==0:
@@ -107,14 +107,14 @@ def device_mainLoop(stop_flag, streams, device_path, device_info ):
                 continue
                 
             
-            index = last_index + new_bytes/nb_channel_ad/itemsize
+            index = last_index + new_bytes/nb_ai_channel/itemsize
                
             if index == last_index : 
                 time.sleep(sleep_time/4.)
                 continue
             
             if index>=internal_size:
-                new_bytes = (internal_size-last_index)*itemsize*nb_channel_ad
+                new_bytes = (internal_size-last_index)*itemsize*nb_ai_channel
                 index = internal_size
             
             
@@ -139,10 +139,11 @@ def device_mainLoop(stop_flag, streams, device_path, device_info ):
                 arr_ad[i,pos+half_size:pos+new_samp2+half_size] = arr_ad[i,pos:pos+new_samp2]
                 
             
-            abs_pos += new_samp
+            abs_pos += int(new_samp)
             pos = abs_pos%half_size
             last_index = index%internal_size
-
+            
+            msgpack.dumps(abs_pos)
             socketAD.send(msgpack.dumps(abs_pos))
             
             ai_subdevice.mark_buffer_read(new_bytes)
@@ -163,6 +164,19 @@ def device_mainLoop(stop_flag, streams, device_path, device_info ):
         print 'not able to stop cbStopBackground properly'
 
 
+def create_analog_subdevice_param(n):
+    d = {
+                'type' : 'AnalogInput',
+                'nb_channel' : n,
+                'params' :{  }, 
+                'by_channel_params' : { 
+                                        'channel_indexes' : range(n),
+                                        'channel_names' : [ 'AI Channel {}'.format(i) for i in range(n)],
+                                        'channel_selection' : [True]*n,
+                                        'channel_ranges' : [ [-10., 10] for i in range(n) ],
+                                        }
+            }
+    return d
 
 def get_info(device_path):
     info = { }
@@ -172,28 +186,17 @@ def get_info(device_path):
     info['device_path'] = device_path
     info['board_name'] = dev.get_board_name()
     info['global_params'] = {
-                                            'sampling_rate' : 1000.,
+                                            'sampling_rate' : 4000.,
                                             'buffer_length' : 60.,
                                             }
     info['subdevices'] = [ ]
     for sub in dev.subdevices():
-        d = {  SUBDEVICE_TYPE.ai : 'AnalogInput',
-                            #~ SUBDEVICE_TYPE.di : 'DigitalInput',
-                            
-                            }
-        if sub.get_type() not in d : continue
-        info_sub = { }
-        info_sub['type'] = d[sub.get_type()]
-        n = sub.get_n_channels()
-        info_sub['nb_channel'] = n
-        info_sub['params'] = { },
-        info_sub['by_channel_params'] = {
-                                                                        'ai_channel_indexes' : range(n),
-                                                                        'ai_channel_names' : [ 'AI Channel {}'.format(i) for i in range(n)],
-                                                                        'ai_channel_range' : [ [-10., 10] for i in range(n) ],
-                                                                        }
-        
+        if sub.get_type() == SUBDEVICE_TYPE.ai:
+            n = sub.get_n_channels()
+            info_sub = create_analog_subdevice_param(n)
+        #~ elif sub.get_type() ==  SUBDEVICE_TYPE.di:
         info['subdevices'].append(info_sub)
+    
     info['device_packet_size'] = 512
     dev.close()
     return info
@@ -234,17 +237,17 @@ class ComediMultiSignals(DeviceBase):
             i += 1
         return devices
 
-    def configure(self, device_path = '/dev/comedi0',
-                                    channel_indexes = None,
-                                    channel_names = None,
+    def configure(self,
+                                    device_path = '/dev/comedi0',
                                     buffer_length= 10.,
                                     sampling_rate =1000.,
+                                    subdevices = None,
                                     ):
+            
         self.params = {'device_path' : device_path,
-                                'channel_indexes' : channel_indexes,
-                                'channel_names' : channel_names,
                                 'buffer_length' : buffer_length,
-                                'sampling_rate' : sampling_rate
+                                'sampling_rate' : sampling_rate,
+                                'subdevices' : subdevices,
                                 }
         self.__dict__.update(self.params)
         self.configured = True
@@ -255,16 +258,20 @@ class ComediMultiSignals(DeviceBase):
         
         # TODO card by card
         info = self.device_info = get_info(self.device_path)
-
-        print info
-        if self.channel_indexes is None:
-            self.channel_indexes = range(info['nb_channel_ad'])
+        #~ self.device_info['buffer_length'] = self.buffer_length
+        #~ self.device_info['sampling_rate'] = self.sampling_rate
+        if self.subdevices is None:
+            self.subdevices = info['subdevices']
         
-        if self.channel_names is None:
-            self.channel_names = [ 'AIn Channel {}'.format(i) for i in self.channel_indexes]
-        self.nb_channel = len(self.channel_indexes)
+        sub0 = self.subdevices[0]
+        assert sub0['type'] == 'AnalogInput', 'deal only with AnalogInput at the moment'
+        sel = sub0['by_channel_params']['channel_selection']
+        self.nb_channel = np.sum(sel)
+        
+        channel_indexes = [e   for e, s in zip(sub0['by_channel_params']['channel_indexes'], sel) if s]
+        channel_names = [e  for e, s in zip(sub0['by_channel_params']['channel_names'], sel) if s]
+
         self.packet_size = int(info['device_packet_size']/self.nb_channel)
-        print 'self.packet_size', self.packet_size
         
         
         l = int(self.sampling_rate*self.buffer_length)
@@ -274,7 +281,7 @@ class ComediMultiSignals(DeviceBase):
         s  = self.streamhandler.new_AnalogSignalSharedMemStream(name = self.name+' Analog', sampling_rate = self.sampling_rate,
                                                         nb_channel = self.nb_channel, buffer_length = self.buffer_length,
                                                         packet_size = self.packet_size, dtype = np.float64,
-                                                        channel_names = self.channel_names, channel_indexes = self.channel_indexes,            
+                                                        channel_names = channel_names, channel_indexes = channel_indexes,            
                                                         )
         
         

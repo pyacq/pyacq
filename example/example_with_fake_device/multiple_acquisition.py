@@ -39,7 +39,7 @@ def test1():
         dev = FakeMultiSignals(streamhandler = streamhandler)
         sampling_rate = sampling_rates[i%4]
         packet_size = packet_sizes[i%4]
-        dev.configure( name = 'device {}'.format(i),
+        dev.configure( 
                                     nb_channel = 3,
                                     sampling_rate =sampling_rate,
                                     buffer_length = 10.  * (sampling_rate//packet_size)/(sampling_rate/packet_size),

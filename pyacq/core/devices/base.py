@@ -8,11 +8,11 @@ class DeviceBase:
         self.configured = False
         self.streamhandler = streamhandler
     
-    def configure(self, **kargs):
-        self.params = { }
-        self.params.update(kargs)
-        self.__dict__.update(kargs)
-        self.configured = True
+    #~ def configure(self, **kargs):
+        #~ self.params = { }
+        #~ self.params.update(kargs)
+        #~ self.__dict__.update(kargs)
+        #~ self.configured = True
 
     def initialize(self):
         raise NotImplementedError
