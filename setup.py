@@ -15,6 +15,7 @@ setup(
                     'pyzmq',
                     'gevent',
                     'msgpack-python',
+                    'blosc',
                     ],
     author = "S.Garcia",
     author_email = "sgarcia at olfac.univ-lyon1.fr",

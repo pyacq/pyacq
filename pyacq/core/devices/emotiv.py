@@ -10,6 +10,8 @@ Reverse engineering and original crack code written by
 Many thanks for their contribution.
 
 
+Need python-crypto.
+
 """
 import multiprocessing as mp
 import numpy as np
@@ -31,6 +33,9 @@ from subprocess import check_output
 from Crypto.Cipher import AES
 from Crypto import Random
  
+ 
+ 
+_channel_names = [ 'F3', 'F4', 'P7', 'FC6', 'F7', 'F8','T7','P8','FC5','AF4','T8','O2','O1','FC3']
  
 sensorBits = {
   'F3': [10, 11, 12, 13, 14, 15, 0, 1, 2, 3, 4, 5, 6, 7],
@@ -54,112 +59,145 @@ g_battery = 0
 #tasks = Queue()
 
 
+
+def create_analog_subdevice_param(channel_names):
+    n = len(channel_names)
+    d = {
+                'type' : 'AnalogInput',
+                'nb_channel' : n,
+                'params' :{  }, 
+                'by_channel_params' : { 
+                                        'channel_indexes' : range(n),
+                                        'channel_names' : channel_names,
+                                        }
+            }
+    return d
+
+def get_info(device_path):
+    info = { }
+    info['class'] = 'EmotivMultiSignals'
+    info['device_path'] = device_path
+    
+    name = device_path.strip('/dev/')
+    realInputPath =  os.path.realpath("/sys/class/hidraw/" + name)
+    path = '/'.join(realInputPath.split('/')[:-4])
+    with open(path + "/manufacturer", 'r') as f:
+        manufacturer = f.readline()
+    with open(path + "/serial", 'r') as f:
+        serial = f.readline().strip()
+    
+    info['board_name'] = '{} {}'.format(manufacturer, serial)
+    
+    
+    info['serial'] = serial
+    info['global_params'] = {
+                                            'sampling_rate' : 128.,
+                                            'buffer_length' : 60.,
+                                            }
+    info['subdevices'] = [ ]
+    info['subdevices'].append(create_analog_subdevice_param(_channel_names))
+    quality_name = ['Quality {}'.format(n) for n in _channel_names]
+    info['subdevices'].append(create_analog_subdevice_param(quality_name))
+    info['subdevices'].append(create_analog_subdevice_param([ 'X','Y']))
+    
+    
+    return info
+
+
 class EmotivMultiSignals(DeviceBase):
     def __init__(self,  **kargs):
         DeviceBase.__init__(self, **kargs)
     
-    
-    def configure(self, buffer_length= 5.12,
-                                    ):
-        self.params = {
-                                'buffer_length' : buffer_length,
-                                }
-        self.__dict__.update(self.params)
-        self.configured = True
-
     @classmethod
     def get_available_devices(cls):
         devices = OrderedDict()
-        #TODO info device here
+        
+        
+        serials = { }
+        for name in os.listdir("/sys/class/hidraw"):
+            realInputPath =  os.path.realpath("/sys/class/hidraw/" + name)
+            path = '/'.join(realInputPath.split('/')[:-4])
+            try:
+                with open(path + "/manufacturer", 'r') as f:
+                    manufacturer = f.readline()
+                if "emotiv" in manufacturer.lower():
+                    with open(path + "/serial", 'r') as f:
+                        serial = f.readline().strip()
+                        if serial not in serials:
+                            serials[serial] = [ ]
+                        serials[serial].append(name)
+            except IOError as e:
+                print "Couldn't open file: %s" % e
+        
+        for serial, names in serials.items():
+            device_path = '/dev/'+names[1]
+            info = get_info(device_path)
+            devices['Emotiv '+device_path] = info
+            #~ print d
+        
+        
         return devices
-
+    
+    def configure(self, buffer_length = 60,
+                                device_path = '',
+                                subdevices = None,
+                                ):
+        self.params = {'device_path' : device_path,
+                                'buffer_length' : buffer_length,
+                                'subdevices' : subdevices,
+                                }
+        self.__dict__.update(self.params)
+        self.configured = True        
+    
     def initialize(self):
         
-        self.name = 'Emo acc'
-        self.sampling_rate = 128.
-        self.nb_gyro = 2
-        self.nb_channel = 14
-        self.packet_size = 1
-        self.channel_names = [ 'F3', 'F4', 'P7', 'FC6', 'F7', 'F8','T7','P8','FC5','AF4','T8','O2','O1','FC3']  #TODO : confirm order
-        self.impedances_names = [ 'Quality_F3', 'Quality_F4', 'Quality_P7', 'Quality_FC6', 'Quality_F7','Quality_F8','Quality_T7','Quality_P8','Quality_FC5','Quality_AF4','Quality_T8','Quality_O2','Quality_O1','Quality_FC3']
-        self.gyro_names = [ 'X','Y']   # Unknown' sup parameter (see Daeken notes)
+        if self.device_path == '':
+            # if no device selected take the first one ine the list
+            devices = EmotivMultiSignals.get_available_devices()
+            self.device_path = devices.values()[0]['device_path']
+
+
+        info = self.device_info = get_info(self.device_path)
+        if self.subdevices is None:
+            self.subdevices = info['subdevices']
         
-        self.sampling_rate = float(self.sampling_rate)
+        self.sampling_rate = float(info['global_params']['sampling_rate'])
+        self.packet_size = 1
+        
         self._os_decryption = False
         
         l = int(self.sampling_rate*self.buffer_length)
         self.buffer_length = (l - l%self.packet_size)/self.sampling_rate
-
-        # Stream Channels
-        self.channel_indexes = range(self.nb_channel) 
-        s_chan = self.streamhandler.new_AnalogSignalSharedMemStream(name = self.name, sampling_rate = self.sampling_rate,
-                                                        nb_channel = self.nb_channel, buffer_length = self.buffer_length,
+        
+        self.name = '{} #{}'.format(info['board_name'], info['serial'])
+        
+        self.streams = [ ]
+        for s, sub in enumerate(self.subdevices):
+            stream = self.streamhandler.new_AnalogSignalSharedMemStream(name = self.name+str(s) , sampling_rate = self.sampling_rate,
+                                                        nb_channel = sub['nb_channel'], buffer_length = self.buffer_length,
                                                         packet_size = self.packet_size, dtype = np.float64,
-                                                        channel_names = self.channel_names, channel_indexes = self.channel_indexes,            
-                                                        )
-        
-        arr_size = s_chan['shared_array'].shape[1]
-        assert (arr_size/2)%self.packet_size ==0, 'buffer should be a multilple of pcket_size {}/2 {}'.format(arr_size, self.packet_size)
-        
-        # Stream Impedances
-        self.impedances_indexes = range(self. nb_channel)
-        s_imp = self.streamhandler.new_AnalogSignalSharedMemStream(name = self.name, sampling_rate = self.sampling_rate,
-                                                        nb_channel = self.nb_channel, buffer_length = self.buffer_length,
-                                                        packet_size = self.packet_size, dtype = np.float64,
-                                                        channel_names = self.impedances_names, channel_indexes = self.impedances_indexes,            
-                                                        )
-                                                        
-        # Stream Gyro
-        self.gyro_indexes = range(self. nb_gyro)
-        s_gyro = self.streamhandler.new_AnalogSignalSharedMemStream(name = self.name, sampling_rate = self.sampling_rate,
-                                                        nb_channel = self.nb_gyro, buffer_length = self.buffer_length,
-                                                        packet_size = self.packet_size, dtype = np.float64,
-                                                        channel_names = self.gyro_names, channel_indexes = self.gyro_indexes,            
-                                                        )
-        
-        self.streams = [s_chan, s_imp, s_gyro,  ]
-        
-        if windows:
-            self.setupWin()
-        else:
-            self.setupPosix()
+                                                        channel_names = sub['by_channel_params']['channel_names'],
+                                                        channel_indexes = sub['by_channel_params']['channel_indexes'],
+                                                        )            
+            self.streams.append(stream)
 
-        self._goOn = True   
-        print 'Emotiv initialized:', self.name, 'Data Channel: ', s_chan['port'], ' Impedances: ', s_imp['port'], ' Gyrostat: ',s_gyro['port']
-
-
-        self.sensors = {
-            'F3': {'value': 0, 'quality': 0},
-            'FC6': {'value': 0, 'quality': 0},
-            'P7': {'value': 0, 'quality': 0},
-            'T8': {'value': 0, 'quality': 0},
-            'F7': {'value': 0, 'quality': 0},
-            'F8': {'value': 0, 'quality': 0},
-            'T7': {'value': 0, 'quality': 0},
-            'P8': {'value': 0, 'quality': 0},
-            'AF4': {'value': 0, 'quality': 0},
-            'F4': {'value': 0, 'quality': 0},
-            'AF3': {'value': 0, 'quality': 0},
-            'O2': {'value': 0, 'quality': 0},
-            'O1': {'value': 0, 'quality': 0},
-            'FC5': {'value': 0, 'quality': 0},
-            'X': {'value': 0, 'quality': 0},
-            'Y': {'value': 0, 'quality': 0},
-            'Unknown': {'value': 0, 'quality': 0}
-        }
+        
+        self.sensors = { }
+        for name in _channel_names + ['X', 'Y', 'Unknown']:
+            self.sensors[name] = {'value': 0, 'quality': 0}
+        
 
 
     def start(self):
         
         self.stop_flag = mp.Value('i', 0) #flag pultiproc  = global 
         
+        self.setupCrypto( self.device_info['serial'])
+        
         s_chan = self.streams[0]
         s_imp = self.streams[1]
         s_gyro = self.streams[2]
-        #s_imp = self.stream2
-        #mp_arrChan = s_chan['shared_array'].mp_array
-        #mp_arrImp = s_imp['shared_array'].mp_array
-        self.process = mp.Process(target = emotiv_mainLoop,  args=(self.stop_flag, s_chan, s_imp, s_gyro, self.hidraw, self._os_decryption, self.cipher, self.sensors, self.nb_channel, self.nb_gyro) )
+        self.process = mp.Process(target = emotiv_mainLoop,  args=(self.stop_flag, s_chan, s_imp, s_gyro, self.device_path, self._os_decryption, self.cipher, self.sensors) )
         self.process.start()
    
         print 'FakeMultiAnalogChannel started:', self.name
@@ -181,86 +219,87 @@ class EmotivMultiSignals(DeviceBase):
             self.hidraw.close()
 
 
-    def setupWin(self):
-            devices = []
-            try:
-                for device in hid.find_all_hid_devices():
-                    if device.vendor_id != 0x21A1:
-                        continue
-                    if device.product_name == 'Brain Waves':
-                        devices.append(device)
-                        device.open()
-                        self.serialNum = device.serial_number
-                        device.set_raw_data_handler(self.handler)
-                    elif device.product_name == 'EPOC BCI':
-                        devices.append(device)
-                        device.open()
-                        self.serialNum = device.serial_number
-                        device.set_raw_data_handler(self.handler)
-                    elif device.product_name == '00000000000':
-                        devices.append(device)
-                        device.open()
-                        self.serialNum = device.serial_number
-                        device.set_raw_data_handler(self.handler)
-            finally:
-                for device in devices:
-                    device.close()
+    #~ def setupWin(self):
+            #~ devices = []
+            #~ try:
+                #~ for device in hid.find_all_hid_devices():
+                    #~ if device.vendor_id != 0x21A1:
+                        #~ continue
+                    #~ if device.product_name == 'Brain Waves':
+                        #~ devices.append(device)
+                        #~ device.open()
+                        #~ self.serialNum = device.serial_number
+                        #~ device.set_raw_data_handler(self.handler)
+                    #~ elif device.product_name == 'EPOC BCI':
+                        #~ devices.append(device)
+                        #~ device.open()
+                        #~ self.serialNum = device.serial_number
+                        #~ device.set_raw_data_handler(self.handler)
+                    #~ elif device.product_name == '00000000000':
+                        #~ devices.append(device)
+                        #~ device.open()
+                        #~ self.serialNum = device.serial_number
+                        #~ device.set_raw_data_handler(self.handler)
+            #~ finally:
+                #~ for device in devices:
+                    #~ device.close()
 
 
-    def setupPosix(self):
-        if os.path.exists('/dev/eeg/raw'):
-            print("decrpytion handled by the Linux epoc daemon")
-            #The decrpytion is handled by the Linux epoc daemon. We don't need to handle it there.
-            self._os_decryption = True
-            self.hidraw = open("/dev/eeg/raw")
-        else:
-            setup = self.getLinuxSetup()
-            self.serialNum = setup[0]
-            if os.path.exists("/dev/" + setup[1]):
-                self.hidraw = open("/dev/" + setup[1])
-            else:
-                self.hidraw = open("/dev/hidraw4")
-            self.setupCrypto( self.serialNum)
+    #~ def setupPosix(self):
+        #~ if os.path.exists('/dev/eeg/raw'):
+            #~ print("decrpytion handled by the Linux epoc daemon")
+            #~ #The decrpytion is handled by the Linux epoc daemon. We don't need to handle it there.
+            #~ self._os_decryption = True
+            #~ self.hidraw = open("/dev/eeg/raw")
+        #~ else:
+            #~ setup = self.getLinuxSetup()
+            #~ self.serialNum = setup[0]
+            #~ if os.path.exists("/dev/" + setup[1]):
+                #~ #self.hidraw = open("/dev/" + setup[1])
+                #~ self.hidraw = open("/dev/hidraw4")
+            #~ else:
+                #~ self.hidraw = open("/dev/hidraw4")
+            #~ self.setupCrypto( self.serialNum)
             
-        print self.hidraw
-        print "os_decryption : ",self._os_decryption
-        return True
+        #~ print self.hidraw
+        #~ print "os_decryption : ",self._os_decryption
+        #~ return True
     
-    def getLinuxSetup(self):
-        rawinputs = []
-        for filename in os.listdir("/sys/class/hidraw"):
-            realInputPath = check_output(["realpath", "/sys/class/hidraw/" + filename])
-            sPaths = realInputPath.split('/')
-            s = len(sPaths)
-            s = s - 4
-            i = 0
-            path = ""
-            while s > i:
-                path = path + sPaths[i] + "/"
-                i += 1
-            rawinputs.append([path, filename])
-        hiddevices = []
-        #TODO: Add support for multiple USB sticks? make a bit more elegant
-        for input in rawinputs:
-            try:
-                with open(input[0] + "/manufacturer", 'r') as f:
-                    manufacturer = f.readline()
-                    f.close()
-                if "Emotiv" in manufacturer:  #Emotiv Systems Inc.
-                    with open(input[0] + "/serial", 'r') as f:
-                        serial = f.readline().strip()
-                        f.close()
-                    #print "Serial: " + serial + " Device: " + input[1]
-                    #Great we found it. But we need to use the second one...
-                    hidraw = input[1]
-                    id_hidraw = int(hidraw[-1])
-                    #The dev headset might use the first device, or maybe if more than one are connected they might.
-                    id_hidraw += 1
-                    hidraw = "hidraw" + id_hidraw.__str__()
-                    print "Serial: " + serial + " Device: " + hidraw + " (Active)"
-                    return [serial, hidraw, ]
-            except IOError as e:
-                print "Couldn't open file: %s" % e
+    #~ def getLinuxSetup(self):
+        #~ rawinputs = []
+        #~ for filename in os.listdir("/sys/class/hidraw"):
+            #~ realInputPath = check_output(["realpath", "/sys/class/hidraw/" + filename])
+            #~ sPaths = realInputPath.split('/')
+            #~ s = len(sPaths)
+            #~ s = s - 4
+            #~ i = 0
+            #~ path = ""
+            #~ while s > i:
+                #~ path = path + sPaths[i] + "/"
+                #~ i += 1
+            #~ rawinputs.append([path, filename])
+        #~ hiddevices = []
+        #~ #TODO: Add support for multiple USB sticks? make a bit more elegant
+        #~ for input in rawinputs:
+            #~ try:
+                #~ with open(input[0] + "/manufacturer", 'r') as f:
+                    #~ manufacturer = f.readline()
+                    #~ f.close()
+                #~ if "Emotiv" in manufacturer:  #Emotiv Systems Inc.
+                    #~ with open(input[0] + "/serial", 'r') as f:
+                        #~ serial = f.readline().strip()
+                        #~ f.close()
+                    #~ #print "Serial: " + serial + " Device: " + input[1]
+                    #~ #Great we found it. But we need to use the second one...
+                    #~ hidraw = input[1]
+                    #~ id_hidraw = int(hidraw[-1])
+                    #~ #The dev headset might use the first device, or maybe if more than one are connected they might.
+                    #~ id_hidraw += 1
+                    #~ hidraw = "hidraw" + id_hidraw.__str__()
+                    #~ print "Serial: " + serial + " Device: " + hidraw + " (Active)"
+                    #~ return [serial, hidraw, ]
+            #~ except IOError as e:
+                #~ print "Couldn't open file: %s" % e
 
 
     def setupCrypto(self, sn):
@@ -304,10 +343,13 @@ class EmotivMultiSignals(DeviceBase):
 
 
 
-def emotiv_mainLoop(stop_flag, streamChan, streamImp, streamGyro, hidraw, _os_decryption, cipher, sensors, nb_channel, nb_gyro):
+def emotiv_mainLoop(stop_flag, streamChan, streamImp, streamGyro, device_path, _os_decryption, cipher, sensors,  ):
     import zmq
     pos = 0
     abs_pos = pos2 = 0
+    
+    
+    hidraw = open(device_path)
     
     #Data channels socket
     context = zmq.Context()
@@ -336,13 +378,15 @@ def emotiv_mainLoop(stop_flag, streamChan, streamImp, streamGyro, hidraw, _os_de
     
     half_size = np_arr_chan.shape[1]/2    # same for the others 
     
+    nb_channel = streamChan['nb_channel']
+    nb_gyro = streamGyro['nb_channel']
+    
     # Linux Style
     while True:
         #~ t1 = time.time()
         try:
-            #~ print 'yop'
-            rawData = hidraw.read(32)  # blocant ?
-            #~ print 'yep'
+            rawData = hidraw.read(32)
+            
             if rawData != "":
                 if _os_decryption:
                     # TODO check if correct
@@ -356,7 +400,8 @@ def emotiv_mainLoop(stop_flag, streamChan, streamImp, streamGyro, hidraw, _os_de
         
         print data.sensors
         # Get Channels data, impedances and gyro
-        for name in 'F3 F4 P7 FC6 F7 F8 T7 P8 FC5 AF4 T8 O2 O1 AF3'.split(' '):	
+        #~ for name in 'F3 F4 P7 FC6 F7 F8 T7 P8 FC5 AF4 T8 O2 O1 AF3'.split(' '):	
+        for name in _channel_names:
             chanData = np.append(chanData, data.sensors[name]['value'] )
             impData = np.append(impData, data.sensors[name]['quality'] )
         chanData = chanData[-nb_channel:].reshape(nb_channel,1)
@@ -420,75 +465,21 @@ class EmotivPacket(object):
     def handle_quality(self, sensors):
         current_contact_quality = self.get_level(self.rawData, quality_bits) / 540
         sensor = ord(self.rawData[0])
-        if sensor == 0:
-            sensors['F3']['quality'] = current_contact_quality
-        elif sensor == 1:
-            sensors['FC5']['quality'] = current_contact_quality
-        elif sensor == 2:
-            sensors['AF3']['quality'] = current_contact_quality
-        elif sensor == 3:
-            sensors['F7']['quality'] = current_contact_quality
-        elif sensor == 4:
-            sensors['T7']['quality'] = current_contact_quality
-        elif sensor == 5:
-            sensors['P7']['quality'] = current_contact_quality
-        elif sensor == 6:
-            sensors['O1']['quality'] = current_contact_quality
-        elif sensor == 7:
-            sensors['O2']['quality'] = current_contact_quality
-        elif sensor == 8:
-            sensors['P8']['quality'] = current_contact_quality
-        elif sensor == 9:
-            sensors['T8']['quality'] = current_contact_quality
-        elif sensor == 10:
-            sensors['F8']['quality'] = current_contact_quality
-        elif sensor == 11:
-            sensors['AF4']['quality'] = current_contact_quality
-        elif sensor == 12:
-            sensors['FC6']['quality'] = current_contact_quality
-        elif sensor == 13:
-            sensors['F4']['quality'] = current_contact_quality
-        elif sensor == 14:
-            sensors['F8']['quality'] = current_contact_quality
-        elif sensor == 15:
-            sensors['AF4']['quality'] = current_contact_quality
-        elif sensor == 64:
-            sensors['F3']['quality'] = current_contact_quality
-        elif sensor == 65:
-            sensors['FC5']['quality'] = current_contact_quality
-        elif sensor == 66:
-            sensors['AF3']['quality'] = current_contact_quality
-        elif sensor == 67:
-            sensors['F7']['quality'] = current_contact_quality
-        elif sensor == 68:
-            sensors['T7']['quality'] = current_contact_quality
-        elif sensor == 69:
-            sensors['P7']['quality'] = current_contact_quality
-        elif sensor == 70:
-            sensors['O1']['quality'] = current_contact_quality
-        elif sensor == 71:
-            sensors['O2']['quality'] = current_contact_quality
-        elif sensor == 72:
-            sensors['P8']['quality'] = current_contact_quality
-        elif sensor == 73:
-            sensors['T8']['quality'] = current_contact_quality
-        elif sensor == 74:
-            sensors['F8']['quality'] = current_contact_quality
-        elif sensor == 75:
-            sensors['AF4']['quality'] = current_contact_quality
-        elif sensor == 76:
-            sensors['FC6']['quality'] = current_contact_quality
-        elif sensor == 77:
-            sensors['F4']['quality'] = current_contact_quality
-        elif sensor == 78:
-            sensors['F8']['quality'] = current_contact_quality
-        elif sensor == 79:
-            sensors['AF4']['quality'] = current_contact_quality
-        elif sensor == 80:
-            sensors['FC6']['quality'] = current_contact_quality
+        
+        num_to_name = { 0 : 'F3',  1:'F5', 2 : 'AF3',  3 : 'F7', 4:'T7', 5 : 'P7', 
+                                            6 : 'O1', 7 : 'O2', 8: 'P8', 9 : 'T8', 10: 'F8', 11 : 'AF4', 
+                                            12 : 'FC6', 13: 'F4', 14 : 'F8', 15:'AF4', 
+                                            64 : 'F3', 65 : 'FC5', 66 : 'AF3', 67 : 'F7', 68 : 'T7', 69 : 'P7', 
+                                            70 : 'O1', 71 : 'O2', 72: 'P8', 73 : 'T8', 74: 'F8', 75 : 'AF4', 
+                                            76 : 'FC6', 77: 'F4', 78 : 'F8', 79:'AF4', 
+                                            80 : 'FC6',
+                                            }
+        if sensor in num_to_name:
+            name = num_to_name[sensor]
+            sensors[name]['quality'] = current_contact_quality
         else:
             sensors['Unknown']['quality'] = current_contact_quality
-            sensors['Unknown']['value'] = sensor
+            sensors['Unknown']['value'] = sensor            
         return current_contact_quality
 
     def battery_percent(self):

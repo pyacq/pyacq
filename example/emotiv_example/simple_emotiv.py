@@ -33,7 +33,9 @@ def run_Emotiv():
     
     # Configure and start
     dev = EmotivMultiSignals(streamhandler = streamhandler)
-    dev.configure(buffer_length = 1800) 
+    dev.configure(buffer_length = 1800,
+                                device_path = '',
+                                ) 
     dev.initialize()
     dev.start()
     
