@@ -35,7 +35,7 @@ from Crypto import Random
  
  
  
-_channel_names = [ 'F3', 'F4', 'P7', 'FC6', 'F7', 'F8','T7','P8','FC5','AF4','T8','O2','O1','FC3']
+_channel_names = [ 'F3', 'F4', 'P7', 'FC6', 'F7', 'F8','T7','P8','FC5','AF4','T8','O2','O1','AF3']
  
 sensorBits = {
   'F3': [10, 11, 12, 13, 14, 15, 0, 1, 2, 3, 4, 5, 6, 7],
@@ -91,7 +91,7 @@ def get_info(device_path):
     
     info['serial'] = serial
     info['global_params'] = {
-                                            'sampling_rate' : 128.,
+                                            #~ 'sampling_rate' : 128.,
                                             'buffer_length' : 60.,
                                             }
     info['subdevices'] = [ ]
@@ -161,7 +161,8 @@ class EmotivMultiSignals(DeviceBase):
         if self.subdevices is None:
             self.subdevices = info['subdevices']
         
-        self.sampling_rate = float(info['global_params']['sampling_rate'])
+        #~ self.sampling_rate = float(info['global_params']['sampling_rate'])
+        self.sampling_rate = 128.
         self.packet_size = 1
         
         self._os_decryption = False
@@ -401,7 +402,8 @@ def emotiv_mainLoop(stop_flag, streamChan, streamImp, streamGyro, device_path, _
         print data.sensors
         # Get Channels data, impedances and gyro
         #~ for name in 'F3 F4 P7 FC6 F7 F8 T7 P8 FC5 AF4 T8 O2 O1 AF3'.split(' '):	
-        for name in _channel_names:
+        #~ for name in sensorBits.keys():
+        for name  in _channel_names:
             chanData = np.append(chanData, data.sensors[name]['value'] )
             impData = np.append(impData, data.sensors[name]['quality'] )
         chanData = chanData[-nb_channel:].reshape(nb_channel,1)
@@ -466,7 +468,7 @@ class EmotivPacket(object):
         current_contact_quality = self.get_level(self.rawData, quality_bits) / 540
         sensor = ord(self.rawData[0])
         
-        num_to_name = { 0 : 'F3',  1:'F5', 2 : 'AF3',  3 : 'F7', 4:'T7', 5 : 'P7', 
+        num_to_name = { 0 : 'F3',  1:'FC5', 2 : 'AF3',  3 : 'F7', 4:'T7', 5 : 'P7', 
                                             6 : 'O1', 7 : 'O2', 8: 'P8', 9 : 'T8', 10: 'F8', 11 : 'AF4', 
                                             12 : 'FC6', 13: 'F4', 14 : 'F8', 15:'AF4', 
                                             64 : 'F3', 65 : 'FC5', 66 : 'AF3', 67 : 'F7', 68 : 'T7', 69 : 'P7', 
