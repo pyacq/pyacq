@@ -103,7 +103,7 @@ class EmotivMultiSignals(DeviceBase):
         
         # Stream Impedances
         self.impedances_indexes = range(self. nb_channel)
-        s_imp = self.streamhandler.new_signals_stream(name = self.name, sampling_rate = self.sampling_rate,
+        s_imp = self.streamhandler.new_DigitalSignalSharedMemStream(name = self.name, sampling_rate = self.sampling_rate,
                                                         nb_channel = self.nb_channel, buffer_length = self.buffer_length,
                                                         packet_size = self.packet_size, dtype = np.float64,
                                                         channel_names = self.impedances_names, channel_indexes = self.impedances_indexes,            
@@ -111,7 +111,7 @@ class EmotivMultiSignals(DeviceBase):
                                                         
         # Stream Gyro
         self.gyro_indexes = range(self. nb_gyro)
-        s_gyro = self.streamhandler.new_signals_stream(name = self.name, sampling_rate = self.sampling_rate,
+        s_gyro = self.streamhandler.new_DigitalSignalSharedMemStream(name = self.name, sampling_rate = self.sampling_rate,
                                                         nb_channel = self.nb_gyro, buffer_length = self.buffer_length,
                                                         packet_size = self.packet_size, dtype = np.float64,
                                                         channel_names = self.gyro_names, channel_indexes = self.gyro_indexes,            
