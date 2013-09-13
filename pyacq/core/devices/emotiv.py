@@ -213,12 +213,8 @@ class EmotivMultiSignals(DeviceBase):
         self.running = False
 
     def close(self):
-        if windows:
-            self.device.close()
-        else:
-            self._goOn = False
-            self.hidraw.close()
-
+        pass
+   
 
     #~ def setupWin(self):
             #~ devices = []

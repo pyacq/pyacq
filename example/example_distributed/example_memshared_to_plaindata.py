@@ -21,7 +21,7 @@ def on_pc1():
     
     # Configure and start
     dev = FakeMultiSignals(streamhandler = streamhandler)
-    dev.configure( name = 'Test dev',
+    dev.configure( #name = 'Test dev',
                                 nb_channel = 16,
                                 sampling_rate =1000.,
                                 buffer_length = 64,
