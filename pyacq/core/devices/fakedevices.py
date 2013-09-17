@@ -87,7 +87,7 @@ class FakeMultiSignals(DeviceBase):
                                     sampling_rate =1000.,
                                     packet_size = 10,
                                     subdevices =[ create_analog_subdevice_param(4) ],
-                                    
+                                    precomputed = None,
                                     # if subdevices is None
                                     nb_channel = None,
                                     ):
@@ -99,6 +99,7 @@ class FakeMultiSignals(DeviceBase):
                                 'sampling_rate' : sampling_rate,
                                 'packet_size' : packet_size,
                                 'subdevices' : subdevices,
+                                'precomputed' : precomputed,
                                 }
         self.__dict__.update(self.params)
         self.configured = True
@@ -149,16 +150,18 @@ class FakeMultiSignals(DeviceBase):
         arr_size = s['shared_array'].shape[1]
         assert (arr_size/2)%self.packet_size ==0, 'buffer should be a multilple of pcket_size {}/2 {}'.format(arr_size, self.packet_size)
         
-        # private precomuted array of 20s = some noise + some sinus burst
-        n = int(self.sampling_rate*20./self.packet_size)*self.packet_size
-        t = np.arange(n, dtype = np.float64)/self.sampling_rate
-        self.precomputed = np.random.rand(self.nb_channel, n)
-        for i in range(self.nb_channel):
-            f1 = np.linspace(np.random.rand()*60+20. , np.random.rand()*60+20., n)
-            f2 = np.linspace(np.random.rand()*1.+.1 , np.random.rand()*1.+.1, n)
-            self.precomputed[i,:] += np.sin(2*np.pi*t*f1) * np.sin(np.pi*t*f2+np.random.rand()*np.pi)
-            self.precomputed[i,:] += np.random.rand()*40. -20  # add random offset
-            self.precomputed[i,:] *= np.random.rand()*10 # add random gain
+        
+        if self.precomputed is None:
+            # private precomuted array of 20s = some noise + some sinus burst
+            n = int(self.sampling_rate*20./self.packet_size)*self.packet_size
+            t = np.arange(n, dtype = np.float64)/self.sampling_rate
+            self.precomputed = np.random.rand(self.nb_channel, n)
+            for i in range(self.nb_channel):
+                f1 = np.linspace(np.random.rand()*60+20. , np.random.rand()*60+20., n)
+                f2 = np.linspace(np.random.rand()*1.+.1 , np.random.rand()*1.+.1, n)
+                self.precomputed[i,:] += np.sin(2*np.pi*t*f1) * np.sin(np.pi*t*f2+np.random.rand()*np.pi)
+                self.precomputed[i,:] += np.random.rand()*40. -20  # add random offset
+                self.precomputed[i,:] *= np.random.rand()*10 # add random gain
             
             
         print 'FakeMultiAnalogChannel initialized:',  s['port']
