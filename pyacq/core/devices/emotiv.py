@@ -55,8 +55,6 @@ sensorBits = {
 }
 quality_bits = [99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112]
 
-g_battery = 0
-#tasks = Queue()
 
 
 
@@ -86,7 +84,7 @@ def get_info(device_path):
     with open(path + "/serial", 'r') as f:
         serial = f.readline().strip()
     
-    info['board_name'] = '{} {}'.format(manufacturer, serial)
+    info['board_name'] = '{} #{}'.format(manufacturer, serial).replace('\n', '').replace('\r', '')
     
     
     info['serial'] = serial
@@ -152,19 +150,16 @@ class EmotivMultiSignals(DeviceBase):
             devices = EmotivMultiSignals.get_available_devices()
             self.device_path = devices.values()[0]['device_path']
 
-
         info = self.device_info = get_info(self.device_path)
         if self.subdevices is None:
             self.subdevices = info['subdevices']
         
         self.sampling_rate = 128.
         self.packet_size = 1
-        
-        
         l = int(self.sampling_rate*self.buffer_length)
         self.buffer_length = (l - l%self.packet_size)/self.sampling_rate
         
-        self.name = '{} #{}'.format(info['board_name'], info['serial'])
+        self.name = '{}'.format(info['board_name'])
         
         self.streams = [ ]
         for s, sub in enumerate(self.subdevices):
@@ -180,7 +175,7 @@ class EmotivMultiSignals(DeviceBase):
     def start(self):
         
         self.stop_flag = mp.Value('i', 0) #flag pultiproc  = global 
-        self.process = mp.Process(target = emotiv_mainLoop,  args=(self.stop_flag, streams, self.device_path, self.device_info['serial']) )
+        self.process = mp.Process(target = emotiv_mainLoop,  args=(self.stop_flag, self.streams, self.device_path, self.device_info['serial']) )
         self.process.start()
    
         print 'FakeMultiAnalogChannel started:', self.name
