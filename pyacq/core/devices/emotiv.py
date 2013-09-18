@@ -91,7 +91,6 @@ def get_info(device_path):
     
     info['serial'] = serial
     info['global_params'] = {
-                                            #~ 'sampling_rate' : 128.,
                                             'buffer_length' : 60.,
                                             }
     info['subdevices'] = [ ]
@@ -111,7 +110,6 @@ class EmotivMultiSignals(DeviceBase):
     @classmethod
     def get_available_devices(cls):
         devices = OrderedDict()
-        
         
         serials = { }
         for name in os.listdir("/sys/class/hidraw"):
@@ -133,8 +131,6 @@ class EmotivMultiSignals(DeviceBase):
             device_path = '/dev/'+names[1]
             info = get_info(device_path)
             devices['Emotiv '+device_path] = info
-            #~ print d
-        
         
         return devices
     
@@ -161,11 +157,9 @@ class EmotivMultiSignals(DeviceBase):
         if self.subdevices is None:
             self.subdevices = info['subdevices']
         
-        #~ self.sampling_rate = float(info['global_params']['sampling_rate'])
         self.sampling_rate = 128.
         self.packet_size = 1
         
-        self._os_decryption = False
         
         l = int(self.sampling_rate*self.buffer_length)
         self.buffer_length = (l - l%self.packet_size)/self.sampling_rate
@@ -181,24 +175,12 @@ class EmotivMultiSignals(DeviceBase):
                                                         channel_indexes = sub['by_channel_params']['channel_indexes'],
                                                         )            
             self.streams.append(stream)
-
-        
-        self.sensors = { }
-        for name in _channel_names + ['X', 'Y', 'Unknown']:
-            self.sensors[name] = {'value': 0, 'quality': 0}
-        
-
+    
 
     def start(self):
         
         self.stop_flag = mp.Value('i', 0) #flag pultiproc  = global 
-        
-        self.setupCrypto( self.device_info['serial'])
-        
-        s_chan = self.streams[0]
-        s_imp = self.streams[1]
-        s_gyro = self.streams[2]
-        self.process = mp.Process(target = emotiv_mainLoop,  args=(self.stop_flag, s_chan, s_imp, s_gyro, self.device_path, self._os_decryption, self.cipher, self.sensors) )
+        self.process = mp.Process(target = emotiv_mainLoop,  args=(self.stop_flag, streams, self.device_path, self.device_info['serial']) )
         self.process.start()
    
         print 'FakeMultiAnalogChannel started:', self.name
@@ -216,135 +198,67 @@ class EmotivMultiSignals(DeviceBase):
         pass
    
 
-    #~ def setupWin(self):
-            #~ devices = []
-            #~ try:
-                #~ for device in hid.find_all_hid_devices():
-                    #~ if device.vendor_id != 0x21A1:
-                        #~ continue
-                    #~ if device.product_name == 'Brain Waves':
-                        #~ devices.append(device)
-                        #~ device.open()
-                        #~ self.serialNum = device.serial_number
-                        #~ device.set_raw_data_handler(self.handler)
-                    #~ elif device.product_name == 'EPOC BCI':
-                        #~ devices.append(device)
-                        #~ device.open()
-                        #~ self.serialNum = device.serial_number
-                        #~ device.set_raw_data_handler(self.handler)
-                    #~ elif device.product_name == '00000000000':
-                        #~ devices.append(device)
-                        #~ device.open()
-                        #~ self.serialNum = device.serial_number
-                        #~ device.set_raw_data_handler(self.handler)
-            #~ finally:
-                #~ for device in devices:
-                    #~ device.close()
-
-
-    #~ def setupPosix(self):
-        #~ if os.path.exists('/dev/eeg/raw'):
-            #~ print("decrpytion handled by the Linux epoc daemon")
-            #~ #The decrpytion is handled by the Linux epoc daemon. We don't need to handle it there.
-            #~ self._os_decryption = True
-            #~ self.hidraw = open("/dev/eeg/raw")
-        #~ else:
-            #~ setup = self.getLinuxSetup()
-            #~ self.serialNum = setup[0]
-            #~ if os.path.exists("/dev/" + setup[1]):
-                #~ #self.hidraw = open("/dev/" + setup[1])
-                #~ self.hidraw = open("/dev/hidraw4")
-            #~ else:
-                #~ self.hidraw = open("/dev/hidraw4")
-            #~ self.setupCrypto( self.serialNum)
-            
-        #~ print self.hidraw
-        #~ print "os_decryption : ",self._os_decryption
-        #~ return True
-    
-    #~ def getLinuxSetup(self):
-        #~ rawinputs = []
-        #~ for filename in os.listdir("/sys/class/hidraw"):
-            #~ realInputPath = check_output(["realpath", "/sys/class/hidraw/" + filename])
-            #~ sPaths = realInputPath.split('/')
-            #~ s = len(sPaths)
-            #~ s = s - 4
-            #~ i = 0
-            #~ path = ""
-            #~ while s > i:
-                #~ path = path + sPaths[i] + "/"
-                #~ i += 1
-            #~ rawinputs.append([path, filename])
-        #~ hiddevices = []
-        #~ #TODO: Add support for multiple USB sticks? make a bit more elegant
-        #~ for input in rawinputs:
-            #~ try:
-                #~ with open(input[0] + "/manufacturer", 'r') as f:
-                    #~ manufacturer = f.readline()
-                    #~ f.close()
-                #~ if "Emotiv" in manufacturer:  #Emotiv Systems Inc.
-                    #~ with open(input[0] + "/serial", 'r') as f:
-                        #~ serial = f.readline().strip()
-                        #~ f.close()
-                    #~ #print "Serial: " + serial + " Device: " + input[1]
-                    #~ #Great we found it. But we need to use the second one...
-                    #~ hidraw = input[1]
-                    #~ id_hidraw = int(hidraw[-1])
-                    #~ #The dev headset might use the first device, or maybe if more than one are connected they might.
-                    #~ id_hidraw += 1
-                    #~ hidraw = "hidraw" + id_hidraw.__str__()
-                    #~ print "Serial: " + serial + " Device: " + hidraw + " (Active)"
-                    #~ return [serial, hidraw, ]
-            #~ except IOError as e:
-                #~ print "Couldn't open file: %s" % e
-
-
-    def setupCrypto(self, sn):
-        type = 0 #feature[5]
-        type &= 0xF
-        type = 0
-        #I believe type == True is for the Dev headset, I'm not using that. That's the point of this library in the first place I thought.
-        k = ['\0'] * 16
-        k[0] = sn[-1]
-        k[1] = '\0'
-        k[2] = sn[-2]
-        if type:
-            k[3] = 'H'
-            k[4] = sn[-1]
-            k[5] = '\0'
-            k[6] = sn[-2]
-            k[7] = 'T'
-            k[8] = sn[-3]
-            k[9] = '\x10'
-            k[10] = sn[-4]
-            k[11] = 'B'
-        else:
-            k[3] = 'T'
-            k[4] = sn[-3]
-            k[5] = '\x10'
-            k[6] = sn[-4]
-            k[7] = 'B'
-            k[8] = sn[-1]
-            k[9] = '\0'
-            k[10] = sn[-2]
-            k[11] = 'H'
-        k[12] = sn[-3]
-        k[13] = '\0'
-        k[14] = sn[-4]
-        k[15] = 'P'
-        #It doesn't make sense to have more than one greenlet handling this as data needs to be in order anyhow. I guess you could assign an ID or something
-        #to each packet but that seems like a waste also or is it? The ID might be useful if your using multiple headsets or usb sticks.
-        key = ''.join(k)
-        iv = Random.new().read(AES.block_size)
-        self.cipher = AES.new(key, AES.MODE_ECB, iv)
+def setupCrypto(serial):
+    type = 0 #feature[5]
+    type &= 0xF
+    type = 0
+    #I believe type == True is for the Dev headset, I'm not using that. That's the point of this library in the first place I thought.
+    k = ['\0'] * 16
+    k[0] = serial[-1]
+    k[1] = '\0'
+    k[2] = serial[-2]
+    if type:
+        k[3] = 'H'
+        k[4] = serial[-1]
+        k[5] = '\0'
+        k[6] = serial[-2]
+        k[7] = 'T'
+        k[8] = serial[-3]
+        k[9] = '\x10'
+        k[10] = serial[-4]
+        k[11] = 'B'
+    else:
+        k[3] = 'T'
+        k[4] = serial[-3]
+        k[5] = '\x10'
+        k[6] = serial[-4]
+        k[7] = 'B'
+        k[8] = serial[-1]
+        k[9] = '\0'
+        k[10] = serial[-2]
+        k[11] = 'H'
+    k[12] = serial[-3]
+    k[13] = '\0'
+    k[14] = serial[-4]
+    k[15] = 'P'
+    #It doesn't make sense to have more than one greenlet handling this as data needs to be in order anyhow. I guess you could assign an ID or something
+    #to each packet but that seems like a waste also or is it? The ID might be useful if your using multiple headsets or usb sticks.
+    key = ''.join(k)
+    iv = Random.new().read(AES.block_size)
+    cipher = AES.new(key, AES.MODE_ECB, iv)
+    return cipher
 
 
 
-def emotiv_mainLoop(stop_flag, streamChan, streamImp, streamGyro, device_path, _os_decryption, cipher, sensors,  ):
+def get_level(data, bits):
+    level = 0
+    for i in range(13, -1, -1):
+        level <<= 1
+        b, o = (bits[i] / 8) + 1, bits[i] % 8
+        level |= (ord(data[b]) >> o) & 1
+    return level
+
+
+def emotiv_mainLoop(stop_flag, streams, device_path, serial,  ):
     import zmq
     pos = 0
     abs_pos = pos2 = 0
     
+    #setup cryto
+    cipher = setupCrypto(serial)
+    
+    
+    streamChan, streamImp, streamGyro = streams
     
     hidraw = open(device_path)
     
@@ -365,54 +279,50 @@ def emotiv_mainLoop(stop_flag, streamChan, streamImp, streamGyro, device_path, _
     sampling_rate = streamChan['sampling_rate']
     
     np_arr_chan = streamChan['shared_array'].to_numpy_array()
-    chanData = np.array(1, dtype = np.int32)
-    
     np_arr_imp = streamImp['shared_array'].to_numpy_array()   
-    impData = np.array(1, dtype = np.int32)
-    
     np_arr_gyro = streamGyro['shared_array'].to_numpy_array()   
-    impGyro = np.array(1, dtype = np.int32)
     
     half_size = np_arr_chan.shape[1]/2    # same for the others 
     
-    nb_channel = streamChan['nb_channel']
-    nb_gyro = streamGyro['nb_channel']
     
-    # Linux Style
+    impedance_qualities = { }
+    for name in _channel_names + ['X', 'Y', 'Unknown']:
+        impedance_qualities[name] = 0.
+
     while True:
-        #~ t1 = time.time()
-        try:
-            rawData = hidraw.read(32)
+        crypted_data = hidraw.read(32)
+        data = cipher.decrypt(crypted_data[:16]) + cipher.decrypt(crypted_data[16:])
+
+        # current impedance quality
+        sensor_num = ord(data[0])
+        num_to_name = { 0 : 'F3',  1:'FC5', 2 : 'AF3',  3 : 'F7', 4:'T7', 5 : 'P7', 
+                                            6 : 'O1', 7 : 'O2', 8: 'P8', 9 : 'T8', 10: 'F8', 11 : 'AF4', 
+                                            12 : 'FC6', 13: 'F4', 14 : 'F8', 15:'AF4', 
+                                            64 : 'F3', 65 : 'FC5', 66 : 'AF3', 67 : 'F7', 68 : 'T7', 69 : 'P7', 
+                                            70 : 'O1', 71 : 'O2', 72: 'P8', 73 : 'T8', 74: 'F8', 75 : 'AF4', 
+                                            76 : 'FC6', 77: 'F4', 78 : 'F8', 79:'AF4', 
+                                            80 : 'FC6',
+                                            }
+        if sensor_num in num_to_name:
+            sensor_name = num_to_name[sensor_num]
+            impedance_qualities[sensor_name] = get_level(data, quality_bits) / 540
+        
+        
+        for c, channel_name in enumerate(_channel_names):
+            bits = sensorBits[channel_name]
+            # channel value
+            value = get_level(data, bits)
+            np_arr_chan[c,pos2] = value
+            np_arr_chan[c,pos2+half_size] = value
             
-            if rawData != "":
-                if _os_decryption:
-                    # TODO check if correct
-                    deCryptData =  EmotivPacket(rawData)  #need self.sensors ?
-                else:
-                    deCryptData = cipher.decrypt(rawData[:16]) + cipher.decrypt(rawData[16:])
-                    data =  EmotivPacket(deCryptData, sensors)
-        except KeyboardInterrupt:
-            print("Data not received")
-            stop_flag.value = 1
-        
-        print data.sensors
-        # Get Channels data, impedances and gyro
-        #~ for name in 'F3 F4 P7 FC6 F7 F8 T7 P8 FC5 AF4 T8 O2 O1 AF3'.split(' '):	
-        #~ for name in sensorBits.keys():
-        for name  in _channel_names:
-            chanData = np.append(chanData, data.sensors[name]['value'] )
-            impData = np.append(impData, data.sensors[name]['quality'] )
-        chanData = chanData[-nb_channel:].reshape(nb_channel,1)
-        impData = impData[-nb_channel:].reshape(nb_channel,1)
-        gyroData = np.array([data.gyroX, data.gyroY]).reshape(nb_gyro,1)
-        
-        #double copy
-        np_arr_chan[:,pos2:pos2+packet_size] = chanData
-        np_arr_chan[:,pos2+half_size:pos2+packet_size+half_size] = chanData
-        np_arr_imp[:,pos2:pos2+packet_size] = impData
-        np_arr_imp[:,pos2+half_size:pos2+packet_size+half_size] = impData
-        np_arr_gyro[:,pos2:pos2+packet_size] = gyroData
-        np_arr_gyro[:,pos2+half_size:pos2+packet_size+half_size] = gyroData
+            #channel qualities
+            np_arr_imp[c,pos2] =  impedance_qualities[channel_name]
+            np_arr_imp[c,pos2+half_size] =  impedance_qualities[channel_name]
+            
+        gyroX = ord(data[29]) - 106
+        gyroY = ord(data[30]) - 105
+        np_arr_gyro[:,pos2] = [gyroX, gyroY]
+        np_arr_gyro[:,pos2+half_size] = [gyroX, gyroY]
         
         pos += packet_size
         pos = pos%chanData.shape[1]
@@ -423,121 +333,10 @@ def emotiv_mainLoop(stop_flag, streamChan, streamImp, streamGyro, device_path, _
         socket_imp.send(msgpack.dumps(abs_pos))
         socket_gyro.send(msgpack.dumps(abs_pos))
         
-        
         if stop_flag.value:
             print 'will stop'
             break
-        #~ t2 = time.time()
  
-
-class EmotivPacket(object):
-    def __init__(self, data, sensors):
-        global g_battery
-        self.rawData = data
-        self.counter = ord(data[0])
-        self.battery = g_battery
-        if(self.counter > 127):
-            self.battery = self.counter
-            g_battery = self.battery_percent()
-            self.counter = 128
-        self.sync = self.counter == 0xe9
-        self.gyroX = ord(data[29]) - 106
-        self.gyroY = ord(data[30]) - 105
-        sensors['X']['value'] = self.gyroX
-        sensors['Y']['value'] = self.gyroY
-        for name, bits in sensorBits.items():
-            value = self.get_level(self.rawData, bits)
-            setattr(self, name, (value,))
-            sensors[name]['value'] = value
-        self.handle_quality(sensors)
-        self.sensors = sensors
-
-    def get_level(self, data, bits):
-        level = 0
-        for i in range(13, -1, -1):
-            level <<= 1
-            b, o = (bits[i] / 8) + 1, bits[i] % 8
-            level |= (ord(data[b]) >> o) & 1
-        return level
-
-    def handle_quality(self, sensors):
-        current_contact_quality = self.get_level(self.rawData, quality_bits) / 540
-        sensor = ord(self.rawData[0])
-        
-        num_to_name = { 0 : 'F3',  1:'FC5', 2 : 'AF3',  3 : 'F7', 4:'T7', 5 : 'P7', 
-                                            6 : 'O1', 7 : 'O2', 8: 'P8', 9 : 'T8', 10: 'F8', 11 : 'AF4', 
-                                            12 : 'FC6', 13: 'F4', 14 : 'F8', 15:'AF4', 
-                                            64 : 'F3', 65 : 'FC5', 66 : 'AF3', 67 : 'F7', 68 : 'T7', 69 : 'P7', 
-                                            70 : 'O1', 71 : 'O2', 72: 'P8', 73 : 'T8', 74: 'F8', 75 : 'AF4', 
-                                            76 : 'FC6', 77: 'F4', 78 : 'F8', 79:'AF4', 
-                                            80 : 'FC6',
-                                            }
-        if sensor in num_to_name:
-            name = num_to_name[sensor]
-            sensors[name]['quality'] = current_contact_quality
-        else:
-            sensors['Unknown']['quality'] = current_contact_quality
-            sensors['Unknown']['value'] = sensor            
-        return current_contact_quality
-
-    def battery_percent(self):
-        if self.battery > 248:
-            return 100
-        elif self.battery == 247:
-            return 99
-        elif self.battery == 246:
-            return 97
-        elif self.battery == 245:
-            return 93
-        elif self.battery == 244:
-            return 89
-        elif self.battery == 243:
-            return 85
-        elif self.battery == 242:
-            return 82
-        elif self.battery == 241:
-            return 77
-        elif self.battery == 240:
-            return 72
-        elif self.battery == 239:
-            return 66
-        elif self.battery == 238:
-            return 62
-        elif self.battery == 237:
-            return 55
-        elif self.battery == 236:
-            return 46
-        elif self.battery == 235:
-            return 32
-        elif self.battery == 234:
-            return 20
-        elif self.battery == 233:
-            return 12
-        elif self.battery == 232:
-            return 6
-        elif self.battery == 231:
-            return 4
-        elif self.battery == 230:
-            return 3
-        elif self.battery == 229:
-            return 2
-        elif self.battery == 228:
-            return 2
-        elif self.battery == 227:
-            return 2
-        elif self.battery == 226:
-            return 1
-        else:
-            return 0
-
-    def __repr__(self):
-        return 'EmotivPacket(counter=%i, battery=%i, gyroX=%i, gyroY=%i, F3=%i)' % (
-            self.counter,
-            self.battery,
-            self.gyroX,
-            self.gyroY,
-            self.F3[0],
-            )
 
 
 Emotiv = EmotivMultiSignals
