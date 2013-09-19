@@ -246,8 +246,7 @@ def get_level(data, bits):
 
 def emotiv_mainLoop(stop_flag, streams, device_path, serial,  ):
     import zmq
-    pos = 0
-    abs_pos = pos2 = 0
+    abs_pos = pos = 0
     
     #setup cryto
     cipher = setupCrypto(serial)
@@ -307,22 +306,20 @@ def emotiv_mainLoop(stop_flag, streams, device_path, serial,  ):
             bits = sensorBits[channel_name]
             # channel value
             value = get_level(data, bits)
-            np_arr_chan[c,pos2] = value
-            np_arr_chan[c,pos2+half_size] = value
+            np_arr_chan[c,pos] = value
+            np_arr_chan[c,pos+half_size] = value
             
             #channel qualities
-            np_arr_imp[c,pos2] =  impedance_qualities[channel_name]
-            np_arr_imp[c,pos2+half_size] =  impedance_qualities[channel_name]
+            np_arr_imp[c,pos] =  impedance_qualities[channel_name]
+            np_arr_imp[c,pos+half_size] =  impedance_qualities[channel_name]
             
         gyroX = ord(data[29]) - 106
         gyroY = ord(data[30]) - 105
-        np_arr_gyro[:,pos2] = [gyroX, gyroY]
-        np_arr_gyro[:,pos2+half_size] = [gyroX, gyroY]
+        np_arr_gyro[:,pos] = [gyroX, gyroY]
+        np_arr_gyro[:,pos+half_size] = [gyroX, gyroY]
         
-        pos += packet_size
-        pos = pos%np_arr_chan.shape[1]
         abs_pos += packet_size
-        pos2 = abs_pos%half_size
+        pos = abs_pos%half_size
         
         socket_chan.send(msgpack.dumps(abs_pos))
         socket_imp.send(msgpack.dumps(abs_pos))
