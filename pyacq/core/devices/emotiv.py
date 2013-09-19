@@ -320,7 +320,7 @@ def emotiv_mainLoop(stop_flag, streams, device_path, serial,  ):
         np_arr_gyro[:,pos2+half_size] = [gyroX, gyroY]
         
         pos += packet_size
-        pos = pos%chanData.shape[1]
+        pos = pos%np_arr_chan.shape[1]
         abs_pos += packet_size
         pos2 = abs_pos%half_size
         
