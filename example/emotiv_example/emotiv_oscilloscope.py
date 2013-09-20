@@ -22,7 +22,7 @@ def emotiv_oscillo():
     # Configure and start
     dev = EmotivMultiSignals(streamhandler = streamhandler)
     dev.configure(buffer_length = 1800,
-                                device_path = '',)
+                                device_path = '/dev/hidraw2',)
     dev.initialize()
     dev.start()
     

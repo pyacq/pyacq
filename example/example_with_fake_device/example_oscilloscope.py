@@ -17,6 +17,8 @@ import zmq
 import msgpack
 import time
 
+import numpy as np
+
 def test1():
     streamhandler = StreamHandler()
     
@@ -39,12 +41,19 @@ def test1():
     w1=Oscilloscope(stream = dev.streams[0])
     w1.show()
     w1.auto_gain_and_offset(mode = 2)
-    w1.change_param_global(xsize = 1.)
+    visibles = np.ones(16, dtype = bool)
+    visibles[4:] = False
+    w1.set_params(xsize = 1.,
+                                    mode = 'scan',
+                                visibles = visibles)
+
+    #~ print w1.get_params()
+    w1.set_params(**w1.get_params())
 
     w2=Oscilloscope(stream = dev.streams[0])
     w2.show()
     w2.auto_gain_and_offset(mode = 0)
-    w2.change_param_global(xsize = 5, mode = 'scroll')
+    w2.set_params(xsize = 5, mode = 'scroll')
     
 
     

@@ -4,7 +4,7 @@ from PyQt4 import QtCore,QtGui
 import pyqtgraph as pg
 import zmq
 
-from .tools import RecvPosThread
+from .tools import RecvPosThread, MultiChannelParams
 from .guiutil import *
 from .multichannelparam import MultiChannelParam
 
@@ -60,7 +60,10 @@ class MyViewBox(pg.ViewBox):
         self.zoom.emit(z)
         ev.accept()
 
-class TimeFreq(QtGui.QWidget):
+class TimeFreq(QtGui.QWidget, MultiChannelParams):
+    _param_global =param_global
+    _param_by_channel = param_by_channel
+    
     def __init__(self, stream = None, parent = None,
                             max_visible_on_open = 4,):
         QtGui.QWidget.__init__(self, parent)
@@ -144,14 +147,14 @@ class TimeFreq(QtGui.QWidget):
         
         #~ self.paramGlobal.param('xsize').setValue(3)
 
-    def change_param_channel(self, channel, **kargs):
-        p  = self.paramChannels.children()[channel]
-        for k, v in kargs.items():
-            p.param(k).setValue(v)
+    #~ def change_param_channel(self, channel, **kargs):
+        #~ p  = self.paramChannels.children()[channel]
+        #~ for k, v in kargs.items():
+            #~ p.param(k).setValue(v)
         
-    def change_param_global(self, **kargs):
-        for k, v in kargs.items():
-            self.paramGlobal.param(k).setValue(v)
+    #~ def change_param_global(self, **kargs):
+        #~ for k, v in kargs.items():
+            #~ self.paramGlobal.param(k).setValue(v)
 
     def change_param_tfr(self, **kargs):
         for k, v in kargs.items():

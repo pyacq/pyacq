@@ -59,7 +59,7 @@ def on_pc2():
     w1.show()
     
     w1.auto_gain_and_offset(mode = 1)
-    w1.change_param_global(xsize = 5., mode = 'scan')
+    w1.set_params(xsize = 5., mode = 'scan')
 
     app.exec_()
 

@@ -4,7 +4,7 @@ from PyQt4 import QtCore,QtGui
 import pyqtgraph as pg
 import zmq
 
-from .tools import RecvPosThread
+from .tools import RecvPosThread, MultiChannelParams
 from .guiutil import *
 from .multichannelparam import MultiChannelParam
 
@@ -52,7 +52,10 @@ def extract_bit(chan, arr):
     mask = 1<<(chan%8)
     return (arr[b,:]&mask>0).astype(float)
 
-class OscilloscopeDigital(QtGui.QWidget):
+class OscilloscopeDigital(QtGui.QWidget, MultiChannelParams):
+    _param_global =param_global
+    _param_by_channel = param_by_channel
+    
     def __init__(self, stream = None, parent = None,):
         QtGui.QWidget.__init__(self, parent)
         
@@ -122,15 +125,15 @@ class OscilloscopeDigital(QtGui.QWidget):
 
     def open_configure_dialog(self):
         self.paramControler.show()    
-    
-    def change_param_channel(self, channel, **kargs):
-        p  = self.paramChannels.children()[channel]
-        for k, v in kargs.items():
-            p.param(k).setValue(v)
+
+    #~ def change_param_channel(self, channel, **kargs):
+        #~ p  = self.paramChannels.children()[channel]
+        #~ for k, v in kargs.items():
+            #~ p.param(k).setValue(v)
         
-    def change_param_global(self, **kargs):
-        for k, v in kargs.items():
-            self.paramGlobal.param(k).setValue(v)
+    #~ def change_param_global(self, **kargs):
+        #~ for k, v in kargs.items():
+            #~ self.paramGlobal.param(k).setValue(v)
     
     def on_param_change(self, params, changes):
         for param, change, data in changes:
@@ -232,12 +235,13 @@ class OscilloscopeDigital(QtGui.QWidget):
         n = np.sum(selected)
         if n==0: return
         cmap = get_cmap(cmap_name , n)
+        colors = self.get_params()['colors']
         s=0
         for i in range(self.stream['nb_channel']):
             if selected[i]:
-                color = [ int(c*255) for c in ColorConverter().to_rgb(cmap(s)) ]
-                self.change_param_channel(i,  color = color)
+                colors[i] = [ int(c*255) for c in ColorConverter().to_rgb(cmap(s)) ]
                 s += 1
+        self.set_params(colors = colors)
 
 
             

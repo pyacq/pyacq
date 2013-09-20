@@ -31,9 +31,12 @@ def test1():
     app = QtGui.QApplication([])
     w1=Oscilloscope(stream = dev.streams[0])
     #w1.auto_gain_and_offset(mode = 0)
-    for i in range(dev.nb_channel):
-        w1.change_param_channel(i, visible = i==0)
-    w1.change_param_global(xsize = 3., refresh_interval = 100, mode = 'scan', ylims = [-1., 1.])
+    visibles = np.ones(dev.nb_channel, dtype = bool)
+    visibles[1:] = False
+    w1.set_params(xsize = 3., refresh_interval = 100, 
+                                mode = 'scan', ylims = [-1., 1.],
+                                visibles = visibles,
+                                )
     w1.show()
     
     app.exec_()

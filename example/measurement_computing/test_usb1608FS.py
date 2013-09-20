@@ -29,7 +29,7 @@ def test1():
     app = QtGui.QApplication([])
     w1=Oscilloscope(stream = dev.streams[0])
     w1.auto_gain_and_offset(mode = 2)
-    w1.change_param_global(xsize = 5., refresh_interval = 100, mode = 'scan', ylims = [-8., 8.])
+    w1.set_params(xsize = 5., refresh_interval = 100, mode = 'scan', ylims = [-8., 8.])
     w1.show()
     
     

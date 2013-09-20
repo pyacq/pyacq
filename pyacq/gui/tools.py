@@ -20,3 +20,40 @@ class RecvPosThread(QtCore.QThread):
             message = self.socket.recv()
             self.pos = msgpack.loads(message)
             self.newpacket.emit(self.port, self.pos)
+
+
+
+class MultiChannelParams:
+    """
+    For Oscilloscope, OscilloscopeDIgital and TimeFreq.
+    Allow external configuration.
+    """
+    def set_params(self, **kargs):
+        pglobal = [ p['name'] for p in self._param_global]
+        pchan = [ p['name']+'s' for p in self._param_by_channel]
+        nb_channel = self.stream['nb_channel']
+        for k, v in kargs.items():
+            if k in pglobal:
+                self.paramGlobal.param(k).setValue(v)
+            elif k in pchan:
+                for channel in range(nb_channel):
+                    p  = self.paramChannels.children()[channel]
+                    p.param(k[:-1]).setValue(v[channel])
+        
+    def get_params(self):
+        nb_channel = self.stream['nb_channel']
+        params = { }
+        for p in self._param_global:
+            v = self.paramGlobal[p['name']]
+            if 'color' in p['name']:
+                v = str(v.name())
+            params[p['name']] = v
+        for p in self._param_by_channel:
+            values = [ ]
+            for channel in range(nb_channel):
+                v= self.paramChannels.children()[channel][p['name']]
+                if 'color' in p['name']:
+                    v = str(v.name())
+                values.append(v)
+            params[p['name']+'s'] = values
+        return params    

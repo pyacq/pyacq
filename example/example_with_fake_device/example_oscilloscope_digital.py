@@ -34,11 +34,11 @@ def test1():
     
     w1=OscilloscopeDigital(stream = dev.streams[0])
     w1.show()
-    w1.change_param_global(xsize = 5.)
+    w1.set_params(xsize = 5.)
 
     w2=OscilloscopeDigital(stream = dev.streams[0])
     w2.show()
-    w2.change_param_global(xsize = 20, mode = 'scroll')
+    w2.set_params(xsize = 20, mode = 'scroll')
     
 
     

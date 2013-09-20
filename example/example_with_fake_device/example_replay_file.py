@@ -39,7 +39,7 @@ def test1():
     w1=Oscilloscope(stream = dev.streams[0])
     w1.show()
     w1.auto_gain_and_offset(mode = 1)
-    w1.change_param_global(xsize = 10.)
+    w1.set_params(xsize = 10.)
 
     
     app.exec_()

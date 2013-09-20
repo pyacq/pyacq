@@ -33,13 +33,13 @@ def test1():
     
     app = QtGui.QApplication([])
     w1=Oscilloscope(stream = dev.streams[0])
-    w1.change_param_global(refresh_interval = 40,
+    w1.set_params(refresh_interval = 40,
                                                         xsize = 2.)
     w1.auto_gain_and_offset(mode = 2)
     w1.show()
     
     w2 = TimeFreq(stream = dev.streams[0], max_visible_on_open = 4)
-    w2.change_param_global(refresh_interval = 40,
+    w2.set_params(refresh_interval = 40,
                                                         xsize = 2., nb_column = 1)
     w2.show()
     
