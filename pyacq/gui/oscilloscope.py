@@ -351,9 +351,14 @@ class OscilloscopeControler(QtGui.QWidget):
             but.clicked.connect(self.on_auto_gain_and_offset)
 
         v.addWidget(QLabel(self.tr('<b>Automatic color on selection:<\b>'),self))
+        h = QtGui.QHBoxLayout()
         but = QPushButton('Progressive')
         but.clicked.connect(self.on_automatic_color)
-        v.addWidget(but)
+        h.addWidget(but,4)
+        self.combo_cmap = QtGui.QComboBox()
+        self.combo_cmap.addItems(['jet', 'prism', 'spring', 'spectral', 'hsv', 'autumn', 'spring', 'summer', 'winter', 'bone'])
+        h.addWidget(self.combo_cmap,1)
+        v.addLayout(h)
 
         v.addWidget(QLabel(self.tr('<b>Gain zoom (mouse wheel on graph):<\b>'),self))
         h = QHBoxLayout()
@@ -373,7 +378,8 @@ class OscilloscopeControler(QtGui.QWidget):
         self.viewer.auto_gain_and_offset(mode = mode, selected = selected)
     
     def on_automatic_color(self, cmap_name = None):
-        cmap_name = 'jet'
+        #~ cmap_name = 'jet'
+        cmap_name = str(self.combo_cmap.currentText())
         if self.viewer.stream['nb_channel']>1:
             selected = self.multi.selected()
         else:
