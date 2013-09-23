@@ -4,7 +4,7 @@ from PyQt4 import QtCore,QtGui
 import pyqtgraph as pg
 import zmq
 
-from .tools import RecvPosThread, MultiChannelParams
+from .tools import RecvPosThread, MultiChannelParamsSetter
 from .guiutil import *
 from .multichannelparam import MultiChannelParam
 
@@ -49,7 +49,7 @@ class MyViewBox(pg.ViewBox):
         self.zoom.emit(z)
         ev.accept()
 
-class Oscilloscope(QtGui.QWidget, MultiChannelParams):
+class Oscilloscope(QtGui.QWidget, MultiChannelParamsSetter):
     _param_global =param_global
     _param_by_channel = param_by_channel
     

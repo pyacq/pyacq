@@ -23,7 +23,7 @@ class RecvPosThread(QtCore.QThread):
 
 
 
-class MultiChannelParams:
+class MultiChannelParamsSetter:
     """
     For Oscilloscope, OscilloscopeDIgital and TimeFreq.
     Allow external configuration.
