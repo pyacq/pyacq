@@ -33,6 +33,8 @@ def test1():
     app = QtGui.QApplication([])
     w1=TimeFreq(stream = dev.streams[0])
     w1.show()
+    #~ w1.change_param_tfr(colormap = 'bone')
+    w1.set_params(colormap = 'bone')
     
     app.exec_()
     

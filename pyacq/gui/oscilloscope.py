@@ -139,7 +139,9 @@ class Oscilloscope(QtGui.QWidget, MultiChannelParamsSetter):
         for param, change, data in changes:
             if change != 'value': continue
             if param.name() in ['gain', 'offset']: 
-                self.last_pos = self.thread_pos.pos - self.intsize
+                #~ print 'ici', self.thread_pos.pos, self.intsize
+                if self.thread_pos.pos is not None:
+                    self.last_pos = self.thread_pos.pos - self.intsize
             if param.name()=='ylims':
                 continue
             if param.name()=='visible':

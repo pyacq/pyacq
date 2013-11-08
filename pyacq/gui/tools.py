@@ -46,7 +46,8 @@ class MultiChannelParamsSetter:
         for p in self._param_global:
             v = self.paramGlobal[p['name']]
             if 'color' in p['name']:
-                v = str(v.name())
+                if type(v) ==  QtGui.QColor:
+                    v = str(v.name())
             params[p['name']] = v
         for p in self._param_by_channel:
             values = [ ]

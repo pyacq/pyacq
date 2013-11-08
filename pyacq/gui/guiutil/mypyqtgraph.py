@@ -3,6 +3,7 @@
 from PyQt4.QtCore import *
 from PyQt4.QtGui import *
 
+from collections import OrderedDict
 
 import pyqtgraph as pg
 from pyqtgraph.parametertree import Parameter, ParameterTree, ParameterItem, registerParameterType
@@ -11,9 +12,12 @@ from pyqtgraph.parametertree import parameterTypes as types
 import numpy as np
 import quantities as pq
 
-def get_dict_from_group_param(param, cascade = False):
+def get_dict_from_group_param(param, cascade = False, dict_type = 'dict'):
     assert param.type() == 'group'
-    d = {}
+    if  dict_type == 'dict':
+        d = {}
+    elif  dict_type == 'OrderedDict':
+        d = OrderedDict()
     for p in param.children():
         if p.type() == 'group':
             if cascade:
