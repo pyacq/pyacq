@@ -483,12 +483,12 @@ class TimefreqControler(QtGui.QWidget):
             clim = np.max(all)*1.1
             for i, p in enumerate(self.viewer.paramChannels.children()):
                 if p.param('visible').value():
-                    p.param('clim').setValue(clim)
+                    p.param('clim').setValue(float(clim))
         else:
             for i, p in enumerate(self.viewer.paramChannels.children()):
                 if p.param('visible').value():
                     clim = np.max(self.viewer.maps[i])*1.1
-                    p.param('clim').setValue(clim)
+                    p.param('clim').setValue(float(clim))
     
     def clim_zoom(self, factor):
         for i, p in enumerate(self.viewer.paramChannels.children()):

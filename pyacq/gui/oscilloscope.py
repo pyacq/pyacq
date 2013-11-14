@@ -278,7 +278,7 @@ class Oscilloscope(QtGui.QWidget, MultiChannelParamsSetter):
             offsets[selected] = range(n)[::-1] - av[selected]*gains[selected]
         
         # apply
-        self.set_params(gains = gains, offsets = offsets, visibles = selected,
+        self.set_params(gains = gains.tolist(), offsets = offsets.tolist(), visibles = selected.tolist(),
                                         ylims = ylims)
 
     def automatic_color(self, cmap_name = None, selected = None):
