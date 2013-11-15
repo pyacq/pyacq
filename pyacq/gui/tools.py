@@ -4,6 +4,8 @@ from PyQt4 import QtCore,QtGui
 import zmq
 import msgpack
 
+import numpy as np
+
 
 class RecvPosThread(QtCore.QThread):
     newpacket = QtCore.pyqtSignal(int, int)
@@ -36,6 +38,8 @@ class MultiChannelParamsSetter:
             if k in pglobal:
                 self.paramGlobal.param(k).setValue(v)
             elif k in pchan:
+                if isinstance(v, np.ndarray):
+                    v = v.tolist()
                 for channel in range(nb_channel):
                     p  = self.paramChannels.children()[channel]
                     p.param(k[:-1]).setValue(v[channel])

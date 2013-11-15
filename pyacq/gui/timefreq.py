@@ -4,6 +4,8 @@ from PyQt4 import QtCore,QtGui
 import pyqtgraph as pg
 import zmq
 
+import time
+
 from .tools import RecvPosThread, MultiChannelParamsSetter
 from .guiutil import *
 from .multichannelparam import MultiChannelParam
@@ -37,7 +39,7 @@ param_by_channel = [
                 {'name': 'clim', 'type': 'float', 'value': 10.},
             ]
 
-
+import sip
 
 class MyViewBox(pg.ViewBox):
     doubleclicked = QtCore.pyqtSignal()
@@ -109,13 +111,14 @@ class TimeFreq(QtGui.QWidget, MultiChannelParamsSetter):
         self.paramControler.setWindowFlags(Qt.Window)
         
         self.graphicsviews = [ ]
-        self.grid_changing =False
+        #~ self.grid_changing =False
+        self.grid_changing =0
         self.create_grid()
         
         self.thread_initialize_tfr = None
         self.need_recreate_thread = True
         
-        self.initialize_time_freq()
+        self.initialize_time_freq(threaded = False)
         self.initialize_tfr_finished.connect(self.refresh)
 
         # this signal is used when trying to change many time tfr params
@@ -144,18 +147,8 @@ class TimeFreq(QtGui.QWidget, MultiChannelParamsSetter):
         self.timer = QtCore.QTimer(interval = 500)
         self.timer.timeout.connect(self.refresh)
         self.timer.start()
-        
-        #~ self.paramGlobal.param('xsize').setValue(3)
-
-    #~ def change_param_channel(self, channel, **kargs):
-        #~ p  = self.paramChannels.children()[channel]
-        #~ for k, v in kargs.items():
-            #~ p.param(k).setValue(v)
-        
-    #~ def change_param_global(self, **kargs):
-        #~ for k, v in kargs.items():
-            #~ self.paramGlobal.param(k).setValue(v)
-
+    
+    
     def change_param_tfr(self, **kargs):
         for k, v in kargs.items():
             self.paramTimeFreq.param(k).setValue(v)
@@ -180,19 +173,18 @@ class TimeFreq(QtGui.QWidget, MultiChannelParamsSetter):
 
     need_change_grid = pyqtSignal()
     def change_grid(self, param=None):
-        if not self.grid_changing:
+        self.grid_changing += 1
+        if self.grid_changing==1:
             self.need_change_grid.emit()
+            
+            
         
     def do_change_grid(self):
-        self.grid_changing = True
+        time.sleep(.2)
+        self.grid_changing = 0
         self.create_grid()
-        self.initialize_time_freq()
-        self.initialize_tfr_finished.connect(self.grid_changed_done)
-        
-    def grid_changed_done(self):
-        self.initialize_tfr_finished.disconnect(self.grid_changed_done)
-        self.grid_changing = False
-        
+        self.initialize_plots()
+    
     def clim_changed(self, param):
         i = self.paramChannels.children().index( param.parent())
         clim = param.value()
@@ -203,10 +195,12 @@ class TimeFreq(QtGui.QWidget, MultiChannelParamsSetter):
         self.paramControler.show()
         
     def create_grid(self):
-        color = self.paramGlobal.param('background_color').value()
-        #~ self.graphicsview.setBackground(color)
-
+        if sip.isdeleted(self): 
+            # This is very ugly patch but
+            # When a TimeFreq is detroyer sometime the init is not fichised!!!
+            return
         
+        color = self.paramGlobal.param('background_color').value()
         n = self.stream['nb_channel']
         for graphicsview in self.graphicsviews:
             if graphicsview is not None:
@@ -241,12 +235,14 @@ class TimeFreq(QtGui.QWidget, MultiChannelParamsSetter):
         self.threads = [ None for i in range(n)]
         
     initialize_tfr_finished = QtCore.pyqtSignal()
-    def initialize_time_freq(self):
-        if self.thread_initialize_tfr is not None or self.is_computing.any():
-            # needd to come back later ...
-            if not self.timer_back_initialize.isActive():
-                self.timer_back_initialize.start()
-            return
+    def initialize_time_freq(self, threaded = True):
+        if threaded:
+            if self.thread_initialize_tfr is not None or self.is_computing.any():
+                # needd to come back later ...
+                if not self.timer_back_initialize.isActive():
+                    self.timer_back_initialize.start()
+                return
+        
         # create self.params_time_freq
         p = self.params_time_freq = { }
         for param in self.paramTimeFreq.children():
@@ -254,7 +250,6 @@ class TimeFreq(QtGui.QWidget, MultiChannelParamsSetter):
         
         
         # we take sampling_rate = f_stop*4 or (original sampling_rate)
-        #~ if p['f_stop']*4 < self.stream['sampling_rate']:
         if p['f_stop']*4 < self.stream['sampling_rate']:
             p['sampling_rate'] = p['f_stop']*4
         else:
@@ -264,13 +259,24 @@ class TimeFreq(QtGui.QWidget, MultiChannelParamsSetter):
         self.xsize2 = self.paramGlobal.param('xsize').value()
         self.len_wavelet = int(self.xsize2*p['sampling_rate'])
         self.win = fftpack.ifftshift(np.hamming(self.len_wavelet))
-        self.thread_initialize_tfr = ThreadInitializeWavelet(len_wavelet = self.len_wavelet, 
-                                                            params_time_freq = p, parent = self )
-        self.thread_initialize_tfr.finished.connect(self.initialize_tfr_done)
-        self.thread_initialize_tfr.start()
         
+        if threaded:
+            self.thread_initialize_tfr = ThreadInitializeWavelet(len_wavelet = self.len_wavelet, 
+                                                                params_time_freq = p, parent = self )
+            self.thread_initialize_tfr.finished.connect(self.initialize_tfr_done)
+            self.thread_initialize_tfr.start()
+        else:
+            self.wf = generate_wavelet_fourier(len_wavelet= self.len_wavelet, ** self.params_time_freq)
+            self.initialize_plots()
+            
     
     def initialize_tfr_done(self):
+        self.wf = self.thread_initialize_tfr.wf
+        self.initialize_plots()
+        self.thread_initialize_tfr = None
+        self.initialize_tfr_finished.emit()        
+    
+    def initialize_plots(self):
         colormap = self.paramGlobal.param('colormap').value()
         lut = [ ]
         cmap = get_cmap(colormap , 10000)
@@ -279,9 +285,6 @@ class TimeFreq(QtGui.QWidget, MultiChannelParamsSetter):
             lut.append([r*255,g*255,b*255])
         self.jet_lut = np.array(lut, dtype = np.uint8)
 
-
-        
-        self.wf = self.thread_initialize_tfr.wf
         p = self.params_time_freq
         for i in range(self.stream['nb_channel']):
             if not self.paramChannels.children()[i].param('visible').value(): continue
@@ -296,7 +299,7 @@ class TimeFreq(QtGui.QWidget, MultiChannelParamsSetter):
             clim = self.paramChannels.children()[i].param('clim').value()
             self.images[i].setImage(self.maps[i], lut = self.jet_lut, levels = [0,clim])
             
-            #~ self.t_start, self.t_stop = self.t-self.xsize2/3. , self.t+self.xsize2*2./3.
+            
             f_start, f_stop = p['f_start'], p['f_stop']
             image.setRect(QRectF(-self.xsize2, f_start,self.xsize2, f_stop-f_start))
 
@@ -306,9 +309,6 @@ class TimeFreq(QtGui.QWidget, MultiChannelParamsSetter):
         self.freqs = np.arange(p['f_start'],p['f_stop'],p['deltafreq'])
         self.need_recreate_thread = True
         
-        self.thread_initialize_tfr = None
-        self.initialize_tfr_finished.emit()
-    
     
     def refresh(self):
         if self.thread_initialize_tfr is not None or self.is_computing.any():
