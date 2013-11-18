@@ -11,6 +11,8 @@ import io
 import msgpack
 import os
 import json
+import time
+
 
 from ..version import version as pyacq_version
 
@@ -40,7 +42,9 @@ class RawDataRecording:
         for stream in self.streams:
             infostream = { }
             infostream.update(stream._params)
-            infostream.pop('shared_array')
+            for e in ['shared_array', ]:
+                if e in infostream:
+                    infostream.pop(e)
             
             info['streams'].append(infostream)
         
@@ -60,10 +64,12 @@ class RawDataRecording:
             f = io.open(os.path.join(self.dirname, stream.name+'.raw'), mode = 'wb')
             self.files.append(f)
             
-            func = getattr(self, 'rec_loop_'+type(stream).__name__)
-            thread = threading.Thread(target = func, args = (socket,stream, f))
-            self.threads.append(thread)
-            thread.start()
+            callback = 'rec_loop_'+type(stream).__name__
+            if hasattr(self, callback):
+                func = getattr(self, callback)
+                thread = threading.Thread(target = func, args = (socket,stream, f))
+                self.threads.append(thread)
+                thread.start()
         
     
     def rec_loop_AnalogSignalSharedMemStream(self, socket, stream, file):
@@ -106,7 +112,18 @@ class RawDataRecording:
             file.write(np_array[:, tail:head].transpose().tostring())
             last_pos = pos
 
-    
+    def rec_loop_AsynchronusEventStream(self, socket, stream, file):
+        while self.running:
+            if socket.poll(timeout = 100):
+                
+                message = socket.recv()
+                t = time.time()
+                print 'ici', t, message
+                file.write(buffer(np.float64(t)))
+                file.write(message)
+            
+
+        
     
 
 
@@ -117,4 +134,6 @@ class RawDataRecording:
         for f in self.files:
             f.close()
         #~ print 'rec stopped'
+        
+
 

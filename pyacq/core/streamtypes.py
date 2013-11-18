@@ -190,6 +190,25 @@ class AnalogSignalPlainDataStream(Stream):
         s['port'] = port
 
 
-stream_type_list = [AnalogSignalSharedMemStream, DigitalSignalSharedMemStream, AnalogSignalPlainDataStream ]
+class AsynchronusEventStream(Stream):
+    """
+    This is a stream for asynchronus Event.
+    Typical : Key press, Change of state.
+    
+    Each even is send via the zmq socket.
+    
+    It can have a chustum dtype by default [('label', 'int32'), ]
+    
+    
+    """
+    def __init__(self, name = '', dtype =  [('label', 'int32'), ], port = None):
+        s = self._params = { }
+        s['name'] = name
+        s['dtype'] = dtype
+        
+        s['port'] = port
+    
+
+stream_type_list = [AnalogSignalSharedMemStream, DigitalSignalSharedMemStream, AnalogSignalPlainDataStream, AsynchronusEventStream ]
 
 
