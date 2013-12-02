@@ -17,6 +17,8 @@ param_global = [
     {'name': 'background_color', 'type': 'color', 'value': 'k' },
     {'name': 'refresh_interval', 'type': 'int', 'value': 100 , 'limits':[5, 1000]},
     {'name': 'mode', 'type': 'list', 'value': 'scan' , 'values' : ['scan', 'scroll'] },
+    {'name': 'auto_decimate', 'type': 'bool', 'value':  True },
+    {'name': 'decimate', 'type': 'int', 'value': 1.,  'limits' : [1, None], },
     ]
 
 param_by_channel = [ 
@@ -126,14 +128,6 @@ class OscilloscopeDigital(QtGui.QWidget, MultiChannelParamsSetter):
     def open_configure_dialog(self):
         self.paramControler.show()    
 
-    #~ def change_param_channel(self, channel, **kargs):
-        #~ p  = self.paramChannels.children()[channel]
-        #~ for k, v in kargs.items():
-            #~ p.param(k).setValue(v)
-        
-    #~ def change_param_global(self, **kargs):
-        #~ for k, v in kargs.items():
-            #~ self.paramGlobal.param(k).setValue(v)
     
     def on_param_change(self, params, changes):
         for param, change, data in changes:
@@ -153,23 +147,49 @@ class OscilloscopeDigital(QtGui.QWidget, MultiChannelParamsSetter):
             if param.name()=='background_color':
                 self.graphicsview.setBackground(data)
             if param.name()=='xsize':
-                xsize = data
-                sr = self.stream['sampling_rate']
-                self.intsize = int(xsize*sr)
-                self.t_vect = np.arange(self.intsize, dtype = float)/sr
-                self.t_vect -= self.t_vect[-1]
-                self.curves_data = [ np.zeros( ( self.intsize), dtype =float) for i in range(self.stream['nb_channel']) ]
-                
+                if self.paramGlobal['auto_decimate']:
+                    self.estimate_decimate()
+                self.reset_curves_data()
+            if param.name()=='decimate':
+                self.reset_curves_data()
+            if param.name()=='auto_decimate':
+                if data:
+                    self.estimate_decimate()
+                self.reset_curves_data()
             if param.name()=='refresh_interval':
                 self.timer.setInterval(data)
             if param.name()=='mode':
-                self.curves_data = [ np.zeros( ( self.intsize), dtype =float) for i in range(self.stream['nb_channel']) ]
+                self.reset_curves_data()
                 self.last_pos = self.thread_pos.pos
+    
+    def estimate_decimate(self):
+        xsize = self.paramGlobal['xsize']
+        sr = self.stream['sampling_rate']
+        self.paramGlobal['decimate'] = max( int(xsize*sr)//4000, 1)
+    
+    def reset_curves_data(self):
+        xsize = self.paramGlobal['xsize']
+        decimate = self.paramGlobal['decimate']
+        sr = self.stream['sampling_rate']
+        self.intsize = int(xsize*sr)
+        self.t_vect = np.arange(0,self.intsize//decimate, dtype = float)/sr/decimate
+        self.t_vect -= self.t_vect[-1]
+        self.curves_data = [ np.zeros( ( self.intsize//decimate), dtype =float) for i in range(self.stream['nb_channel']) ]
 
+    
 
     def refresh(self):
         if self.thread_pos.pos is None: return
+        
+        decimate = self.paramGlobal['decimate']
+        mode = self.paramGlobal['mode']
+        visibles = np.array([p['visible'] for p in self.paramChannels.children()], dtype = bool)
+        n = np.sum(visibles)
+        
+        
         pos = self.thread_pos.pos
+        if decimate>1:
+            pos = pos - pos%decimate
 
         if self.last_pos>pos:
             # the stream have restart from zeros
@@ -177,15 +197,11 @@ class OscilloscopeDigital(QtGui.QWidget, MultiChannelParamsSetter):
             for curve_data in self.curves_data:
                 curve_data[:] = 0.
         
-
-        mode = self.paramGlobal['mode']
-        visibles = np.array([p['visible'] for p in self.paramChannels.children()], dtype = bool)
-        n = np.sum(visibles)
-        
         if mode=='scroll':
             head = pos%self.half_size+self.half_size
-            tail = head-self.intsize
-            np_arr = self.np_array[:, tail:head]
+            head = head - head%decimate
+            tail = head-(self.intsize-self.intsize%decimate)
+            np_arr = self.np_array[:, tail:head:decimate]
             o = n-1
             for c, v in zip(range(visibles.size),  visibles):
                 if v :
@@ -195,15 +211,21 @@ class OscilloscopeDigital(QtGui.QWidget, MultiChannelParamsSetter):
             new = (pos-self.last_pos)
             if new>=self.intsize: new = self.intsize-1
             head = pos%self.half_size+self.half_size
+            head = head - head%decimate
+            new = new-new%decimate
             tail = head - new
-            np_arr = self.np_array[:, tail:head]
+            np_arr = self.np_array[:, tail:head:decimate]
+            
             i1 = (pos-new)%self.intsize
             i2 = pos%self.intsize
+            if decimate>1:
+                i1 = i1//decimate
+                i2 = i2//decimate
             if i1>i2:
                 o = n-1
                 for c in range(visibles.size):
                     if visibles[c]:
-                        self.curves_data[c][i1:] = extract_bit(c,np_arr[:,:self.intsize-i1])*.8+o
+                        self.curves_data[c][i1:] = extract_bit(c,np_arr[:,:self.intsize//decimate-i1])*.8+o
                         if i2!=0:
                             self.curves_data[c][:i2] = extract_bit(c, np_arr[:,-i2:])*.8+o
                         o -= 1 

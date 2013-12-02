@@ -18,6 +18,8 @@ param_global = [
     {'name': 'background_color', 'type': 'color', 'value': 'k' },
     {'name': 'refresh_interval', 'type': 'int', 'value': 100 , 'limits':[5, 1000]},
     {'name': 'mode', 'type': 'list', 'value': 'scan' , 'values' : ['scan', 'scroll'] },
+    {'name': 'auto_decimate', 'type': 'bool', 'value':  True },
+    {'name': 'decimate', 'type': 'int', 'value': 1., 'limits' : [1, None], },
     ]
 
 param_by_channel = [ 
@@ -119,25 +121,16 @@ class Oscilloscope(QtGui.QWidget, MultiChannelParamsSetter):
             self.plot.addItem(curve)
             self.curves.append(curve)
         
-        self.paramGlobal.param('xsize').setValue(3)
+        self.paramGlobal['xsize'] = 3.
 
     def open_configure_dialog(self):
-        self.paramControler.show()    
-    
-
-    
-    #~ def change_param_channel(self, channel, **kargs):
-        #~ p  = self.paramChannels.children()[channel]
-        #~ for k, v in kargs.items():
-            #~ p.param(k).setValue(v)
-        
-    #~ def change_param_global(self, **kargs):
-        #~ for k, v in kargs.items():
-            #~ self.paramGlobal.param(k).setValue(v)
+        self.paramControler.show()
     
     def on_param_change(self, params, changes):
+        #~ print 'on_param_change'
         for param, change, data in changes:
             if change != 'value': continue
+            #~ print param.name()
             if param.name() in ['gain', 'offset']: 
                 #~ print 'ici', self.thread_pos.pos, self.intsize
                 if self.thread_pos.pos is not None:
@@ -157,40 +150,68 @@ class Oscilloscope(QtGui.QWidget, MultiChannelParamsSetter):
             if param.name()=='background_color':
                 self.graphicsview.setBackground(data)
             if param.name()=='xsize':
-                xsize = data
-                sr = self.stream['sampling_rate']
-                self.intsize = int(xsize*sr)
-                self.t_vect = np.arange(self.intsize, dtype = self.np_array.dtype)/sr
-                self.t_vect -= self.t_vect[-1]
-                self.curves_data = [ np.zeros( ( self.intsize), dtype = self.np_array.dtype) for i in range(self.stream['nb_channel']) ]
-                
+                if self.paramGlobal['auto_decimate']:
+                    self.estimate_decimate()
+                self.reset_curves_data()
+            if param.name()=='decimate':
+                self.reset_curves_data()
+            if param.name()=='auto_decimate':
+                if data:
+                    self.estimate_decimate()
+                self.reset_curves_data()                
             if param.name()=='refresh_interval':
                 self.timer.setInterval(data)
             if param.name()=='mode':
-                self.curves_data = [ np.zeros( ( self.intsize), dtype = self.np_array.dtype) for i in range(self.stream['nb_channel']) ]
+                self.reset_curves_data()
                 self.last_pos = self.thread_pos.pos
+
+    def estimate_decimate(self):
+        xsize = self.paramGlobal['xsize']
+        sr = self.stream['sampling_rate']
+        self.paramGlobal['decimate'] = max( int(xsize*sr)//4000, 1)
+    
+    def reset_curves_data(self):
+        xsize = self.paramGlobal['xsize']
+        decimate = self.paramGlobal['decimate']
+        sr = self.stream['sampling_rate']
+        self.intsize = int(xsize*sr)
+        self.t_vect = np.arange(0,self.intsize//decimate, dtype = float)/sr/decimate
+        self.t_vect -= self.t_vect[-1]
+        self.curves_data = [ np.zeros( ( self.intsize//decimate), dtype =float) for i in range(self.stream['nb_channel']) ]
+
+    
+
 
 
     def refresh(self):
         if self.thread_pos.pos is None: return
+
+        mode = self.paramGlobal['mode']
+        decimate = self.paramGlobal['decimate']
+        gains = np.array([p['gain'] for p in self.paramChannels.children()])
+        offsets = np.array([p['offset'] for p in self.paramChannels.children()])
+        visibles = np.array([p['visible'] for p in self.paramChannels.children()], dtype = bool)
+
         pos = self.thread_pos.pos
+        if decimate>1:
+            pos = pos - pos%decimate
         
         if self.last_pos>pos:
             # the stream have restart from zeros
             self.last_pos = 0
             for curve_data in self.curves_data:
                 curve_data[:] = 0.
-
-        mode = self.paramGlobal['mode']
-        gains = np.array([p['gain'] for p in self.paramChannels.children()])
-        offsets = np.array([p['offset'] for p in self.paramChannels.children()])
-        visibles = np.array([p['visible'] for p in self.paramChannels.children()], dtype = bool)
         
         
         if mode=='scroll':
             head = pos%self.half_size+self.half_size
-            tail = head-self.intsize
-            np_arr = self.np_array[:, tail:head]
+            head = head - head%decimate
+            tail = head-(self.intsize-self.intsize%decimate)
+            np_arr = self.np_array[:, tail:head:decimate]
+            
+            #~ head = pos%self.half_size+self.half_size
+            #~ tail = head-self.intsize
+            #~ np_arr = self.np_array[:, tail:head]
             for c, g, o,v in zip(range(gains.size), gains, offsets, visibles):
                 if v :
                     self.curves_data[c] = np_arr[c,:]*g+o
@@ -198,14 +219,28 @@ class Oscilloscope(QtGui.QWidget, MultiChannelParamsSetter):
             new = (pos-self.last_pos)
             if new>=self.intsize: new = self.intsize-1
             head = pos%self.half_size+self.half_size
+            head = head - head%decimate
+            new = new-new%decimate
             tail = head - new
-            np_arr = self.np_array[:, tail:head]
+            np_arr = self.np_array[:, tail:head:decimate]
+            
             i1 = (pos-new)%self.intsize
-            i2 = pos%self.intsize
+            i2 = pos%self.intsize            
+            if decimate>1:
+                i1 = i1//decimate
+                i2 = i2//decimate
+            #~ new = (pos-self.last_pos)
+            #~ if new>=self.intsize: new = self.intsize-1
+            #~ head = pos%self.half_size+self.half_size
+            #~ tail = head - new
+            #~ np_arr = self.np_array[:, tail:head]
+            #~ i1 = (pos-new)%self.intsize
+            #~ i2 = pos%self.intsize
             if i1>i2:
                 for c in range(gains.size):
                     if visibles[c]:
-                        self.curves_data[c][i1:] = np_arr[c,:self.intsize-i1]*gains[c]+offsets[c]
+                        #~ self.curves_data[c][i1:] = np_arr[c,:self.intsize-i1]*gains[c]+offsets[c]
+                        self.curves_data[c][i1:] = np_arr[c,:self.intsize//decimate-i1]*gains[c]+offsets[c]
                         if i2!=0:
                             self.curves_data[c][:i2] = np_arr[c,-i2:]*gains[c]+offsets[c]
             else:
