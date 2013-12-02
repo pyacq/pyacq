@@ -23,11 +23,11 @@ class RawDataRecording:
     
     
     """
-    def __init__(self, streams, dirname, dtype = np.float32):
+    def __init__(self, streams, dirname, dtype_sig = np.float32):
         self.streams = streams
         self.dirname = dirname
         
-        self.dtype = dtype
+        self.dtype_sig = dtype_sig
         
         
         
@@ -42,10 +42,15 @@ class RawDataRecording:
         for stream in self.streams:
             infostream = { }
             infostream.update(stream._params)
+            
+            infostream['stream_type'] = type(stream).__name__
+            
+            if infostream['stream_type'] == 'AnalogSignalSharedMemStream':
+                infostream['dtype'] = str(np.dtype(self.dtype_sig).name)
+            
             for e in ['shared_array', ]:
                 if e in infostream:
                     infostream.pop(e)
-            
             info['streams'].append(infostream)
         
         info_file = io.open(os.path.join(self.dirname, 'info.json'), mode = 'w', encoding = 'utf8')
@@ -89,7 +94,7 @@ class RawDataRecording:
                 new = half_size
             head = pos%half_size+half_size
             tail = head - new
-            file.write(np_array[:, tail:head].transpose().astype(self.dtype).tostring())
+            file.write(np_array[:, tail:head].transpose().astype(self.dtype_sig).tostring())
             last_pos = pos
 
     def rec_loop_DigitalSignalSharedMemStream(self, socket, stream, file):

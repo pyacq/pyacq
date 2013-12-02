@@ -13,7 +13,7 @@ setup(
     install_requires=[
                     'numpy',
                     'pyzmq',
-                    'gevent',
+                    #~ 'gevent',
                     'msgpack-python',
                     'blosc',
                     ],
