@@ -36,7 +36,10 @@ def set_dict_to_param_group(param, d, cascade = False):
             if cascade:
                 set_dict_to_param_group(param.param(k), v, cascade = True)
         else:
-            param[k] = v
+            try:
+                param[k] = v
+            except:
+                print('{} is no more a parameter'.format(k))
 set_dict = set_dict_to_param_group
 
 

@@ -23,12 +23,12 @@ class RawDataRecording:
     
     
     """
-    def __init__(self, streams, dirname, dtype_sig = np.float32):
+    def __init__(self, streams, dirname, dtype_sig = np.float32, annotations = { }):
         self.streams = streams
         self.dirname = dirname
         
         self.dtype_sig = dtype_sig
-        
+        self.annotations = annotations
         
         
     def start(self):
@@ -52,6 +52,7 @@ class RawDataRecording:
                 if e in infostream:
                     infostream.pop(e)
             info['streams'].append(infostream)
+        info['annotations'] = self.annotations
         
         info_file = io.open(os.path.join(self.dirname, 'info.json'), mode = 'w', encoding = 'utf8')
         info_file.write(json.dumps(info, sort_keys=True, indent=4, separators=(',', ': '), ensure_ascii = False, encoding =  'utf8'))
