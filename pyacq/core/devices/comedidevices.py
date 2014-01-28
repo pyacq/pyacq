@@ -194,8 +194,8 @@ def get_info(device_path):
         if sub.get_type() == SUBDEVICE_TYPE.ai:
             n = sub.get_n_channels()
             info_sub = create_analog_subdevice_param(n)
+            info['subdevices'].append(info_sub)
         #~ elif sub.get_type() ==  SUBDEVICE_TYPE.di:
-        info['subdevices'].append(info_sub)
     
     info['device_packet_size'] = 512
     dev.close()
