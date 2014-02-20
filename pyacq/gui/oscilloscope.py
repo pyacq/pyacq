@@ -195,10 +195,11 @@ class Oscilloscope(QtGui.QWidget, MultiChannelParamsSetter):
         pos = self.thread_pos.pos
         if decimate>1:
             pos = pos - pos%decimate
+        last_pos = self.last_pos #can be modifyed during refresh!!
         
-        if self.last_pos>pos:
+        if last_pos>pos:
             # the stream have restart from zeros
-            self.last_pos = 0
+            last_pos = self.last_pos = 0
             for curve_data in self.curves_data:
                 curve_data[:] = 0.
         
@@ -216,8 +217,8 @@ class Oscilloscope(QtGui.QWidget, MultiChannelParamsSetter):
                 if v :
                     self.curves_data[c] = np_arr[c,:]*g+o
         else:
-            new = (pos-self.last_pos)
-            if new>=self.intsize: new = self.intsize-1
+            new = (pos-last_pos)
+            if new>=(self.intsize-decimate-1): new = self.intsize-decimate-1
             head = pos%self.half_size+self.half_size
             head = head - head%decimate
             new = new-new%decimate
@@ -243,10 +244,18 @@ class Oscilloscope(QtGui.QWidget, MultiChannelParamsSetter):
                         self.curves_data[c][i1:] = np_arr[c,:self.intsize//decimate-i1]*gains[c]+offsets[c]
                         if i2!=0:
                             self.curves_data[c][:i2] = np_arr[c,-i2:]*gains[c]+offsets[c]
-            else:
+            #~ else:
+            elif i1<i2:
                 for c in range(gains.size):
                     if visibles[c]:
+                        #~ try:
                         self.curves_data[c][i1:i2] = np_arr[c,:]*gains[c]+offsets[c]
+                        #~ except:
+                            #~ print i1, i2, decimate, np_arr.shape, (pos-new)%self.intsize, pos%self.intsize, new, head, tail
+            else:
+                if np_arr.shape[1]!=0:
+                    print 'bug arrondi!!!'
+                    print i1, i2, decimate, np_arr.shape, (pos-new)%self.intsize, pos%self.intsize, new, head, tail, head-tail, self.intsize, self.intsize//decimate
         self.last_pos = pos
         
         for c, curve in enumerate(self.curves):

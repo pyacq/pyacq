@@ -23,7 +23,10 @@ class RawDataRecording:
     
     
     """
-    def __init__(self, streams, dirname, dtype_sig = np.float32, annotations = { }):
+    def __init__(self, streams, dirname, dtype_sig = np.float32,
+                                    annotations = { },
+                                    
+                                    ):
         self.streams = streams
         self.dirname = dirname
         
