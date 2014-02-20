@@ -90,6 +90,7 @@ class FakeMultiSignals(DeviceBase):
                                     precomputed = None,
                                     # if subdevices is None
                                     nb_channel = None,
+                                    last_channel_is_trig = False,
                                     ):
         
         if nb_channel is not None:
@@ -100,6 +101,7 @@ class FakeMultiSignals(DeviceBase):
                                 'packet_size' : packet_size,
                                 'subdevices' : subdevices,
                                 'precomputed' : precomputed,
+                                'last_channel_is_trig' : last_channel_is_trig,
                                 }
         self.__dict__.update(self.params)
         self.configured = True
@@ -162,6 +164,18 @@ class FakeMultiSignals(DeviceBase):
                 self.precomputed[i,:] += np.sin(2*np.pi*t*f1) * np.sin(np.pi*t*f2+np.random.rand()*np.pi)
                 self.precomputed[i,:] += np.random.rand()*40. -20  # add random offset
                 self.precomputed[i,:] *= np.random.rand()*10 # add random gain
+            
+            if self.last_channel_is_trig:
+                self.precomputed[-1,:] = 0.
+                for i in range(20):
+                    self.precomputed[-1,(t>i)&(t<i+.2)] = .5
+                    if np.random.rand()<.5:
+                        #add  noise
+                        self.precomputed[-1,(t>i+.01)&(t<i+0.015)] = 0.
+                        self.precomputed[-1,(t>i+.02)&(t<i+0.025)] = 0.
+                        
+                    
+                
             
             
         print 'FakeMultiAnalogChannel initialized:',  s['port']

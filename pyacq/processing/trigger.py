@@ -3,6 +3,15 @@
 
 """
 
+import multiprocessing as mp
+import numpy as np
+import msgpack
+
+import threading
+
+import zmq
+
+
 
 
 
@@ -21,8 +30,105 @@ group of glitches
 """
 
 class AnalogTrigger:
-    pass
+    def __init__(self, stream, channel = 0, threshold = 1., front = '+',
+                            debounce_mode = 'no-debounce', # 'after-stable' , 'before-stable'
+                            debounce_time = 0.01,
+                            ):
+        assert type(stream).__name__ == 'AnalogSignalSharedMemStream'
+        self.stream = stream
+        self.context = zmq.Context()
+        
+        
+        self.channel = channel
+        self.threshold =threshold
+        self.front = front
+        self.debounce_mode = debounce_mode
+        self.debounce_time = debounce_time
+        
+        self.np_array = self.stream['shared_array'].to_numpy_array()
+        self.half_size = self.np_array.shape[1]/2
+        
+        
+        self.start()
+        
+    def start(self):
+        print 'start'
+        self.go = True
+        #~ self.greenlet = gevent.spawn(self.loop)
+        self.thread = threading.Thread(target = self.loop)
+        self.thread.start()
 
+    def loop(self):
+        port = self.stream['port']
+        socket = self.context.socket(zmq.SUB)
+        socket.setsockopt(zmq.SUBSCRIBE,'')
+        socket.connect("tcp://localhost:{}".format(port))
+        self.last_pos = 0
+        while self.go:
+            message = socket.recv()
+            pos = msgpack.loads(message)
+            
+            db = int(self.debounce_time*self.stream['sampling_rate'])
+            
+            if self.debounce_mode == 'no-debounce':
+                pass
+            elif self.debounce_mode == 'after-stable':
+                pos -= db
+            elif self.debounce_mode == 'before-stable':
+                pos -= db*2
+            new = pos - self.last_pos
+            head = pos%self.half_size+self.half_size
+            tail = head - new
+            newbuf = self.np_array[self.channel, tail:head]
+            sig1 = newbuf[:-1]
+            sig2 = newbuf[1:]
+            
+            if self.front == '+':
+                crossings,  = np.where( (sig1 <= self.threshold) & ( sig2>self.threshold) )
+            elif self.front == '-':
+                crossings,  = np.where( (sig1 >= self.threshold) & ( sig2<self.threshold) )
+            crossings +=1
+            
+            
+            if self.debounce_mode == 'no-debounce':
+                pass
+            elif self.debounce_mode == 'after-stable':
+                if self.front == '+':
+                    for i, crossing in enumerate(crossings):
+                        if np.any(newbuf[crossing:crossing+db]<self.threshold):
+                            crossings[i] = -1
+                elif self.front == '-':
+                    for i, crossing in enumerate(crossings):
+                        if np.any(newbuf[crossing:crossing+db]>self.threshold):
+                            crossings[i] = -1
+                crossings = crossings[crossings != -1]
+            elif self.debounce_mode == 'before-stable':
+                if self.front == '+':
+                    for i, crossing in enumerate(crossings):
+                        if crossing == -1: continue
+                        if np.any(newbuf[crossing+db:crossing+db*2]<self.threshold):
+                            crossings[i] = -1
+                        else:
+                            crossings[crossings[i+1:]-crossing<db] = -1
+                elif self.front == '-':
+                    for i, crossing in enumerate(crossings):
+                        if crossing == -1: continue
+                        if np.any(newbuf[crossing+db:crossing+db*2]>self.threshold):
+                            crossings[i] = -1
+                        else:
+                            crossings[crossings[i+1:]-crossing<db] = -1
+
+                
+            print crossings+self.last_pos
+            
+            
+            self.last_pos = pos-1
+            
+            
+            
+            
+            
+            
 
 class DigitalTrigger:
     pass
