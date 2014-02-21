@@ -33,6 +33,7 @@ class AnalogTrigger:
     def __init__(self, stream, channel = 0, threshold = 1., front = '+',
                             debounce_mode = 'no-debounce', # 'after-stable' , 'before-stable'
                             debounce_time = 0.01,
+                            callbacks = [ ],
                             ):
         assert type(stream).__name__ == 'AnalogSignalSharedMemStream'
         self.stream = stream
@@ -44,12 +45,15 @@ class AnalogTrigger:
         self.front = front
         self.debounce_mode = debounce_mode
         self.debounce_time = debounce_time
+        self.callbacks = callbacks
         
         self.np_array = self.stream['shared_array'].to_numpy_array()
         self.half_size = self.np_array.shape[1]/2
         
-        
         self.start()
+        
+        
+        
         
     def start(self):
         print 'start'
@@ -57,6 +61,9 @@ class AnalogTrigger:
         #~ self.greenlet = gevent.spawn(self.loop)
         self.thread = threading.Thread(target = self.loop)
         self.thread.start()
+    
+    def stop(self):
+        self.go =False
 
     def loop(self):
         port = self.stream['port']
@@ -109,18 +116,20 @@ class AnalogTrigger:
                         if np.any(newbuf[crossing+db:crossing+db*2]<self.threshold):
                             crossings[i] = -1
                         else:
-                            crossings[crossings[i+1:]-crossing<db] = -1
+                            crossings[i+1:][(crossings[i+1:]-crossing)<db] = -1
                 elif self.front == '-':
                     for i, crossing in enumerate(crossings):
                         if crossing == -1: continue
                         if np.any(newbuf[crossing+db:crossing+db*2]>self.threshold):
                             crossings[i] = -1
                         else:
-                            crossings[crossings[i+1:]-crossing<db] = -1
-
+                            crossings[i+1:][(crossings[i+1:]-crossing)<db] = -1
+                crossings = crossings[crossings != -1]
                 
-            print crossings+self.last_pos
-            
+            for crossing in crossings:
+                for callback in self.callbacks:
+                    callback(crossing+self.last_pos)
+                
             
             self.last_pos = pos-1
             

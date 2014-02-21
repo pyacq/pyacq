@@ -28,6 +28,8 @@ def trigger_analog1():
     dev.initialize()
     dev.start()
 
+    def print_pos(pos):
+        print pos
     
     trigger = AnalogTrigger(stream = dev.streams[0],
                                     threshold = 0.25,
@@ -37,7 +39,7 @@ def trigger_analog1():
                                     #~ debounce_mode = 'after-stable',
                                     debounce_mode = 'before-stable',
                                     debounce_time = 0.05,
-                                    
+                                    callbacks = [ print_pos,  ]
                                     )
     
 
@@ -48,7 +50,7 @@ def trigger_analog1():
     w1.show()
     visibles = np.ones(16, dtype = bool)
     visibles[4:] = False
-    w1.set_params(xsize = 3.,
+    w1.set_params(xsize = 4.7,
                                     mode = 'scan',
                                 visibles = visibles)
 
@@ -58,10 +60,14 @@ def trigger_analog1():
 
     
     app.exec_()
-    
+    print 1
     # Stope and release the device
+    trigger.stop()
+    print 2
     dev.stop()
+    print 3
     dev.close()
+    print 4
 
 
 
