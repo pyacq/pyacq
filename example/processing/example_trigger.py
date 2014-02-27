@@ -36,8 +36,8 @@ def trigger_analog1():
                                     front = '+', 
                                     channel = dev.nb_channel-1,
                                     #~ debounce_mode = 'no-debounce',
-                                    #~ debounce_mode = 'after-stable',
-                                    debounce_mode = 'before-stable',
+                                    debounce_mode = 'after-stable',
+                                    #~ debounce_mode = 'before-stable',
                                     debounce_time = 0.05,
                                     callbacks = [ print_pos,  ]
                                     )

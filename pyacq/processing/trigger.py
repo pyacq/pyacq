@@ -56,7 +56,7 @@ class AnalogTrigger:
         
         
     def start(self):
-        print 'start'
+        print 'Trigger started'
         self.go = True
         #~ self.greenlet = gevent.spawn(self.loop)
         self.thread = threading.Thread(target = self.loop)
@@ -95,7 +95,6 @@ class AnalogTrigger:
             elif self.front == '-':
                 crossings,  = np.where( (sig1 >= self.threshold) & ( sig2<self.threshold) )
             crossings +=1
-            
             
             if self.debounce_mode == 'no-debounce':
                 pass

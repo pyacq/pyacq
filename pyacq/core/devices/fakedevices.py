@@ -317,7 +317,9 @@ class FakeDigital(DeviceBase):
         l = int(self.sampling_rate*self.buffer_length)
         self.buffer_length = (l - l%self.packet_size)/self.sampling_rate
         
-        s = self.streamhandler.new_DigitalSignalSharedMemStream(name = 'yep', sampling_rate = self.sampling_rate,
+        #TODO FIXME NAME
+        name = 'fake {} digital input'.format(self.nb_channel)
+        s = self.streamhandler.new_DigitalSignalSharedMemStream(name = name, sampling_rate = self.sampling_rate,
                                                         nb_channel = self.nb_channel, buffer_length = self.buffer_length,
                                                         packet_size = self.packet_size, channel_names = channel_names)
         
