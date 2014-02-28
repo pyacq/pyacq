@@ -117,6 +117,7 @@ class FakeMultiSignals(DeviceBase):
                         'global_params' : {'sampling_rate' : 1000.,
                                                                  'buffer_length' : 60.,
                                                                  'packet_size' : 10,
+                                                                 'last_channel_is_trig': True,
                                                         },
                         'subdevices' : [ create_analog_subdevice_param(n),],
                         }

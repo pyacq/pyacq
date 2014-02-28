@@ -90,6 +90,12 @@ class RawDataRecording:
         
     
     def rec_loop_AnalogSignalSharedMemStream(self, socket, stream, file, bounds):
+        self.rec_loop_common(socket, stream, file, bounds, self.dtype_sig)
+    
+    def rec_loop_DigitalSignalSharedMemStream(self, socket, stream, file, bounds):
+        self.rec_loop_common(socket, stream, file, bounds, None)
+    
+    def rec_loop_common(self, socket, stream, file, bounds, dt):
         np_array = stream['shared_array'].to_numpy_array()
         half_size = np_array.shape[1]/2
         
@@ -102,7 +108,10 @@ class RawDataRecording:
             head = pos%half_size+half_size
             new = pos-pos1
             tail = head - new
-            file.write(np_array[:, tail:head].transpose().astype(self.dtype_sig).tostring())
+            if dt is None:
+                file.write(np_array[:, tail:head].transpose().tostring())
+            else:
+                file.write(np_array[:, tail:head].transpose().astype(self.dtype_sig).tostring())
             last_pos = pos
             pos_stop = pos2
         else:
@@ -118,8 +127,6 @@ class RawDataRecording:
             if pos_stop is not None:
                 if pos>pos_stop:
                     pos=pos_stop
-                    self.running = False
-                    print 'rec limit'
             new = (pos-last_pos)
             if new>half_size:
                 print 'ERROR MISSEDE packet'
@@ -127,28 +134,16 @@ class RawDataRecording:
                 new = half_size
             head = pos%half_size+half_size
             tail = head - new
-            file.write(np_array[:, tail:head].transpose().astype(self.dtype_sig).tostring())
+            if dt is None:
+                file.write(np_array[:, tail:head].transpose().tostring())
+            else:
+                file.write(np_array[:, tail:head].transpose().astype(self.dtype_sig).tostring())
+            if pos>=pos_stop:
+                break
+                
             last_pos = pos
+        file.close()
 
-    def rec_loop_DigitalSignalSharedMemStream(self, socket, stream, file, bounds):
-        last_pos = None
-        np_array = stream['shared_array'].to_numpy_array()
-        half_size = np_array.shape[1]/2
-        while self.running:
-            message = socket.recv()
-            pos = msgpack.loads(message)
-            if last_pos is None:
-                last_pos = pos
-                continue
-            new = (pos-last_pos)
-            if new>half_size:
-                print 'ERROR MISSEDE packet'
-                # FIXME : what to do
-                new = half_size
-            head = pos%half_size+half_size
-            tail = head - new
-            file.write(np_array[:, tail:head].transpose().tostring())
-            last_pos = pos
 
     def rec_loop_AsynchronusEventStream(self, socket, stream, file, bounds):
         while self.running:
@@ -159,9 +154,11 @@ class RawDataRecording:
                 print 'ici', t, message
                 file.write(buffer(np.float64(t)))
                 file.write(message)
-            
+        file.close()
 
-        
+    
+    def is_recording(self):
+        return np.any([ t.is_alive() for t in self.threads])
     
 
 
@@ -169,8 +166,8 @@ class RawDataRecording:
         self.running = False
         for thread in self.threads:
             thread.join()
-        for f in self.files:
-            f.close()
+        #~ for f in self.files:
+            #~ f.close()
         #~ print 'rec stopped'
         
 

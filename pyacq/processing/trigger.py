@@ -64,13 +64,16 @@ class AnalogTrigger:
     
     def stop(self):
         self.go =False
+        self.thread.join()
 
     def loop(self):
         port = self.stream['port']
         socket = self.context.socket(zmq.SUB)
         socket.setsockopt(zmq.SUBSCRIBE,'')
         socket.connect("tcp://localhost:{}".format(port))
-        self.last_pos = 0
+        #~ self.last_pos = 0
+        message = socket.recv()
+        self.last_pos = msgpack.loads(message)
         while self.go:
             message = socket.recv()
             pos = msgpack.loads(message)
