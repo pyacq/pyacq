@@ -8,9 +8,11 @@ from .tools import RecvPosThread, MultiChannelParamsSetter
 from .guiutil import *
 from .multichannelparam import MultiChannelParam
 
+import time
+
 from matplotlib.cm import get_cmap
 from matplotlib.colors import ColorConverter
-
+#~ import copy
 
 param_global = [
     {'name': 'xsize', 'type': 'logfloat', 'value': 1., 'step': 0.1},
@@ -61,7 +63,6 @@ class Oscilloscope(QtGui.QWidget, MultiChannelParamsSetter):
         assert type(stream).__name__ == 'AnalogSignalSharedMemStream'
         
         self.stream = stream
-        
 
         self.mainlayout = QtGui.QVBoxLayout()
         self.setLayout(self.mainlayout)
@@ -83,16 +84,17 @@ class Oscilloscope(QtGui.QWidget, MultiChannelParamsSetter):
         self.last_pos = 0
         self.all_mean, self.all_sd = None, None
         
+
         self.timer = QtCore.QTimer(interval = 100)
         self.timer.timeout.connect(self.refresh)
         self.timer.start()
-        
+
         # Create parameters
         n = stream['nb_channel']
         self.np_array = self.stream['shared_array'].to_numpy_array()
         self.half_size = self.np_array.shape[1]/2
         sr = self.stream['sampling_rate']
-        
+
         all = [ ]
         for i, channel_index, channel_name in zip(range(n), stream['channel_indexes'], stream['channel_names']):
             name = 'Signal{} name={} channel_index={}'.format(i, channel_name,channel_index)
@@ -101,15 +103,11 @@ class Oscilloscope(QtGui.QWidget, MultiChannelParamsSetter):
         self.paramGlobal = pg.parametertree.Parameter.create( name='Global options',
                                                     type='group', children =param_global)
         self.allParams = pg.parametertree.Parameter.create(name = 'all param', type = 'group', children = [self.paramGlobal,self.paramChannels  ])
-        
         self.allParams.sigTreeStateChanged.connect(self.on_param_change)
         self.paramGlobal.param('xsize').setLimits([2./sr, self.half_size/sr*.95])
-        
-        
         self.paramControler = OscilloscopeControler(parent = self)
         self.paramControler.setWindowFlags(Qt.Window)
         self.viewBox.zoom.connect(self.gain_zoom)
-
         
         # Create curve items
         self.curves = [ ]
@@ -120,9 +118,14 @@ class Oscilloscope(QtGui.QWidget, MultiChannelParamsSetter):
             curve = pg.PlotCurveItem(pen = color)
             self.plot.addItem(curve)
             self.curves.append(curve)
-        
         self.paramGlobal['xsize'] = 3.
-
+    
+    def stop(self):
+        self.timer.stop()
+        self.thread_pos.stop()
+        self.thread_pos.wait()
+        
+    
     def open_configure_dialog(self):
         self.paramControler.show()
     

@@ -147,7 +147,11 @@ class TimeFreq(QtGui.QWidget, MultiChannelParamsSetter):
         self.timer = QtCore.QTimer(interval = 500)
         self.timer.timeout.connect(self.refresh)
         self.timer.start()
-    
+
+    def stop(self):
+        self.timer.stop()
+        self.thread_pos.stop()
+        self.thread_pos.wait()    
     
     def change_param_tfr(self, **kargs):
         for k, v in kargs.items():

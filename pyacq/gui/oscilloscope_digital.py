@@ -125,6 +125,11 @@ class OscilloscopeDigital(QtGui.QWidget, MultiChannelParamsSetter):
         
         self.paramGlobal.param('xsize').setValue(3)
 
+    def stop(self):
+        self.timer.stop()
+        self.thread_pos.stop()
+        self.thread_pos.wait()
+
     def open_configure_dialog(self):
         self.paramControler.show()    
 

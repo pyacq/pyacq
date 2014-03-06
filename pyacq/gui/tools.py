@@ -5,7 +5,7 @@ import zmq
 import msgpack
 
 import numpy as np
-
+import time
 
 class RecvPosThread(QtCore.QThread):
     newpacket = QtCore.pyqtSignal(int, int)
@@ -19,10 +19,20 @@ class RecvPosThread(QtCore.QThread):
     def run(self):
         self.running = True
         while self.running:
+            events = self.socket.poll(50)
+            if events ==0:
+                time.sleep(.05)
+                continue
+            
             #TODO : do something with poll
             message = self.socket.recv()
             self.pos = msgpack.loads(message)
             self.newpacket.emit(self.port, self.pos)
+    
+    def stop(self):
+        self.running = False
+        
+
 
 
 
