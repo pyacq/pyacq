@@ -124,8 +124,7 @@ class RawDataRecording:
             if last_pos is None:
                 last_pos = pos
                 continue
-            if pos_stop is not None:
-                if pos>pos_stop:
+            if pos_stop is not None and pos>pos_stop:
                     pos=pos_stop
             new = (pos-last_pos)
             if new>half_size:
@@ -138,9 +137,9 @@ class RawDataRecording:
                 file.write(np_array[:, tail:head].transpose().tostring())
             else:
                 file.write(np_array[:, tail:head].transpose().astype(self.dtype_sig).tostring())
-            if pos>=pos_stop:
+            if pos_stop is not None and pos>=pos_stop:
                 break
-                
+            
             last_pos = pos
         file.close()
 
