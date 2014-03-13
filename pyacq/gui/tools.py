@@ -24,7 +24,6 @@ class RecvPosThread(QtCore.QThread):
                 time.sleep(.05)
                 continue
             
-            #TODO : do something with poll
             message = self.socket.recv()
             self.pos = msgpack.loads(message)
             self.newpacket.emit(self.port, self.pos)
