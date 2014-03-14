@@ -29,13 +29,19 @@ within the group if the debounce time is set accordingly. In this case the debou
 group of glitches
 """
 
-class AnalogTrigger:
+
+
+
+
+
+
+class TriggerBase:
     def __init__(self, stream, channel = 0, threshold = 1., front = '+',
                             debounce_mode = 'no-debounce', # 'after-stable' , 'before-stable'
                             debounce_time = 0.01,
                             callbacks = [ ],
-                            ):
-        assert type(stream).__name__ == 'AnalogSignalSharedMemStream'
+                            autostart = True,
+                            ):    
         self.stream = stream
         self.context = zmq.Context()
         
@@ -50,21 +56,24 @@ class AnalogTrigger:
         self.np_array = self.stream['shared_array'].to_numpy_array()
         self.half_size = self.np_array.shape[1]/2
         
-        self.start()
-        
-        
-        
-        
+        if autostart:
+            self.start()
+    
     def start(self):
-        print 'Trigger started'
         self.go = True
-        #~ self.greenlet = gevent.spawn(self.loop)
         self.thread = threading.Thread(target = self.loop)
         self.thread.start()
     
     def stop(self):
         self.go =False
         self.thread.join()
+    
+    def set_params(**kargs):
+        for k, v in kargs.items:
+            assert k in ['channel', 'threshold', 'front',
+                        'debounce_mode', 'debounce_time']
+            setattr(self, k, v)
+                        
 
     def loop(self):
         port = self.stream['port']
@@ -89,7 +98,8 @@ class AnalogTrigger:
             new = pos - self.last_pos
             head = pos%self.half_size+self.half_size
             tail = head - new
-            newbuf = self.np_array[self.channel, tail:head]
+            
+            newbuf = self.get_buffer_from_channel(tail, head)
             sig1 = newbuf[:-1]
             sig2 = newbuf[1:]
             
@@ -135,14 +145,27 @@ class AnalogTrigger:
             
             self.last_pos = pos-1
             
-            
-            
-            
-            
-            
 
-class DigitalTrigger:
-    pass
 
+class AnalogTrigger(TriggerBase):
+    def __init__(self, **kargs):
+        TriggerBase.__init__(self, **kargs)
+        assert type(self.stream).__name__ == 'AnalogSignalSharedMemStream'
+
+    def get_buffer_from_channel(self, tail, head):
+        return self.np_array[self.channel, tail:head]
+
+
+class DigitalTrigger(TriggerBase):
+    def __init__(self, **kargs):
+        kargs['threshold'] = .5
+        TriggerBase.__init__(self, **kargs)
+        assert type(self.stream).__name__ == 'DigitalSignalSharedMemStream'
+        
+        self.b = self.channel//8
+        self.mask = 1<<(self.channel%8)
+
+    def get_buffer_from_channel(self, tail, head):
+        return self.np_array[self.b, tail:head]&self.mask
 
 
