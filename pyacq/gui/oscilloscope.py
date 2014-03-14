@@ -53,10 +53,8 @@ class MyViewBox(pg.ViewBox):
         self.zoom.emit(z)
         ev.accept()
 
-class Oscilloscope(QtGui.QWidget, MultiChannelParamsSetter):
-    _param_global =param_global
-    _param_by_channel = param_by_channel
-    
+
+class BaseOscilloscope(QtGui.QWidget, MultiChannelParamsSetter):
     def __init__(self, stream = None, parent = None,):
         QtGui.QWidget.__init__(self, parent)
         
@@ -78,16 +76,11 @@ class Oscilloscope(QtGui.QWidget, MultiChannelParamsSetter):
         self.socket.setsockopt(zmq.SUBSCRIBE,'')
         self.socket.connect("tcp://localhost:{}".format(self.stream['port']))
         
-        self.thread_pos = RecvPosThread(socket = self.socket, port = self.stream['port'])
-        self.thread_pos.start()
-        
-        self.last_pos = 0
         self.all_mean, self.all_sd = None, None
         
-
         self.timer = QtCore.QTimer(interval = 100)
         self.timer.timeout.connect(self.refresh)
-        self.timer.start()
+        
 
         # Create parameters
         n = stream['nb_channel']
@@ -98,10 +91,10 @@ class Oscilloscope(QtGui.QWidget, MultiChannelParamsSetter):
         all = [ ]
         for i, channel_index, channel_name in zip(range(n), stream['channel_indexes'], stream['channel_names']):
             name = 'Signal{} name={} channel_index={}'.format(i, channel_name,channel_index)
-            all.append({ 'name': name, 'type' : 'group', 'children' : param_by_channel})
+            all.append({ 'name': name, 'type' : 'group', 'children' : self._param_by_channel})
         self.paramChannels = pg.parametertree.Parameter.create(name='AnalogSignals', type='group', children=all)
         self.paramGlobal = pg.parametertree.Parameter.create( name='Global options',
-                                                    type='group', children =param_global)
+                                                    type='group', children =self._param_global)
         self.allParams = pg.parametertree.Parameter.create(name = 'all param', type = 'group', children = [self.paramGlobal,self.paramChannels  ])
         self.allParams.sigTreeStateChanged.connect(self.on_param_change)
         self.paramGlobal.param('xsize').setLimits([2./sr, self.half_size/sr*.95])
@@ -109,25 +102,51 @@ class Oscilloscope(QtGui.QWidget, MultiChannelParamsSetter):
         self.paramControler.setWindowFlags(Qt.Window)
         self.viewBox.zoom.connect(self.gain_zoom)
         
-        # Create curve items
-        self.curves = [ ]
-        for i, channel_index, channel_name in zip(range(n), stream['channel_indexes'], stream['channel_names']):
-            color = self.paramChannels.children()[i]['color']
-            #~ curve = self.plot.plot([np.nan], [np.nan], pen = color)
-            #~ self.curves.append(curve)
-            curve = pg.PlotCurveItem(pen = color)
-            self.plot.addItem(curve)
-            self.curves.append(curve)
-        self.paramGlobal['xsize'] = 3.
+
+    def open_configure_dialog(self):
+        self.paramControler.show()
+    
+    def start(self):
+        self.timer.start()
     
     def stop(self):
         self.timer.stop()
+
+
+class Oscilloscope(BaseOscilloscope):
+    _param_global =param_global
+    _param_by_channel = param_by_channel
+    
+    def __init__(self, stream = None, parent = None,):
+        
+        
+        
+        BaseOscilloscope.__init__(self, stream = stream, parent = parent,)
+
+        # Create curve items
+        
+        self.curves = [ ]
+        for i in range(self.stream['nb_channel']):
+            color = self.paramChannels.children()[i]['color']
+            curve = pg.PlotCurveItem(pen = color)
+            self.plot.addItem(curve)
+            self.curves.append(curve)
+        
+        self.paramGlobal['xsize'] = 3.# to reset curves
+        
+        self.start()
+    
+    def start(self):
+        self.thread_pos = RecvPosThread(socket = self.socket, port = self.stream['port'])
+        self.thread_pos.start()
+        self.last_pos = 0
+        BaseOscilloscope.start(self)
+
+    def stop(self):
+        BaseOscilloscope.stop(self)
         self.thread_pos.stop()
         self.thread_pos.wait()
-        
     
-    def open_configure_dialog(self):
-        self.paramControler.show()
     
     def on_param_change(self, params, changes):
         #~ print 'on_param_change'

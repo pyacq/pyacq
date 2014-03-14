@@ -39,12 +39,12 @@ def test1():
     
     w1=Oscilloscope(stream = dev.streams[0])
     w1.show()
-    w1.auto_gain_and_offset(mode = 2)
-    visibles = np.ones(16, dtype = bool)
-    visibles[4:] = False
-    w1.set_params(xsize = 1.,
-                                    mode = 'scan',
-                                visibles = visibles)
+    #~ w1.auto_gain_and_offset(mode = 2)
+    #~ visibles = np.ones(16, dtype = bool)
+    #~ visibles[4:] = False
+    #~ w1.set_params(xsize = 1.,
+                                    #~ mode = 'scan',
+                                #~ visibles = visibles)
 
     #~ print w1.get_params()
     w1.set_params(**w1.get_params())
