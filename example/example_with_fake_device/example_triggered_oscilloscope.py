@@ -30,8 +30,8 @@ def test1():
                                 #~ sampling_rate =1000.,
                                 #~ buffer_length = 64,
                                 #~ packet_size = 100,
-                                nb_channel = 32,
-                                sampling_rate =1000.,
+                                nb_channel = 8,
+                                sampling_rate =10000.,
                                 buffer_length = 64,
                                 packet_size = 100,
                                 
@@ -51,17 +51,17 @@ def test1():
                                     left_sweep = -.1,
                                     right_sweep = +.3,
                                     threshold = .25,
-                                    debounce_mode = 'no-debounce',
-                                    #~ debounce_mode = 'after-stable',
+                                    #~ debounce_mode = 'no-debounce',
+                                    debounce_mode = 'after-stable',
                                     #~ debounce_mode = 'before-stable',
                                     debounce_time = 0.05,
                                     )
     w1.show()
 
-    #~ w2=Oscilloscope(stream = dev.streams[0])
-    #~ w2.show()
-    #~ w2.auto_gain_and_offset(mode = 0)
-    #~ w2.set_params(xsize = 5, mode = 'scroll')
+    w2=Oscilloscope(stream = dev.streams[0])
+    w2.show()
+    w2.auto_gain_and_offset(mode = 0)
+    w2.set_params(xsize = 5, mode = 'scroll')
     
 
     

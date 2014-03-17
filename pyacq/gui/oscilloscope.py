@@ -113,6 +113,66 @@ class BaseOscilloscope(QtGui.QWidget, MultiChannelParamsSetter):
         self.timer.stop()
 
 
+
+    def auto_gain_and_offset(self, mode = 0, selected = None):
+        """
+        mode = 0, 1, 2
+        """
+        nb_channel = self.stream['nb_channel']
+        if selected is None:
+            selected = np.ones(nb_channel, dtype = bool)
+        
+        n = np.sum(selected)
+        if n==0: return
+        
+        av, sd = self.autoestimate_scales()
+        if av is None: return
+        
+        if mode==0:
+            ylims = [np.min(av[selected]-3*sd[selected]), np.max(av[selected]+3*sd[selected]) ]
+            gains = np.ones(nb_channel, dtype = float)
+            offsets = np.zeros(nb_channel, dtype = float)
+        elif mode in [1, 2]:
+            ylims  = [-.5, n-.5 ]
+            gains = np.ones(nb_channel, dtype = float)
+            if mode==1 and max(sd[selected])!=0:
+                gains = np.ones(nb_channel, dtype = float) * 1./(6.*max(sd[selected]))
+            elif mode==2 :
+                gains[sd!=0] = 1./(6.*sd[sd!=0])
+            offsets = np.zeros(nb_channel, dtype = float)
+            offsets[selected] = range(n)[::-1] - av[selected]*gains[selected]
+        
+        # apply
+        self.set_params(gains = gains.tolist(), offsets = offsets.tolist(), visibles = selected.tolist(),
+                                        ylims = ylims)
+
+    def automatic_color(self, cmap_name = None, selected = None):
+        nb_channel = self.stream['nb_channel']
+        if selected is None:
+            selected = np.ones(nb_channel, dtype = bool)
+        
+        if cmap_name is None:
+            cmap_name = 'jet'
+        n = np.sum(selected)
+        if n==0: return
+        cmap = get_cmap(cmap_name , n)
+        colors = self.get_params()['colors']
+        s=0
+        for i in range(self.stream['nb_channel']):
+            if selected[i]:
+                colors[i] = [ int(c*255) for c in ColorConverter().to_rgb(cmap(s)) ]
+                s += 1
+        self.set_params(colors = colors)
+        
+    def gain_zoom(self, factor):
+        for i, p in enumerate(self.paramChannels.children()):
+            if self.all_mean is not None:
+                p['offset'] = p['offset'] + self.all_mean[i]*p['gain'] - self.all_mean[i]*p['gain']*factor
+            p['gain'] = p['gain']*factor
+
+
+
+
 class Oscilloscope(BaseOscilloscope):
     _param_global =param_global
     _param_by_channel = param_by_channel
@@ -316,61 +376,10 @@ class Oscilloscope(BaseOscilloscope):
         return self.all_mean, self.all_sd
 
     
-    def auto_gain_and_offset(self, mode = 0, selected = None):
-        """
-        mode = 0, 1, 2
-        """
-        nb_channel = self.stream['nb_channel']
-        if selected is None:
-            selected = np.ones(nb_channel, dtype = bool)
-        
-        n = np.sum(selected)
-        if n==0: return
-        
-        av, sd = self.autoestimate_scales()
-        if av is None: return
-        
-        if mode==0:
-            ylims = [np.min(av[selected]-3*sd[selected]), np.max(av[selected]+3*sd[selected]) ]
-            gains = np.ones(nb_channel, dtype = float)
-            offsets = np.zeros(nb_channel, dtype = float)
-        elif mode in [1, 2]:
-            ylims  = [-.5, n-.5 ]
-            gains = np.ones(nb_channel, dtype = float)
-            if mode==1 and max(sd[selected])!=0:
-                gains = np.ones(nb_channel, dtype = float) * 1./(6.*max(sd[selected]))
-            elif mode==2 :
-                gains[sd!=0] = 1./(6.*sd[sd!=0])
-            offsets = np.zeros(nb_channel, dtype = float)
-            offsets[selected] = range(n)[::-1] - av[selected]*gains[selected]
-        
-        # apply
-        self.set_params(gains = gains.tolist(), offsets = offsets.tolist(), visibles = selected.tolist(),
-                                        ylims = ylims)
 
-    def automatic_color(self, cmap_name = None, selected = None):
-        nb_channel = self.stream['nb_channel']
-        if selected is None:
-            selected = np.ones(nb_channel, dtype = bool)
+
         
-        if cmap_name is None:
-            cmap_name = 'jet'
-        n = np.sum(selected)
-        if n==0: return
-        cmap = get_cmap(cmap_name , n)
-        colors = self.get_params()['colors']
-        s=0
-        for i in range(self.stream['nb_channel']):
-            if selected[i]:
-                colors[i] = [ int(c*255) for c in ColorConverter().to_rgb(cmap(s)) ]
-                s += 1
-        self.set_params(colors = colors)
-        
-    def gain_zoom(self, factor):
-        for i, p in enumerate(self.paramChannels.children()):
-            if self.all_mean is not None:
-                p['offset'] = p['offset'] + self.all_mean[i]*p['gain'] - self.all_mean[i]*p['gain']*factor
-            p['gain'] = p['gain']*factor
+
             
             
 
