@@ -97,7 +97,7 @@ class BaseOscilloscope(QtGui.QWidget, MultiChannelParamsSetter):
                                                     type='group', children =self._param_global)
         self.allParams = pg.parametertree.Parameter.create(name = 'all param', type = 'group', children = [self.paramGlobal,self.paramChannels  ])
         self.allParams.sigTreeStateChanged.connect(self.on_param_change)
-        self.paramGlobal.param('xsize').setLimits([2./sr, self.half_size/sr*.95])
+        
         self.paramControler = OscilloscopeControler(parent = self)
         self.paramControler.setWindowFlags(Qt.Window)
         self.viewBox.zoom.connect(self.gain_zoom)
@@ -131,7 +131,8 @@ class Oscilloscope(BaseOscilloscope):
             curve = pg.PlotCurveItem(pen = color)
             self.plot.addItem(curve)
             self.curves.append(curve)
-        
+        sr = self.stream['sampling_rate']
+        self.paramGlobal.param('xsize').setLimits([2./sr, self.half_size/sr*.95])
         self.paramGlobal['xsize'] = 3.# to reset curves
         
         self.start()

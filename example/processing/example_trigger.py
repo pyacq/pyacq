@@ -20,7 +20,7 @@ def trigger_analog1():
     dev = FakeMultiSignals(streamhandler = streamhandler)
     dev.configure( #name = 'Test dev',
                                 nb_channel = 32,
-                                sampling_rate =10000.,
+                                sampling_rate =1000.,
                                 buffer_length = 64,
                                 packet_size = 100,
                                 last_channel_is_trig = True,
@@ -129,5 +129,5 @@ def trigger_digital1():
 
 
 if __name__ == '__main__':
-    #~ trigger_analog1()
-    trigger_digital1()
+    trigger_analog1()
+    #~ trigger_digital1()

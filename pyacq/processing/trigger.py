@@ -68,13 +68,12 @@ class TriggerBase:
         self.go =False
         self.thread.join()
     
-    def set_params(**kargs):
-        for k, v in kargs.items:
+    def set_params(self, **kargs):
+        for k, v in kargs.items():
             assert k in ['channel', 'threshold', 'front',
                         'debounce_mode', 'debounce_time']
             setattr(self, k, v)
-                        
-
+            
     def loop(self):
         port = self.stream['port']
         socket = self.context.socket(zmq.SUB)
@@ -96,6 +95,7 @@ class TriggerBase:
             elif self.debounce_mode == 'before-stable':
                 pos -= db*2
             new = pos - self.last_pos
+            if new<2: continue
             head = pos%self.half_size+self.half_size
             tail = head - new
             
@@ -137,7 +137,7 @@ class TriggerBase:
                         else:
                             crossings[i+1:][(crossings[i+1:]-crossing)<db] = -1
                 crossings = crossings[crossings != -1]
-                
+            
             for crossing in crossings:
                 for callback in self.callbacks:
                     callback(crossing+self.last_pos)

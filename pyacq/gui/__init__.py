@@ -8,4 +8,5 @@ if sys.platform.startswith('win'):
 from .oscilloscope import Oscilloscope
 from .oscilloscope_digital import OscilloscopeDigital
 from .timefreq import TimeFreq
+from .triggered_oscilloscope import TriggeredOscilloscope
 
