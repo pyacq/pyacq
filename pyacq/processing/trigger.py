@@ -60,12 +60,12 @@ class TriggerBase:
             self.start()
     
     def start(self):
-        self.go = True
+        self.running = True
         self.thread = threading.Thread(target = self.loop)
         self.thread.start()
     
     def stop(self):
-        self.go =False
+        self.running =False
         self.thread.join()
     
     def set_params(self, **kargs):
@@ -82,7 +82,7 @@ class TriggerBase:
         #~ self.last_pos = 0
         message = socket.recv()
         self.last_pos = msgpack.loads(message)
-        while self.go:
+        while self.running:
             message = socket.recv()
             pos = msgpack.loads(message)
             

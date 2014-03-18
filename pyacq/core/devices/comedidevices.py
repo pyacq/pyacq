@@ -93,7 +93,7 @@ def device_mainLoop(stop_flag, streams, device_path, device_info ):
     
     socketAD.send(msgpack.dumps(abs_pos))
     
-    sleep_time = 0.05
+    sleep_time = 0.02
     while True:
         #~ try:
         if 1:
@@ -103,14 +103,14 @@ def device_mainLoop(stop_flag, streams, device_path, device_info ):
             
             
             if new_bytes ==0:
-                time.sleep(sleep_time/4.)
+                time.sleep(sleep_time/2.)
                 continue
                 
             
             index = last_index + new_bytes/nb_ai_channel/itemsize
                
             if index == last_index : 
-                time.sleep(sleep_time/4.)
+                time.sleep(sleep_time/2.)
                 continue
             
             if index>=internal_size:
