@@ -11,7 +11,7 @@ import threading
 
 import zmq
 
-
+import time
 
 
 
@@ -79,13 +79,19 @@ class TriggerBase:
         socket = self.context.socket(zmq.SUB)
         socket.setsockopt(zmq.SUBSCRIBE,'')
         socket.connect("tcp://localhost:{}".format(port))
-        #~ self.last_pos = 0
-        message = socket.recv()
-        self.last_pos = msgpack.loads(message)
+        self.last_pos = None
+        #~ message = socket.recv()
+        #~ self.last_pos = msgpack.loads(message)
         while self.running:
+            events = socket.poll(50)
+            if events ==0:
+                time.sleep(.05)
+                continue
+            
             message = socket.recv()
             pos = msgpack.loads(message)
-            
+            if self.last_pos is None:
+                self.last_pos = pos
             db = int(self.debounce_time*self.stream['sampling_rate'])
             
             if self.debounce_mode == 'no-debounce':
