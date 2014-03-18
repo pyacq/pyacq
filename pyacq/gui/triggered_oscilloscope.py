@@ -51,6 +51,19 @@ class TriggeredOscilloscope(BaseOscilloscope):
     
     def __init__(self, stream = None, parent = None,):
         BaseOscilloscope.__init__(self, stream = stream, parent = parent,)
+        h = QtGui.QHBoxLayout()
+        self.mainlayout.addLayout(h)
+        
+        self.but_startstop = QtGui.QPushButton('Start/Stop', checkable = True, checked = True)
+        h.addWidget(self.but_startstop)
+        self.but_startstop.toggled.connect(self.start_or_stop_trigger)
+        but = QtGui.QPushButton('Reset')
+        but.clicked.connect(self.reset_stack)
+        h.addWidget(but)
+        self.label_count = QtGui.QLabel('Nb events:')
+        h.addWidget(self.label_count)
+        h.addStretch()
+        
         
         self.paramGlobal.param('channel').setLimits([0, self.stream['nb_channel']-1])
 
@@ -75,10 +88,18 @@ class TriggeredOscilloscope(BaseOscilloscope):
 
     def stop(self):
         BaseOscilloscope.stop(self)
-        self.trigger.stop()
+        if self.trigger.running:
+            self.trigger.stop()
         for thread in self.threads_limit:
             thread.stop()
             thread.wait()
+    
+    def start_or_stop_trigger(self, state):
+        if state:
+            self.trigger.start()
+        else:
+            self.trigger.stop()
+    
     
     def recreate_stack(self):
         n = self.stream['nb_channel']
@@ -103,7 +124,7 @@ class TriggeredOscilloscope(BaseOscilloscope):
         self.stack_pos = 0
         
         self.total_trig = 0
-        self.plotted_trig = 0
+        self.plotted_trig = -1
     
     def recreate_curves(self):
         n = self.stream['nb_channel']
@@ -208,6 +229,8 @@ class TriggeredOscilloscope(BaseOscilloscope):
         self.plot.setXRange( self.t_vect[0], self.t_vect[-1])
         ylims  =self.paramGlobal['ylims']
         self.plot.setYRange( *ylims )
+        
+        self.label_count.setText('Nb events: {}'.format(self.total_trig))
     
     
     def autoestimate_scales(self):
