@@ -23,6 +23,41 @@ import mmap
 from .base import DeviceBase
 
 
+def prepare_device(dev, ai_channel_indexes, sampling_rate):
+    nb_ai_channel = len(ai_channel_indexes)
+    
+    ai_subdevice = dev.find_subdevice_by_type(SUBDEVICE_TYPE.ai, factory=StreamingSubdevice)
+    
+    #~ aref = AREF.diff
+    #~ aref = AREF.ground
+    aref = AREF.common
+    
+    ai_channels = [ ai_subdevice.channel(i, factory=AnalogChannel, aref=aref) for i in ai_channel_indexes]
+
+    dt = ai_subdevice.get_dtype()
+    itemsize = np.dtype(dt).itemsize
+    
+    internal_size = int(ai_subdevice.get_max_buffer_size()//nb_ai_channel//itemsize)
+    ai_subdevice.set_buffer_size(internal_size*nb_ai_channel*itemsize)
+
+    scan_period_ns = int(1e9 / sampling_rate)
+    ai_cmd = ai_subdevice.get_cmd_generic_timed(len(ai_channels), scan_period_ns)
+    ai_cmd.chanlist = ai_channels
+    ai_cmd.start_src = TRIG_SRC.now
+    ai_cmd.start_arg = 0
+    ai_cmd.stop_src = TRIG_SRC.none
+    ai_cmd.stop_arg = 0
+    
+    ai_subdevice.cmd = ai_cmd
+    # test cmd
+    for i in range(3):
+        rc = ai_subdevice.command_test()
+        if rc is not None:
+            print 'Not able to command_test properly'
+            return
+    
+    return ai_subdevice,  ai_channels, internal_size
+
 
 def device_mainLoop(stop_flag, streams, device_path, device_info ):
     streamAD = streams[0]
@@ -42,51 +77,16 @@ def device_mainLoop(stop_flag, streams, device_path, device_info ):
     dev = Device(device_path)
     dev.open()
 
-    ai_subdevice = dev.find_subdevice_by_type(SUBDEVICE_TYPE.ai, factory=StreamingSubdevice)
+    ai_subdevice,  ai_channels, internal_size = prepare_device(dev, ai_channel_indexes, sampling_rate)
     
-    #~ aref = AREF.diff
-    #~ aref = AREF.ground
-    aref = AREF.common
-    
-    ai_channels = [ ai_subdevice.channel(i, factory=AnalogChannel, aref=aref) for i in ai_channel_indexes]
-
-    dt = ai_subdevice.get_dtype()
-    itemsize = np.dtype(dt).itemsize
-
-    #~ ai_subdevice.set_max_buffer_size(2**24) # need to be sudo
-    #~ print 'max_buffer_size', ai_subdevice.get_max_buffer_size()
-    
-    internal_size = int(ai_subdevice.get_max_buffer_size()//nb_ai_channel//itemsize)
-    ai_subdevice.set_buffer_size(internal_size*nb_ai_channel*itemsize)
-    #~ print 'internal_size', internal_size, 'in second', internal_size/sampling_rate/nb_ai_channel/itemsize
-
-    ai_buffer = np.memmap(dev.file, dtype = dt, mode = 'r', shape = (internal_size, nb_ai_channel))
-    #m = mmap.mmap(dev.fileno(), internal_size*itemsize, flags= mmap.MAP_SHARED, access=  mmap.PROT_READ)
-    
-
-    scan_period_ns = int(1e9 / sampling_rate)
-    #~ print  sampling_rate, 'real rate',  1e9/scan_period_ns
-    ai_cmd = ai_subdevice.get_cmd_generic_timed(len(ai_channels), scan_period_ns)
-    ai_cmd.chanlist = ai_channels
-    #~ print ai_cmd
-    ai_cmd.start_src = TRIG_SRC.now
-    ai_cmd.start_arg = 0
-    ai_cmd.stop_src = TRIG_SRC.none
-    ai_cmd.stop_arg = 0
-
-    ai_subdevice.cmd = ai_cmd
-    # test
-    for i in range(3):
-        rc = ai_subdevice.command_test()
-        if rc is not None:
-            print 'Not able to command_test properly'
-            return
     
     
     converters = [c.get_converter() for c in ai_channels]
+    dt = ai_subdevice.get_dtype()
+    itemsize = np.dtype(dt).itemsize
+    ai_buffer = np.memmap(dev.file, dtype = dt, mode = 'r', shape = (internal_size, nb_ai_channel))
     
     ai_subdevice.command()
-    
     
     pos = abs_pos = 0
     last_index = 0
@@ -253,13 +253,7 @@ class ComediMultiSignals(DeviceBase):
         self.configured = True
 
     def initialize(self, streamhandler = None):
-        
-        self.sampling_rate = float(self.sampling_rate)
-        
-        # TODO card by card
         info = self.device_info = get_info(self.device_path)
-        #~ self.device_info['buffer_length'] = self.buffer_length
-        #~ self.device_info['sampling_rate'] = self.sampling_rate
         if self.subdevices is None:
             self.subdevices = info['subdevices']
         
@@ -267,11 +261,19 @@ class ComediMultiSignals(DeviceBase):
         assert sub0['type'] == 'AnalogInput', 'deal only with AnalogInput at the moment'
         sel = sub0['by_channel_params']['channel_selection']
         self.nb_channel = np.sum(sel)
-        
         channel_indexes = [e   for e, s in zip(sub0['by_channel_params']['channel_indexes'], sel) if s]
         channel_names = [e  for e, s in zip(sub0['by_channel_params']['channel_names'], sel) if s]
-
         self.packet_size = int(info['device_packet_size']/self.nb_channel)
+        
+        # compute the real sampling rate
+        print 'sampling_rate wanted:', self.sampling_rate
+        dev = Device(self.device_path)
+        dev.open()
+        ai_subdevice,  ai_channels, internal_size = prepare_device(dev, channel_indexes, self.sampling_rate)
+        self.sampling_rate = 1.e9/ai_subdevice.cmd.convert_arg/len(ai_channels)
+        dev.close()
+        print 'sampling_rate real:', self.sampling_rate
+        
         
         
         l = int(self.sampling_rate*self.buffer_length)

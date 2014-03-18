@@ -13,6 +13,7 @@ from PyQt4 import QtCore,QtGui
 import zmq
 import msgpack
 import time
+import numpy as np
 
 def test1():
 
@@ -22,7 +23,7 @@ def test1():
     # Configure and start
     dev = ComediMultiSignals(streamhandler = streamhandler)
     dev.configure( device_path = '/dev/comedi0',
-                                sampling_rate =10000.,
+                                sampling_rate =9555.111,
                                 buffer_length = 5.,
                             )
     dev.initialize()
@@ -43,6 +44,7 @@ def test1():
     
     dev.stop()
     dev.close()
+    w1.stop()
 
 
 
