@@ -48,9 +48,7 @@ class WaitLimitThread(QtCore.QThread):
     def run(self):
         message = self.socket.recv()
         pos = msgpack.loads(message)
-        #~ print self.pos_limit-pos
-        #
-
+        
         self.running = True
         while self.running:
             events = self.socket.poll(50)

@@ -56,6 +56,8 @@ class TriggerBase:
         self.np_array = self.stream['shared_array'].to_numpy_array()
         self.half_size = self.np_array.shape[1]/2
         
+        self.running = False
+        
         if autostart:
             self.start()
     
@@ -64,9 +66,10 @@ class TriggerBase:
         self.thread = threading.Thread(target = self.loop)
         self.thread.start()
     
-    def stop(self):
+    def stop(self, join = True):
         self.running =False
-        self.thread.join()
+        if join:
+            self.thread.join()
     
     def set_params(self, **kargs):
         for k, v in kargs.items():
