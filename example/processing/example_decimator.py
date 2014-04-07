@@ -4,7 +4,7 @@ from pyacq import (StreamHandler, FakeMultiSignals, FakeDigital, AnaSigSharedMem
                                         AnaSigPlainData_to_AnaSigSharedMem)
 from pyacq.gui import Oscilloscope, OscilloscopeDigital, TimeFreq
 
-from pyacq.processing import BandPassFilter
+from pyacq.processing import BandPassFilter, SimpleDecimator
 
 import time
 from PyQt4 import QtCore,QtGui
@@ -20,7 +20,7 @@ def filter_analog1():
     
     # Configure and start
     dev = FakeMultiSignals(streamhandler = streamhandler)
-    dev.configure(     nb_channel = 64,
+    dev.configure(     nb_channel = 2,
                                 sampling_rate =10000.,
                                 buffer_length = 30.,
                                 packet_size = 100,
@@ -32,17 +32,22 @@ def filter_analog1():
     
     filter = BandPassFilter(stream = dev.streams[0],
                                                 streamhandler= streamhandler,
-                                                autostart = False)
+                                                autostart = False,
+                                                f_start =0.,
+                                                f_stop = dev.streams[0].sampling_rate/10./2.,
+                                                )
+    decimator = SimpleDecimator( filter.out_stream,
+                                                streamhandler= streamhandler,
+                                                downsampling_factor = 10,
+                                                autostart = False,
+                                                )
+    
+    
+                                                
     app = QtGui.QApplication([])
     
     filter.start()
-
-    time.sleep(.2)
-    filter.set_params(f_start = 300., f_stop =np.inf)
-    time.sleep(.2)
-    filter.set_params(f_start = 0., f_stop =40.3)
-    time.sleep(.2)
-    filter.set_params(f_start = 30., f_stop =70.)
+    decimator.start()
 
 
     visibles = np.ones(dev.nb_channel, dtype = bool)
@@ -50,25 +55,18 @@ def filter_analog1():
     
     w1=Oscilloscope(stream = dev.streams[0])
     w2=Oscilloscope(stream = filter.out_stream)
+    w3=Oscilloscope(stream = decimator.out_stream)
 
     time.sleep(.5)
     
     
-    for w in [w1, w2]:
+    for w in [w1, w2, w3]:
         w.auto_gain_and_offset(mode = 0)
         w.set_params(xsize = 1.,
                                         mode = 'scan',
                                         visibles = visibles,
                                         ylims = [-5,5]
                                         )
-        w.show()
-    
-    w3=TimeFreq(stream = dev.streams[0])
-    w4=TimeFreq(stream = filter.out_stream)
-    for w in [w3, w4]:
-        w.set_params(colormap = 'hot', visibles = visibles, 
-                                            xsize=30, 
-                                            nb_column = 1)
         w.show()
     
     
