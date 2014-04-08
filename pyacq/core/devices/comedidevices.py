@@ -25,15 +25,17 @@ from .base import DeviceBase
 
 def prepare_device(dev, ai_channel_indexes, sampling_rate):
     nb_ai_channel = len(ai_channel_indexes)
+    #~ dev.parse_calibration()
     
     ai_subdevice = dev.find_subdevice_by_type(SUBDEVICE_TYPE.ai, factory=StreamingSubdevice)
-    
     #~ aref = AREF.diff
     #~ aref = AREF.ground
     aref = AREF.common
     
     ai_channels = [ ai_subdevice.channel(i, factory=AnalogChannel, aref=aref) for i in ai_channel_indexes]
-
+    
+    print 'in prepare_device conv',ai_channels[0].get_converter()
+    
     dt = ai_subdevice.get_dtype()
     itemsize = np.dtype(dt).itemsize
     
@@ -78,10 +80,11 @@ def device_mainLoop(stop_flag, streams, device_path, device_info ):
     dev.open()
 
     ai_subdevice,  ai_channels, internal_size = prepare_device(dev, ai_channel_indexes, sampling_rate)
-    
-    
-    
+
     converters = [c.get_converter() for c in ai_channels]
+    print 'soft_calibrated', ai_subdevice.get_flags().soft_calibrated
+    print converters[0]
+    
     dt = ai_subdevice.get_dtype()
     itemsize = np.dtype(dt).itemsize
     ai_buffer = np.memmap(dev.file, dtype = dt, mode = 'r', shape = (internal_size, nb_ai_channel))

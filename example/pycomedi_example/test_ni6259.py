@@ -32,8 +32,8 @@ def test1():
     # Configure and start
     dev = ComediMultiSignals(streamhandler = streamhandler)
     dev.configure( device_path = '/dev/comedi0',
-                                sampling_rate =20000.,
-                                buffer_length = 5.,
+                                sampling_rate =15000.,
+                                buffer_length = 60.,
                             )
     dev.initialize()
     dev.start()
@@ -44,8 +44,10 @@ def test1():
     visibles = np.zeros(dev.nb_channel, dtype = bool)
     visibles[21] = True
     w1.set_params(xsize = 3.7, refresh_interval = 100, 
-                                mode = 'scan', ylims = [-1., 1.],
+                                mode = 'scan', ylims = [-1.5, 1.5],
                                 visibles = visibles,
+                                gains = np.ones(dev.nb_channel),
+                                offsets = np.zeros(dev.nb_channel),
                                 )
     w1.show()
     
