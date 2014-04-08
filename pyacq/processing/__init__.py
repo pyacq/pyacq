@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
  
 from .trigger import AnalogTrigger, DigitalTrigger
-from .filter import BadnPassFilter
+from .filter import BandPassFilter
+from decimator import SimpleDecimator

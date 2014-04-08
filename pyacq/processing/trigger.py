@@ -14,6 +14,8 @@ import zmq
 import time
 
 
+from .base import ProcessingBase
+
 
 # debounce_time
 # debounce_mode = after_stable    before_stable
@@ -35,16 +37,15 @@ group of glitches
 
 
 
-class TriggerBase:
+class TriggerBase(ProcessingBase):
     def __init__(self, stream, channel = 0, threshold = 1., front = '+',
                             debounce_mode = 'no-debounce', # 'after-stable' , 'before-stable'
                             debounce_time = 0.01,
                             callbacks = [ ],
                             autostart = True,
-                            ):    
-        self.stream = stream
-        self.context = zmq.Context()
+                            ):
         
+        ProcessingBase.__init__(self, stream)
         
         self.channel = channel
         self.threshold =threshold
@@ -53,30 +54,15 @@ class TriggerBase:
         self.debounce_time = debounce_time
         self.callbacks = callbacks
         
-        self.np_array = self.stream['shared_array'].to_numpy_array()
-        self.half_size = self.np_array.shape[1]/2
-        
-        self.running = False
-        
         if autostart:
             self.start()
-    
-    def start(self):
-        self.running = True
-        self.thread = threading.Thread(target = self.loop)
-        self.thread.start()
-    
-    def stop(self, join = True):
-        self.running =False
-        if join:
-            self.thread.join()
     
     def set_params(self, **kargs):
         for k, v in kargs.items():
             assert k in ['channel', 'threshold', 'front',
                         'debounce_mode', 'debounce_time']
             setattr(self, k, v)
-            
+    
     def loop(self):
         port = self.stream['port']
         socket = self.context.socket(zmq.SUB)
@@ -162,9 +148,11 @@ class AnalogTrigger(TriggerBase):
         assert type(self.stream).__name__ == 'AnalogSignalSharedMemStream'
 
     def get_buffer_from_channel(self, tail, head):
-        return self.np_array[self.channel, tail:head]
+        return self.in_array[self.channel, tail:head]
 
 
+
+# FIXME : take in account when the channel change!!!!! it is done in init at the moment.
 class DigitalTrigger(TriggerBase):
     def __init__(self, **kargs):
         kargs['threshold'] = .5
@@ -173,8 +161,14 @@ class DigitalTrigger(TriggerBase):
         
         self.b = self.channel//8
         self.mask = 1<<(self.channel%8)
-
+    
+    def set_params(self, **kargs):
+        TriggerBase.set_params(self, **kargs)
+        self.b = self.channel//8
+        self.mask = 1<<(self.channel%8)
+        
+    
     def get_buffer_from_channel(self, tail, head):
-        return self.np_array[self.b, tail:head]&self.mask
+        return self.in_array[self.b, tail:head]&self.mask
 
 
