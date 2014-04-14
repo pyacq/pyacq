@@ -177,7 +177,7 @@ class OscilloscopeDigital(QtGui.QWidget, MultiChannelParamsSetter):
         decimate = self.paramGlobal['decimate']
         sr = self.stream['sampling_rate']
         self.intsize = int(xsize*sr)
-        self.t_vect = np.arange(0,self.intsize//decimate, dtype = float)/sr/decimate
+        self.t_vect = np.arange(0,self.intsize//decimate, dtype = float)/(sr/decimate)
         self.t_vect -= self.t_vect[-1]
         self.curves_data = [ np.zeros( ( self.intsize//decimate), dtype =float) for i in range(self.stream['nb_channel']) ]
 

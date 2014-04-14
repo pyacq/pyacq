@@ -41,6 +41,9 @@ class BandPassFilter(ProcessingBase):
         
         self.f_start, self.f_stop = f_start, f_stop
         self.init_filter()
+        
+        self.channel_mask = np.ones(stream.nb_channel, dtype = bool)
+        
         if autostart:
             self.start()
     
@@ -64,6 +67,8 @@ class BandPassFilter(ProcessingBase):
             print 'highpass'
             Wn = Wn[0]
             self.b, self.a = scipy.signal.iirfilter(N=3,  Wn=Wn, btype = 'highpass', analog = False, ftype = 'butter', output = 'ba')
+        else:
+            self.a, self.b = None, None
         self.zi = None
     
     def loop(self):
@@ -94,9 +99,14 @@ class BandPassFilter(ProcessingBase):
             head = pos%self.half_size+self.half_size
             tail = head - new
             
-            if self.zi is None:
-                self.zi = np.array([ scipy.signal.lfilter_zi(self.b, self.a) for c in range(self.stream.nb_channel)])
-            filtered, self.zi = scipy.signal.lfilter(self.b, self.a, self.in_array[:,tail:head], axis = 1, zi = self.zi)
+            mask = self.channel_mask
+            
+            if self.a is None:
+                filtered = self.in_array[mask,tail:head]
+            else:
+                if self.zi is None:
+                    self.zi = np.array([ scipy.signal.lfilter_zi(self.b, self.a) for c in range(self.stream.nb_channel)])
+                filtered, self.zi = scipy.signal.lfilter(self.b, self.a, self.in_array[mask, tail:head], axis = 1, zi = self.zi)
 
             head2 = pos%self.half_size
             tail2 = self.last_pos%self.half_size

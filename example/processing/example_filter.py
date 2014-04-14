@@ -33,6 +33,7 @@ def filter_analog1():
     filter = BandPassFilter(stream = dev.streams[0],
                                                 streamhandler= streamhandler,
                                                 autostart = False)
+    
     app = QtGui.QApplication([])
     
     filter.start()
@@ -63,13 +64,13 @@ def filter_analog1():
                                         )
         w.show()
     
-    w3=TimeFreq(stream = dev.streams[0])
-    w4=TimeFreq(stream = filter.out_stream)
-    for w in [w3, w4]:
-        w.set_params(colormap = 'hot', visibles = visibles, 
-                                            xsize=30, 
-                                            nb_column = 1)
-        w.show()
+    #~ w3=TimeFreq(stream = dev.streams[0])
+    #~ w4=TimeFreq(stream = filter.out_stream)
+    #~ for w in [w3, w4]:
+        #~ w.set_params(colormap = 'hot', visibles = visibles, 
+                                            #~ xsize=30, 
+                                            #~ nb_column = 1)
+        #~ w.show()
     
     
     

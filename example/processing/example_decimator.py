@@ -28,6 +28,18 @@ def filter_analog1():
                                 )
     dev.initialize()
     dev.start()
+
+    dev2 = FakeDigital(streamhandler = streamhandler)
+    dev2.configure( 
+                                nb_channel = 30,
+                                sampling_rate =10000.,
+                                buffer_length = 30.,
+                                packet_size = 100,
+                                )
+    dev2.initialize()
+    dev2.start()
+
+    
     
     
     filter = BandPassFilter(stream = dev.streams[0],
@@ -41,14 +53,20 @@ def filter_analog1():
                                                 downsampling_factor = 10,
                                                 autostart = False,
                                                 )
-    
+
+    decimator2 = SimpleDecimator( dev2.streams[0],
+                                                streamhandler= streamhandler,
+                                                downsampling_factor = 10,
+                                                autostart = False,
+                                                )
+    print decimator2.out_stream._params
     
                                                 
     app = QtGui.QApplication([])
     
     filter.start()
     decimator.start()
-
+    decimator2.start()
 
     visibles = np.ones(dev.nb_channel, dtype = bool)
     visibles[1:] = False
@@ -56,6 +74,9 @@ def filter_analog1():
     w1=Oscilloscope(stream = dev.streams[0])
     w2=Oscilloscope(stream = filter.out_stream)
     w3=Oscilloscope(stream = decimator.out_stream)
+    
+    w4 = OscilloscopeDigital(stream = dev2.streams[0])
+    w5 = OscilloscopeDigital(stream = decimator2.out_stream)
 
     time.sleep(.5)
     
@@ -68,6 +89,13 @@ def filter_analog1():
                                         ylims = [-5,5]
                                         )
         w.show()
+    
+    for w in [w4, w5]:
+        w.set_params(xsize = 1.,
+                                        mode = 'scan',
+                                        )
+        w.show()
+    
     
     
     

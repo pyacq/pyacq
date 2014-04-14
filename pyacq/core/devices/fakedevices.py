@@ -251,7 +251,7 @@ def create_digital_subdevice_param(n):
                 'params' :{  }, 
                 'by_channel_params' : { 
                                         'channel_indexes' : range(n),
-                                        'channel_names' : [ 'AI Channel {}'.format(i) for i in range(n)],
+                                        'channel_names' : [ 'DI Channel {}'.format(i) for i in range(n)],
                                         }
             }
     return d
