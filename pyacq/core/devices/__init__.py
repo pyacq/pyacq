@@ -23,4 +23,6 @@ try:
 except :
     pass
 
+from .brainvisionsocket import BrainvisionSocket
+device_classes += [BrainvisionSocket]
 
