@@ -7,6 +7,7 @@
 
 from pyacq import StreamHandler, BrainvisionSocket
 from pyacq.gui import Oscilloscope, TimeFreq
+from pyacq.core.devices.brainvisionsocket import dtype_trigger
 
 import msgpack
 #~ import gevent
@@ -19,6 +20,24 @@ import msgpack
 import time
 
 import numpy as np
+
+
+def trigger_recv_loop(stream1, stop_recv):
+    print 'start receiver loop' , port
+    context = zmq.Context()
+    socket = context.socket(zmq.SUB)
+    socket.setsockopt(zmq.SUBSCRIBE,'')
+    socket.connect("tcp://localhost:{}".format(stream1['port']))
+    while stop_recv.value==0:
+        message = socket.recv()
+        buf = msgpack.loads(message)
+        triggers = np.frombuffer(buf, dtype = dtype_trigger)
+        print 'triggers n=', triggers.size
+        print triggers
+        
+        
+    print 'stop receiver'
+
 
 def test1():
     streamhandler = StreamHandler()
@@ -34,7 +53,17 @@ def test1():
     dev.initialize()
     print dev.streams[0]
     print dev.streams[0]['port']
+    print dev.streams[1]
+    print dev.streams[1]['port']
     dev.start()
+
+    # Create recv trigger loop
+    stream1 = dev.streams[1]
+    stop_recv = mp.Value('i', 0)
+    process = mp.Process(target= trigger_recv_loop, args = (stream1,stop_recv))
+    process.start()
+
+
 
     app = QtGui.QApplication([])
     
@@ -65,6 +94,10 @@ def test1():
 
     
     app.exec_()
+    
+    stop_recv.value = 1
+    process.join()
+
     
     # Stope and release the device
     dev.stop()
