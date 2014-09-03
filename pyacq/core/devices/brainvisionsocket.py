@@ -20,11 +20,11 @@ class Marker:
         self.description = ""
 
 dtype_trigger = [('pos', 'int64'),
-                            ('points', 'int64'),
-                            ('channel', 'int64'),
-                            ('type', 'S16'),#TODO check size
-                            ('description', 'S16'),#TODO check size
-                            ]
+                ('points', 'int64'),
+                ('channel', 'int64'),
+                ('type', 'S16'),#TODO check size
+                ('description', 'S16'),#TODO check size
+                ]
 
 def recv_data(brain_socket, requestedSize):
     buf = np.empty( requestedSize, dtype = np.uint8)
@@ -50,11 +50,11 @@ def get_signal_and_markers(rawdata, nb_channel):
 
     # Extract markers
     markers = np.empty((nb_marker,), dtype = dtype_trigger)
-    index = 12 + 4 * points * n
+    index = 12 + dt.itemsize * points * n
     for m in range(nb_marker):
         markersize, = struct.unpack('<L', rawdata[index:index+4])
         markers['pos'][m], markers['points'][m],markers['channel'][m] = struct.unpack('<LLl', rawdata[index+4:index+16])
-        markers['type'][m], markers['description'][m] = rawdata[index+16:index+markersize].split('\x00')[:2]
+        markers['type'][m], markers['description'][m] = rawdata[index+16:index+markersize].tostring().split('\x00')[:2]
         index = index + markersize
 
     return block, sigs, markers
@@ -93,6 +93,7 @@ def brainvisionsocket_mainLoop(stop_flag, streams, brain_host, brain_port, resol
             # Signals
             chunk *= resolutions[np.newaxis, :]
             packet_size = chunk.shape[0]
+            #~ print 'packet_size', packet_size
             np_arr[:,pos2:pos2+packet_size] = chunk.transpose() 
             np_arr[:,pos2+half_size:pos2+packet_size+half_size] = chunk.transpose()
             if pos2+packet_size>half_size:
@@ -103,6 +104,7 @@ def brainvisionsocket_mainLoop(stop_flag, streams, brain_host, brain_port, resol
             socket0.send(msgpack.dumps(abs_pos))
             
             #Triggers
+            markers['pos'] += (abs_pos-packet_size)
             for marker in markers:
                 socket1.send(marker.tostring())
             
