@@ -19,6 +19,13 @@ class Marker:
         self.type = ""
         self.description = ""
 
+dtype_trigger = [('pos', 'int64'),
+                ('points', 'int64'),
+                ('channel', 'int64'),
+                ('type', 'S16'),#TODO check size
+                ('description', 'S16'),#TODO check size
+                ]
+
 def recv_data(brain_socket, requestedSize):
     buf = np.empty( requestedSize, dtype = np.uint8)
     n = 0
@@ -36,23 +43,18 @@ def get_signal_and_markers(rawdata, nb_channel):
     dt = np.dtype(np.float32)
     
     # Extract numerical data
-    (block, points, markerCount) = struct.unpack('<LLL', rawdata[:hs])
+    (block, points, nb_marker) = struct.unpack('<LLL', rawdata[:hs])
     n = nb_channel
     sigs = (rawdata[hs:hs+points*n*dt.itemsize]).view(dt)
     sigs = sigs.reshape(points, n)
 
     # Extract markers
-    # TODO : optimize!!!
-    markers = [ ]
-    index = 12 + 4 * points * n
-    for m in range(markerCount):
+    markers = np.empty((nb_marker,), dtype = dtype_trigger)
+    index = 12 + dt.itemsize * points * n
+    for m in range(nb_marker):
         markersize, = struct.unpack('<L', rawdata[index:index+4])
-        
-        ma = Marker()
-        ma.position, ma.points, ma.channel = struct.unpack('<LLl', rawdata[index+4:index+16])
-        ma.type, ma.description = rawdata[index+16:index+markersize].split('\x00')[:-1]
-        markers.append(ma)
-        
+        markers['pos'][m], markers['points'][m],markers['channel'][m] = struct.unpack('<LLl', rawdata[index+4:index+16])
+        markers['type'][m], markers['description'][m] = rawdata[index+16:index+markersize].tostring().split('\x00')[:2]
         index = index + markersize
 
     return block, sigs, markers
@@ -67,6 +69,10 @@ def brainvisionsocket_mainLoop(stop_flag, streams, brain_host, brain_port, resol
     socket0 = context.socket(zmq.PUB)
     socket0.bind("tcp://*:{}".format(stream0['port']))
     socket0.send(msgpack.dumps(abs_pos))
+    
+    stream1 = streams[1]
+    socket1 = context.socket(zmq.PUB)
+    socket1.bind("tcp://*:{}".format(stream1['port']))
     
     brain_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     brain_socket.connect((brain_host, brain_port))
@@ -84,18 +90,24 @@ def brainvisionsocket_mainLoop(stop_flag, streams, brain_host, brain_port, resol
         elif msgtype == 4:
             block, chunk, markers = get_signal_and_markers(rawdata, stream0.nb_channel)
             
+            # Signals
             chunk *= resolutions[np.newaxis, :]
-            
             packet_size = chunk.shape[0]
+            #~ print 'packet_size', packet_size
             np_arr[:,pos2:pos2+packet_size] = chunk.transpose() 
             np_arr[:,pos2+half_size:pos2+packet_size+half_size] = chunk.transpose()
             if pos2+packet_size>half_size:
                 pass
                 #TODO : check packet_size
-            
             abs_pos += packet_size
             pos2 = abs_pos%half_size
             socket0.send(msgpack.dumps(abs_pos))
+            
+            #Triggers
+            markers['pos'] += (abs_pos-packet_size)
+            for marker in markers:
+                socket1.send(marker.tostring())
+            
 
         elif msgtype == 3:
             break
@@ -193,18 +205,23 @@ class BrainvisionSocket(DeviceBase):
         
         name = 'Brainvision socket {}'.format(nb_channel)
         #FIXME : name
-        s = self.streamhandler.new_AnalogSignalSharedMemStream(name = name, sampling_rate = sampling_rate,
+        s0 = self.streamhandler.new_AnalogSignalSharedMemStream(name = name, sampling_rate = sampling_rate,
                                                         nb_channel = nb_channel, buffer_length = self.buffer_length,
                                                         packet_size = packet_size, dtype = np.float64,
                                                         channel_names = channel_names, channel_indexes = channel_indexes,            
                                                         )
         
-        self.streams = [s, ]
+        s1 = self.streamhandler.new_AsynchronusEventStream(name = 'Brainvision socket triggers', 
+                        dtype =  dtype_trigger)
+        
+        
+        self.streams = [s0, s1]
         
         #~ arr_size = s['shared_array'].shape[1]
         #~ assert (arr_size/2)%self.packet_size ==0, 'buffer should be a multilple of pcket_size {}/2 {}'.format(arr_size, self.packet_size)
 
-        print 'BrainvisionSocket initialized:',  s['port']
+        print 'BrainvisionSocket initialized analog:',  s0['port']
+        print 'BrainvisionSocket initialized trigger:',  s1['port']
     
     def start(self):
         self.stop_flag = mp.Value('i', 0) #flag pultiproc
