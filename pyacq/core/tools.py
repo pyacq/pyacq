@@ -19,7 +19,12 @@ class SharedArray:
     def __init__(self, shape, dtype):
         self.dtype = np.dtype(dtype)
         self.shape = shape
-        self.mp_array = mp.Array(ctypes.c_byte, np.prod(self.shape)*self.dtype.itemsize)
+        #~ self.mp_array = mp.Array(ctypes.c_byte, np.prod(self.shape)*self.dtype.itemsize)
+        self.mp_array = mp.RawArray(ctypes.c_byte, np.prod(self.shape)*self.dtype.itemsize)
 
     def to_numpy_array(self):
-        return np.frombuffer(self.mp_array.get_obj(), dtype = self.dtype).reshape(self.shape)
+        #~ return np.frombuffer(self.mp_array.get_obj(), dtype = self.dtype).reshape(self.shape)
+        return np.frombuffer(self.mp_array, dtype = self.dtype).reshape(self.shape)
+    
+    
+    

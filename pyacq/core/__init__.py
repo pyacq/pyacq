@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
-from .streamhandler import StreamHandler
+from .streamhandler import StreamHandler, StreamServer, StreamHandlerProxy
+
 try:
     from .timestampserver  import TimestampServer 
 except:
@@ -7,3 +8,4 @@ except:
 from .tools import SharedArray
 from .devices import *
 from .streamconverter import *
+
