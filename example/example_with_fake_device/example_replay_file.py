@@ -72,17 +72,13 @@ class ThreadListenTriggers(QtCore.QThread):
     def __init__(self, parent=None, stream = None):
         QtCore.QThread.__init__(self, parent)
         self.running = False
-        
         self.stream = stream
-        
     
     def run(self):
         context = zmq.Context()
         socket = context.socket(zmq.SUB)
         socket.setsockopt(zmq.SUBSCRIBE,'')
         socket.connect("tcp://localhost:{}".format(self.stream['port']))
-        
-        
         self.running = True
         while self.running:
             events = socket.poll(50)
@@ -90,9 +86,9 @@ class ThreadListenTriggers(QtCore.QThread):
                 time.sleep(.05)
                 continue
             message = socket.recv()
-            trigger = np.frombuffer(message, dtype = self.stream['dtype'])
+            trigger = np.frombuffer(message, dtype = self.stream['dtype'])[0]
             self.new_trig.emit(int(trigger['pos']), str(trigger['label']))
-    
+
     def stop(self):
         self.running = False
 
@@ -149,8 +145,6 @@ def test2():
     
     def on_new_trigger(pos, label):
         print pos, label
-        print type(pos), type(label)
-        
     
     app = QtGui.QApplication([])
     
@@ -168,8 +162,7 @@ def test2():
     # Stope and release the device
     dev.stop()
     dev.close()
-    process.stop()
-
+    listen_trigger.stop()
 
 
 if __name__ == '__main__':
