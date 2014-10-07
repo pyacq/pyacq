@@ -63,7 +63,7 @@ class TriggerBase(ProcessingBase):
                         'debounce_mode', 'debounce_time']
             setattr(self, k, v)
     
-    def loop(self):
+    def run(self):
         port = self.stream['port']
         socket = self.context.socket(zmq.SUB)
         socket.setsockopt(zmq.SUBSCRIBE,'')

@@ -17,49 +17,15 @@ import zmq
 import time
 
 
+from .tools import WaitLimitThread
 from .base import ProcessingBase
 
 
-#TODO put this in tools for processing
-class WaitLimitThread(QtCore.QThread):
-    """
-    thread for waiting in a stream a pos.
-    """
-    limit_reached = QtCore.pyqtSignal(int)
-    def __init__(self, parent=None, socket = None, pos_limit = None):
-        QtCore.QThread.__init__(self, parent)
-        self.running = False
-        self.socket = socket
-        self.pos_limit = pos_limit
-    
-    def run(self):
-        message = self.socket.recv()
-        pos = msgpack.loads(message)
-        
-        self.running = True
-        while self.running:
-            events = self.socket.poll(50)
-            if events ==0:
-                time.sleep(.05)
-                continue
-            message = self.socket.recv()
-            pos = msgpack.loads(message)
-            
-            if pos>=self.pos_limit:
-                self.limit_reached.emit(self.pos_limit)
-                self.running = False
-                break
-            
-    
-    def stop(self):
-        self.running = False
-    
-    
         
 
 
 
-class StackedChunkOnTrigger(ProcessingBase, QtCore.QObject):
+class StackedChunkOnTrigger(ProcessingBase,):
     """
     This handle a stack of chunk of signals when there is a trigger.
     """
@@ -73,7 +39,7 @@ class StackedChunkOnTrigger(ProcessingBase, QtCore.QObject):
     def __init__(self, stream,  parent = None, **kargs):
         
         ProcessingBase.__init__(self, stream)
-        QtCore.QObject.__init__(self, parent)
+        
         
         
         #TODO : do something with inheritences
@@ -135,7 +101,9 @@ class StackedChunkOnTrigger(ProcessingBase, QtCore.QObject):
         thread.start()
 
     def on_limit_reached(self, limit):
-        self.threads_limit.remove(self.sender())
+        thread_limit = self.sender()
+        thread_limit.wait()
+        self.threads_limit.remove(thread_limit)
         
         head = limit%self.half_size+self.half_size
         tail = head - (self.limit2 - self.limit1)
@@ -146,3 +114,4 @@ class StackedChunkOnTrigger(ProcessingBase, QtCore.QObject):
         self.total_trig += 1
         
         self.new_chunk.emit(self.total_trig)
+

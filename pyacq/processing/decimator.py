@@ -58,7 +58,7 @@ class SimpleDecimator(ProcessingBase):
         if autostart:
             self.start()
     
-    def loop(self):
+    def run(self):
         port = self.stream['port']
         socket = self.context.socket(zmq.SUB)
         socket.setsockopt(zmq.SUBSCRIBE,'')

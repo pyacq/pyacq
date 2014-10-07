@@ -71,7 +71,7 @@ class BandPassFilter(ProcessingBase):
             self.a, self.b = None, None
         self.zi = None
     
-    def loop(self):
+    def run(self):
         port = self.stream['port']
         socket = self.context.socket(zmq.SUB)
         socket.setsockopt(zmq.SUBSCRIBE,'')
