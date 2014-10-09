@@ -388,7 +388,7 @@ class FakeDigital(DeviceBase):
 
 
 
-def fake_multisignal_and_triggers_mainLoop(stop_flag, streams,  precomputed_sigs, precomputed_trigs):
+def fake_multisignal_and_triggers_mainLoop(stop_flag, streams,  precomputed_sigs, precomputed_trigs, speed):
     import zmq
     pos = 0
     abs_pos = pos2 = 0
@@ -419,9 +419,10 @@ def fake_multisignal_and_triggers_mainLoop(stop_flag, streams,  precomputed_sigs
         pos2 = abs_pos%half_size
         socket0.send(msgpack.dumps(abs_pos))
         
-        sel = (precomputed_trigs['pos']>=pos2-packet_size) & (precomputed_trigs['pos']<pos2)
+        sel = (precomputed_trigs['pos']>=abs_pos-packet_size) & (precomputed_trigs['pos']<abs_pos)
         if np.any(sel):
             for trigger in precomputed_trigs[sel]:
+                #~ print 'send', trigger
                 socket1.send(trigger.tostring())
         
         if stop_flag.value:
@@ -430,7 +431,7 @@ def fake_multisignal_and_triggers_mainLoop(stop_flag, streams,  precomputed_sigs
         t2 = time.time()
         #~ time.sleep(packet_size/sampling_rate-(t2-t1))
         
-        time.sleep(packet_size/sampling_rate)
+        time.sleep(packet_size/sampling_rate/speed)
         #~ gevent.sleep(packet_size/sampling_rate)
 
 class FakeMultiSignalsAndTriggers(DeviceBase):
@@ -448,6 +449,7 @@ class FakeMultiSignalsAndTriggers(DeviceBase):
                                     precomputed_trigs = None,
                                     # if subdevices is None
                                     nb_channel = None,
+                                    speed = 1.,
                                     ):
         
         if nb_channel is not None:
@@ -459,6 +461,7 @@ class FakeMultiSignalsAndTriggers(DeviceBase):
                                 'subdevices' : subdevices,
                                 'precomputed_sigs' : precomputed_sigs,
                                 'precomputed_trigs' : precomputed_trigs,
+                                'speed' : speed,
                                 }
         self.__dict__.update(self.params)
         self.configured = True
@@ -547,7 +550,7 @@ class FakeMultiSignalsAndTriggers(DeviceBase):
         self.stop_flag = mp.Value('i', 0) #flag pultiproc
         
         s = self.streams[0]
-        self.process = mp.Process(target = fake_multisignal_and_triggers_mainLoop,  args=(self.stop_flag, self.streams, self.precomputed_sigs, self.precomputed_trigs) )
+        self.process = mp.Process(target = fake_multisignal_and_triggers_mainLoop,  args=(self.stop_flag, self.streams, self.precomputed_sigs, self.precomputed_trigs, self.speed) )
         self.process.start()
         
         print 'FakeMultiSignalsAndTriggers started:'

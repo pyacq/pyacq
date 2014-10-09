@@ -58,15 +58,15 @@ class BandPassFilter(ProcessingBase):
         Wn = [self.f_start/(sr/2.), self.f_stop/(sr/2.) ]
         if self.f_start>0. and self.f_stop<sr:
             print 'bandpass'
-            self.b, self.a = scipy.signal.iirfilter(N=3, Wn=Wn, btype = 'bandpass', analog = False, ftype = 'butter', output = 'ba')
+            self.b, self.a = scipy.signal.iirfilter(N=2, Wn=Wn, btype = 'bandpass', analog = False, ftype = 'butter', output = 'ba')
         elif self.f_start==0. and self.f_stop<sr:
             print 'lowpass'
             Wn = Wn[1]
-            self.b, self.a = scipy.signal.iirfilter(N=3,  Wn=Wn, btype = 'lowpass', analog = False, ftype = 'butter', output = 'ba')
+            self.b, self.a = scipy.signal.iirfilter(N=2,  Wn=Wn, btype = 'lowpass', analog = False, ftype = 'butter', output = 'ba')
         elif self.f_start>0. and self.f_stop>=sr:
             print 'highpass'
             Wn = Wn[0]
-            self.b, self.a = scipy.signal.iirfilter(N=3,  Wn=Wn, btype = 'highpass', analog = False, ftype = 'butter', output = 'ba')
+            self.b, self.a = scipy.signal.iirfilter(N=2,  Wn=Wn, btype = 'highpass', analog = False, ftype = 'butter', output = 'ba')
         else:
             self.a, self.b = None, None
         self.zi = None
