@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import multiprocessing as mp
+import threading
 import numpy as np
 import msgpack
 import time
@@ -436,17 +437,21 @@ class MeasurementComputingMultiSignals(DeviceBase):
     def start(self):
         self.stop_flag = mp.Value('i', 0)
         
-        self.process = mp.Process(target = device_mainLoop,  args=(self.stop_flag, self.streams, self.board_num, self.ul_dig_ports, self.device_info) )
-        self.process.start()
+        # multiprocessing
+        #~ self.process = mp.Process(target = device_mainLoop,  args=(self.stop_flag, self.streams, self.board_num, self.ul_dig_ports, self.device_info) )        
         
+        # python threading
+        self.process = threading.Thread(target = device_mainLoop,  args=(self.stop_flag, self.streams, self.board_num, self.ul_dig_ports, self.device_info) )
+        
+        self.process.start()
         print 'MeasurementComputingMultiSignals started:', self.name
         self.running = True
     
     def stop(self):
         self.stop_flag.value = 1
         self.process.join()
-        print 'MeasurementComputingMultiSignals stopped:', self.name
         
+        print 'MeasurementComputingMultiSignals stopped:', self.name
         self.running = False
     
     def close(self):
