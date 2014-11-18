@@ -22,6 +22,7 @@ param_global = [
     {'name': 'mode', 'type': 'list', 'value': 'scan' , 'values' : ['scan', 'scroll'] },
     {'name': 'auto_decimate', 'type': 'bool', 'value':  True },
     {'name': 'decimate', 'type': 'int', 'value': 1., 'limits' : [1, None], },
+    {'name': 'display_labels', 'type': 'bool', 'value': False },
     ]
 
 param_by_channel = [ 
@@ -186,11 +187,15 @@ class Oscilloscope(BaseOscilloscope):
         # Create curve items
         
         self.curves = [ ]
+        self.channel_labels = [ ]
         for i in range(self.stream['nb_channel']):
             color = self.paramChannels.children()[i]['color']
             curve = pg.PlotCurveItem(pen = color)
             self.plot.addItem(curve)
             self.curves.append(curve)
+            label = pg.TextItem(self.stream['channel_names'][i], color = color,  anchor=(0.5, 0.5), border=None,  fill=pg.mkColor((128,128,128, 200)))
+            self.plot.addItem(label)
+            self.channel_labels.append(label)
         sr = self.stream['sampling_rate']
         self.paramGlobal.param('xsize').setLimits([2./sr, self.half_size/sr*.95])
         self.paramGlobal['xsize'] = 3.# to reset curves
@@ -230,6 +235,7 @@ class Oscilloscope(BaseOscilloscope):
                 i = self.paramChannels.children().index(param.parent())
                 pen = pg.mkPen(color = data)
                 self.curves[i].setPen(pen)
+                self.channel_labels[i].setText(self.stream['channel_names'][i], color = data)
             if param.name()=='background_color':
                 self.graphicsview.setBackground(data)
             if param.name()=='xsize':
@@ -354,9 +360,17 @@ class Oscilloscope(BaseOscilloscope):
         self.plot.setXRange( self.t_vect[0], self.t_vect[-1])
         ylims  =self.paramGlobal['ylims']
         self.plot.setYRange( *ylims )
-    
-    
-            
+        
+        for c in range(gains.size):
+            label = self.channel_labels[c]
+            if visibles[c] and self.paramGlobal['display_labels']:
+                if self.all_mean is not None:
+                    label.setPos(-self.paramGlobal['xsize'],  self.all_mean[c]*gains[c]+offsets[c])
+                else:
+                    label.setPos(-self.paramGlobal['xsize'],  offsets[c])
+                label.setVisible(True)
+            else:
+                label.setVisible(False)
     
     #
     def autoestimate_scales(self):
