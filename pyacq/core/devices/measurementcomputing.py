@@ -97,7 +97,7 @@ def device_mainLoop(stop_flag, streams, board_num, ul_dig_ports, device_info ):
     internal_size = internal_size- internal_size%(device_info['device_packet_size'])
     #~ print 'internal_size', internal_size
     
-    
+    #???? use cbWinBuffAlloc()
     raw_arr = np.zeros(( internal_size, nb_total_channel), dtype = np.uint16)
     pretrig_count = ctypes.c_long(0)
     total_count = ctypes.c_long(int(raw_arr.size))
@@ -112,7 +112,7 @@ def device_mainLoop(stop_flag, streams, board_num, ul_dig_ports, device_info ):
                             gain_array.ctypes.data, nb_total_channel, byref(real_sr), byref(pretrig_count),
                              byref(total_count) ,raw_arr.ctypes.data, options)
         function = UL.DAQIFUNCTION
-        
+        print 'cbDaqInScan OK'
     except ULError as e:
         print e.errno, e.errno == UL.BADBOARDTYPE
         if e.errno == UL.BADBOARDTYPE:
@@ -124,10 +124,13 @@ def device_mainLoop(stop_flag, streams, board_num, ul_dig_ports, device_info ):
                 
                 low_chan = int(min(chan_indexes))
                 high_chan = int(max(chan_indexes))
+                print ctypes.byref(real_sr)
+                print raw_arr.ctypes.data
+                print options
                 cbw.cbAInScan(board_num, low_chan, high_chan, int(raw_arr.size),
                       ctypes.byref(real_sr), int(gain_array[0]), raw_arr.ctypes.data, options)
                 function = UL.AIFUNCTION
-                
+                print 'cbAInScan OK'
             except ULError as e:
                 print 'Not able to cbDaqInScan properly', e
                 return
@@ -244,7 +247,7 @@ def device_mainLoop(stop_flag, streams, board_num, ul_dig_ports, device_info ):
         
     try:
         cbw.cbStopBackground(board_num, function)
-        print 'has stop properly'
+        print 'cbStopBackground has stop properly'
     except ULError:
         print 'not able to stop cbStopBackground properly'
         
@@ -438,10 +441,10 @@ class MeasurementComputingMultiSignals(DeviceBase):
         self.stop_flag = mp.Value('i', 0)
         
         # multiprocessing
-        #~ self.process = mp.Process(target = device_mainLoop,  args=(self.stop_flag, self.streams, self.board_num, self.ul_dig_ports, self.device_info) )        
+        self.process = mp.Process(target = device_mainLoop,  args=(self.stop_flag, self.streams, self.board_num, self.ul_dig_ports, self.device_info) )        
         
         # python threading
-        self.process = threading.Thread(target = device_mainLoop,  args=(self.stop_flag, self.streams, self.board_num, self.ul_dig_ports, self.device_info) )
+        #~ self.process = threading.Thread(target = device_mainLoop,  args=(self.stop_flag, self.streams, self.board_num, self.ul_dig_ports, self.device_info) )
         
         self.process.start()
         print 'MeasurementComputingMultiSignals started:', self.name

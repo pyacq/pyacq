@@ -64,7 +64,7 @@ class ProcessingBase(QtCore.QThread):
     def stop(self, join = True):
         self.running =False
         if join:
-            self.thread.wait()
+            self.wait()
     
     def run(self):
         pass
