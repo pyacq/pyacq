@@ -98,6 +98,11 @@ def device_mainLoop(stop_flag, streams, board_num, ul_dig_ports, device_info ):
     #~ print 'internal_size', internal_size
     
     #???? use cbWinBuffAlloc()
+    #~ size = internal_size*nb_total_channel
+    #~ memhandle = cbw.cbWinBuffAlloc(size)
+    #~ assert memhandle != 0, 'UL problem for allocating window memory handle'
+    #~ raw_arr = numpy.ctypeslib.as_array((ctypes.c_short * size).from_address(memhandle))
+    
     raw_arr = np.zeros(( internal_size, nb_total_channel), dtype = np.uint16)
     pretrig_count = ctypes.c_long(0)
     total_count = ctypes.c_long(int(raw_arr.size))
@@ -250,7 +255,11 @@ def device_mainLoop(stop_flag, streams, board_num, ul_dig_ports, device_info ):
         print 'cbStopBackground has stop properly'
     except ULError:
         print 'not able to stop cbStopBackground properly'
-        
+    
+    #~ try:
+        #~ cbw.cbWinBufFree(memhandle)
+    #~ except ULError as e:
+        #~ print e.errno, e
 
 
 
