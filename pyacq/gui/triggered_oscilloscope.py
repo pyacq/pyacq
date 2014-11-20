@@ -111,6 +111,14 @@ class TriggeredOscilloscope(BaseOscilloscope):
     def reset_stack(self):
         self.stackedchunk.reset_stack()
         self.plotted_trig = -1
+        n = self.stream['nb_channel']
+        stack_size = self.paramGlobal['stack_size']
+        for c in range(n):
+            for pos in range(stack_size):
+                self.list_curves[c][pos].setData(self.stackedchunk.t_vect, np.zeros(self.stackedchunk.t_vect.shape), antialias = False)
+
+        
+        self.refresh()
     
     def recreate_curves(self):
         n = self.stream['nb_channel']
