@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
 
-from .fakedevices import FakeMultiSignals, FakeDigital
-device_classes = [FakeMultiSignals, FakeDigital ]
+from .fakedevices import FakeMultiSignals, FakeDigital, FakeMultiSignalsAndTriggers
+device_classes = [FakeMultiSignals, FakeDigital, FakeMultiSignalsAndTriggers ]
 
 try:
     from .measurementcomputing import MeasurementComputingMultiSignals
@@ -23,4 +23,6 @@ try:
 except :
     pass
 
+from .brainvisionsocket import BrainvisionSocket
+device_classes += [BrainvisionSocket]
 

@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import multiprocessing as mp
+import threading
 import numpy as np
 import msgpack
 import time
@@ -96,7 +97,13 @@ def device_mainLoop(stop_flag, streams, board_num, ul_dig_ports, device_info ):
     internal_size = internal_size- internal_size%(device_info['device_packet_size'])
     #~ print 'internal_size', internal_size
     
+    #with cbWinBuffAlloc()
+    #~ size = int(internal_size*nb_total_channel)
+    #~ memhandle = _cbw.cbWinBufAlloc(ctypes.c_long(size))
+    #~ assert memhandle != 0, 'UL problem for allocating window memory handle'
+    #~ raw_arr = np.ctypeslib.as_array((ctypes.c_short * size).from_address(memhandle)).reshape(internal_size, nb_total_channel).view(np.uint16)
     
+    #with numpy allocation
     raw_arr = np.zeros(( internal_size, nb_total_channel), dtype = np.uint16)
     pretrig_count = ctypes.c_long(0)
     total_count = ctypes.c_long(int(raw_arr.size))
@@ -107,14 +114,36 @@ def device_mainLoop(stop_flag, streams, board_num, ul_dig_ports, device_info ):
     
     try:
         # this is SLOW!!!!:
+        #~ print 'ici'
+        #~ print chan_array.ctypes.data
+        #~ print chan_array_type.ctypes.data
+        #~ print gain_array.ctypes.data
+        #~ print nb_total_channel
+        #~ print real_sr, ctypes.byref(real_sr)
+        #~ print pretrig_count, byref(pretrig_count)
+        #~ print total_count, byref(total_count)
+        #~ print raw_arr.ctypes.data
+        #~ print options
+        
         cbw.cbDaqInScan(board_num, chan_array.ctypes.data,  chan_array_type.ctypes.data,
                             gain_array.ctypes.data, nb_total_channel, byref(real_sr), byref(pretrig_count),
                              byref(total_count) ,raw_arr.ctypes.data, options)
         function = UL.DAQIFUNCTION
-        
+        print 'cbDaqInScan OK'
     except ULError as e:
         print e.errno, e.errno == UL.BADBOARDTYPE
-        if e.errno == UL.BADBOARDTYPE:
+        
+        if e.errno == 35:
+            #do not known why sometimes just a second try and it is OK
+            time.sleep(1.)
+            cbw.cbDaqInScan(board_num, chan_array.ctypes.data,  chan_array_type.ctypes.data,
+                            gain_array.ctypes.data, nb_total_channel, byref(real_sr), byref(pretrig_count),
+                             byref(total_count) ,raw_arr.ctypes.data, options)
+            print 'Demmarage en DEUX FOIS!!!!!'
+            function = UL.DAQIFUNCTION
+        
+        elif e.errno == UL.BADBOARDTYPE:
+            # this error raise when the (old) card do not support cbDaqInScan
             try:
                 chan_indexes = streamAD['channel_indexes']
                 assert np.all(np.diff(chan_indexes) == 1), 'For this card you must select continuous cannel indexes'
@@ -123,10 +152,13 @@ def device_mainLoop(stop_flag, streams, board_num, ul_dig_ports, device_info ):
                 
                 low_chan = int(min(chan_indexes))
                 high_chan = int(max(chan_indexes))
+                #~ print ctypes.byref(real_sr)
+                #~ print raw_arr.ctypes.data
+                #~ print options
                 cbw.cbAInScan(board_num, low_chan, high_chan, int(raw_arr.size),
                       ctypes.byref(real_sr), int(gain_array[0]), raw_arr.ctypes.data, options)
                 function = UL.AIFUNCTION
-                
+                print 'cbAInScan OK'
             except ULError as e:
                 print 'Not able to cbDaqInScan properly', e
                 return
@@ -243,10 +275,15 @@ def device_mainLoop(stop_flag, streams, board_num, ul_dig_ports, device_info ):
         
     try:
         cbw.cbStopBackground(board_num, function)
-        print 'has stop properly'
+        print 'cbStopBackground has stop properly'
     except ULError:
         print 'not able to stop cbStopBackground properly'
-        
+    
+    # if winbufaloc
+    #~ try:
+        #~ cbw.cbWinBufFree(memhandle)
+    #~ except ULError as e:
+        #~ print e.errno, e
 
 
 
@@ -436,17 +473,21 @@ class MeasurementComputingMultiSignals(DeviceBase):
     def start(self):
         self.stop_flag = mp.Value('i', 0)
         
-        self.process = mp.Process(target = device_mainLoop,  args=(self.stop_flag, self.streams, self.board_num, self.ul_dig_ports, self.device_info) )
-        self.process.start()
+        # multiprocessing
+        #~ self.process = mp.Process(target = device_mainLoop,  args=(self.stop_flag, self.streams, self.board_num, self.ul_dig_ports, self.device_info) )        
         
+        # python threading
+        self.process = threading.Thread(target = device_mainLoop,  args=(self.stop_flag, self.streams, self.board_num, self.ul_dig_ports, self.device_info) )
+        
+        self.process.start()
         print 'MeasurementComputingMultiSignals started:', self.name
         self.running = True
     
     def stop(self):
         self.stop_flag.value = 1
         self.process.join()
-        print 'MeasurementComputingMultiSignals stopped:', self.name
         
+        print 'MeasurementComputingMultiSignals stopped:', self.name
         self.running = False
     
     def close(self):

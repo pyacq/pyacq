@@ -49,10 +49,10 @@ def test1():
     #~ print w1.get_params()
     w1.set_params(**w1.get_params())
 
-    w2=Oscilloscope(stream = dev.streams[0])
-    w2.show()
-    w2.auto_gain_and_offset(mode = 0)
-    w2.set_params(xsize = 5, mode = 'scroll')
+    #~ w2=Oscilloscope(stream = dev.streams[0])
+    #~ w2.show()
+    #~ w2.auto_gain_and_offset(mode = 0)
+    #~ w2.set_params(xsize = 5, mode = 'scroll')
     
 
     

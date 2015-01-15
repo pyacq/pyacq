@@ -21,7 +21,7 @@ param_global = [
     {'name': 'background_color', 'type': 'color', 'value': 'k' },
     {'name': 'colormap', 'type': 'list', 'value': 'jet', 'values' : ['jet', 'gray', 'bone', 'cool', 'hot', ] },
     {'name': 'refresh_interval', 'type': 'int', 'value': 500 , 'limits':[5, 1000]},
-    
+    #~ {'name': 'display_labels', 'type': 'bool', 'value': False },
     ]
 
 param_timefreq = [ 
@@ -223,6 +223,7 @@ class TimeFreq(QtGui.QWidget, MultiChannelParamsSetter):
             graphicsview  = pg.GraphicsView()#useOpenGL = True)
             graphicsview.setBackground(color)
             plot = pg.PlotItem(viewBox = viewBox)
+            plot.setTitle(self.stream['channel_names'][i])
             graphicsview.setCentralItem(plot)
             self.graphicsviews[i] = graphicsview
             
@@ -474,8 +475,15 @@ class TimefreqControler(QtGui.QWidget):
         self.treeParamSignal.setParameters(self.viewer.paramChannels, showTop=True)
         
         if self.viewer.stream['nb_channel']>1:
+            v2 = QtGui.QVBoxLayout()
+            h.addLayout(v2)
             self.multi = MultiChannelParam( all_params = self.viewer.paramChannels, param_by_channel = param_by_channel)
-            h.addWidget(self.multi)
+            #~ h.addWidget(self.multi)
+            v2.addWidget(self.multi)
+            but = QtGui.QPushButton('Set selection visible')
+            but.clicked.connect(self.set_selection_visible)
+            v2.addWidget(but)
+            
 
     def auto_clim(self, identic = True):
         
@@ -499,7 +507,9 @@ class TimefreqControler(QtGui.QWidget):
             p.param('clim').setValue(p.param('clim').value()*factor)
 
         
-        
+    def set_selection_visible(self):
+        for i, v in enumerate(self.multi.selected()):
+            self.viewer.paramChannels.children()[i]['visible'] = v
         
 
 

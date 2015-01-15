@@ -31,23 +31,34 @@ class SimpleDecimator(ProcessingBase):
         
         q = self.downsampling_factor = downsampling_factor
         
-        self.out_stream = self.streamhandler.new_AnalogSignalSharedMemStream(name = self.stream.name+'filtered',
-                                                        sampling_rate = self.stream.sampling_rate/q,
-                                                        nb_channel = self.stream.nb_channel,
-                                                        buffer_length = self.stream.buffer_length,
-                                                        packet_size = self.stream.packet_size, 
-                                                        dtype = self.stream.shared_array.dtype,
-                                                        channel_names = self.stream.channel_names,
-                                                        channel_indexes = self.stream.channel_indexes,            
-                                                        )
+        if type(stream).__name__ == 'AnalogSignalSharedMemStream':
+            self.out_stream = self.streamhandler.new_AnalogSignalSharedMemStream(name = self.stream.name+'decimated',
+                                                            sampling_rate = self.stream.sampling_rate/q,
+                                                            nb_channel = self.stream.nb_channel,
+                                                            buffer_length = self.stream.buffer_length,
+                                                            packet_size = self.stream.packet_size, 
+                                                            dtype = self.stream.shared_array.dtype,
+                                                            channel_names = self.stream.channel_names,
+                                                            channel_indexes = self.stream.channel_indexes,            
+                                                            )
+
+        elif type(stream).__name__ == 'DigitalSignalSharedMemStream':
+            self.out_stream = self.streamhandler.new_DigitalSignalSharedMemStream(name = self.stream.name+'decimated',
+                                                            sampling_rate = self.stream.sampling_rate/q,
+                                                            nb_channel = self.stream.nb_channel,
+                                                            buffer_length = self.stream.buffer_length,
+                                                            packet_size = self.stream.packet_size, 
+                                                            channel_names = self.stream.channel_names,
+                                                            )
 
         self.out_array = self.out_stream['shared_array'].to_numpy_array()
         self.half_size2 = self.out_array.shape[1]/2
+            
         
         if autostart:
             self.start()
     
-    def loop(self):
+    def run(self):
         port = self.stream['port']
         socket = self.context.socket(zmq.SUB)
         socket.setsockopt(zmq.SUBSCRIBE,'')

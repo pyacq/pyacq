@@ -19,6 +19,7 @@ param_global = [
     {'name': 'mode', 'type': 'list', 'value': 'scan' , 'values' : ['scan', 'scroll'] },
     {'name': 'auto_decimate', 'type': 'bool', 'value':  True },
     {'name': 'decimate', 'type': 'int', 'value': 1.,  'limits' : [1, None], },
+    {'name': 'display_labels', 'type': 'bool', 'value': False },
     ]
 
 param_by_channel = [ 
@@ -115,6 +116,7 @@ class OscilloscopeDigital(QtGui.QWidget, MultiChannelParamsSetter):
         
         # Create curve items
         self.curves = [ ]
+        self.channel_labels = [ ]
         for i, channel_name in zip(range(n),  stream['channel_names']):
             color = self.paramChannels.children()[i]['color']
             #~ curve = self.plot.plot([np.nan], [np.nan], pen = color)
@@ -122,6 +124,9 @@ class OscilloscopeDigital(QtGui.QWidget, MultiChannelParamsSetter):
             curve = pg.PlotCurveItem(pen = color)
             self.plot.addItem(curve)
             self.curves.append(curve)
+            label = pg.TextItem(self.stream['channel_names'][i], color = color,  anchor=(0.5, 0.5), border=None,  fill=pg.mkColor((128,128,128, 200)))
+            self.plot.addItem(label)
+            self.channel_labels.append(label)
         
         self.paramGlobal.param('xsize').setValue(3)
 
@@ -149,6 +154,7 @@ class OscilloscopeDigital(QtGui.QWidget, MultiChannelParamsSetter):
                 i = self.paramChannels.children().index(param.parent())
                 pen = pg.mkPen(color = data)
                 self.curves[i].setPen(pen)
+                self.channel_labels[i].setText(self.stream['channel_names'][i], color = data)
             if param.name()=='background_color':
                 self.graphicsview.setBackground(data)
             if param.name()=='xsize':
@@ -177,7 +183,7 @@ class OscilloscopeDigital(QtGui.QWidget, MultiChannelParamsSetter):
         decimate = self.paramGlobal['decimate']
         sr = self.stream['sampling_rate']
         self.intsize = int(xsize*sr)
-        self.t_vect = np.arange(0,self.intsize//decimate, dtype = float)/sr/decimate
+        self.t_vect = np.arange(0,self.intsize//decimate, dtype = float)/(sr/decimate)
         self.t_vect -= self.t_vect[-1]
         self.curves_data = [ np.zeros( ( self.intsize//decimate), dtype =float) for i in range(self.stream['nb_channel']) ]
 
@@ -248,7 +254,16 @@ class OscilloscopeDigital(QtGui.QWidget, MultiChannelParamsSetter):
         
         self.plot.setXRange( self.t_vect[0], self.t_vect[-1])
         self.plot.setYRange( -.5,n+.5  )
-    
+        
+        o = n-1
+        for c in range(visibles.size):
+            label = self.channel_labels[c]
+            if visibles[c] and self.paramGlobal['display_labels']:
+                label.setPos(-self.paramGlobal['xsize'],  o)
+                label.setVisible(True)
+                o -= 1 
+            else:
+                label.setVisible(False)
     
             
     
