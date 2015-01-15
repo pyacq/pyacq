@@ -38,14 +38,15 @@ group of glitches
 
 
 class TriggerBase(ProcessingBase):
-    def __init__(self, stream, channel = 0, threshold = 1., front = '+',
+    def __init__(self, stream, parent = None,
+                            channel = 0, threshold = 1., front = '+',
                             debounce_mode = 'no-debounce', # 'after-stable' , 'before-stable'
                             debounce_time = 0.01,
                             callbacks = [ ],
                             autostart = True,
                             ):
         
-        ProcessingBase.__init__(self, stream)
+        ProcessingBase.__init__(self, stream, parent = parent)
         
         self.channel = channel
         self.threshold =threshold
