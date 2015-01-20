@@ -147,11 +147,7 @@ class RawDataRecording:
     def rec_loop_AsynchronusEventStream(self, socket, stream, file, bounds):
         while self.running:
             if socket.poll(timeout = 100):
-                
                 message = socket.recv()
-                t = time.time()
-                print 'ici', t, message
-                file.write(buffer(np.float64(t)))
                 file.write(message)
         file.close()
 
