@@ -81,7 +81,7 @@ def brainvisionsocket_mainLoop(stop_flag, streams, brain_host, brain_port, resol
     sampling_rate = stream0['sampling_rate']
     np_arr = stream0['shared_array'].to_numpy_array()
     half_size = np_arr.shape[1]/2
-    while True:
+    while not stop_flag.value :
         buf_header = recv_data(brain_socket, 24)
         (id1, id2, id3, id4, msgsize, msgtype) = struct.unpack('<llllLL', buf_header)
         rawdata = recv_data(brain_socket,  msgsize - 24)
