@@ -509,7 +509,7 @@ class TimefreqControler(QtGui.QWidget):
         
     def set_selection_visible(self):
         for i, v in enumerate(self.multi.selected()):
-            self.viewer.paramChannels.children()[i]['visible'] = v
+            self.viewer.paramChannels.children()[i]['visible'] = bool(v)
         
 
 
