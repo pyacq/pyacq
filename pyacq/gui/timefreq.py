@@ -261,19 +261,32 @@ class TimeFreq(QtGui.QWidget, MultiChannelParamsSetter):
             p['sampling_rate']  = self.stream['sampling_rate']
         self.factor = p['sampling_rate']/self.stream['sampling_rate'] # this compensate unddersampling in FFT.
         
+        
+        
         self.xsize2 = self.paramGlobal.param('xsize').value()
         self.len_wavelet = int(self.xsize2*p['sampling_rate'])
-        self.win = fftpack.ifftshift(np.hamming(self.len_wavelet))
+        self.len_wavelet2=2**np.ceil(np.log(self.len_wavelet)/np.log(2)) # extension to next power of  2 of previous number
+        #~ self.win = fftpack.ifftshift(np.hamming(self.len_wavelet))
+        self.win = fftpack.ifftshift(np.hamming(self.len_wavelet2))
+        
+        self.factor *= self.len_wavelet2/self.len_wavelet
+        
+        
+        #~ self.xsize3 = self.xsize2 * self.len_wavelet2 / self.len_wavelet
+        #~ print 'ici', self.xsize2, self.xsize3, self.len_wavelet , self.len_wavelet2
+        
+        
         
         if threaded:
-            self.thread_initialize_tfr = ThreadInitializeWavelet(len_wavelet = self.len_wavelet, 
+            #~ self.thread_initialize_tfr = ThreadInitializeWavelet(len_wavelet = self.len_wavelet, 
+            self.thread_initialize_tfr = ThreadInitializeWavelet(len_wavelet = self.len_wavelet2, 
                                                                 params_time_freq = p, parent = self )
             self.thread_initialize_tfr.finished.connect(self.initialize_tfr_done)
             self.thread_initialize_tfr.start()
         else:
-            self.wf = generate_wavelet_fourier(len_wavelet= self.len_wavelet, ** self.params_time_freq)
+            #~ self.wf = generate_wavelet_fourier(len_wavelet= self.len_wavelet, ** self.params_time_freq)
+            self.wf = generate_wavelet_fourier(len_wavelet= self.len_wavelet2, ** self.params_time_freq)
             self.initialize_plots()
-            
     
     def initialize_tfr_done(self):
         self.wf = self.thread_initialize_tfr.wf
@@ -340,6 +353,7 @@ class TimeFreq(QtGui.QWidget, MultiChannelParamsSetter):
             
             f_start, f_stop = self.params_time_freq['f_start'], self.params_time_freq['f_stop']
             self.images[i].setRect(QRectF(-self.xsize2, f_start,self.xsize2, f_stop-f_start))
+            #~ self.images[i].setRect(QRectF(-self.xsize3, f_start,self.xsize3, f_stop-f_start))
             self.threads[i].start()
         
         self.need_recreate_thread = False
@@ -351,11 +365,12 @@ class TimeFreq(QtGui.QWidget, MultiChannelParamsSetter):
             return
         if not self.grid_changing and self.thread_initialize_tfr is None:
             if self.images[i] is not None:
-                self.images[i].updateImage(self.maps[i])
+                #~ self.images[i].updateImage(self.maps[i])
+                self.images[i].updateImage(self.maps[i][-self.len_wavelet:, :])
         self.is_computing[i] = False
 
 
-
+"""
 class ThreadComputeTF(QtCore.QThread):
     finished = QtCore.pyqtSignal(int)
     def __init__(self, sig, wf, win,n, factor, parent = None, ):
@@ -376,6 +391,32 @@ class ThreadComputeTF(QtCore.QThread):
         
         self.parent().maps[self.n] = np.abs(wt)
         self.finished.emit(self.n)
+"""
+
+class ThreadComputeTF(QtCore.QThread):
+    finished = QtCore.pyqtSignal(int)
+    def __init__(self, sig, wf, win,n, factor, parent = None, ):
+        QtCore.QThread.__init__(self, parent)
+        self.sig = sig
+        self.wf = wf
+        self.win = win
+        self.n = n
+        self.factor = factor # this compensate subsampling
+        
+    def run(self):
+        #decimate
+        
+        
+        sigf=fftpack.fft(self.sig)
+        n = self.wf.shape[0]
+        sigf = np.concatenate([sigf[0:(n+1)/2],  sigf[-(n-1)/2:]])*self.factor
+        #~ sigf *= self.win
+        wt_tmp=fftpack.ifft(sigf[:,np.newaxis]*self.wf,axis=0)
+        wt = fftpack.fftshift(wt_tmp,axes=[0])
+        
+        self.parent().maps[self.n] = np.abs(wt)
+        self.finished.emit(self.n)
+
 
 def generate_wavelet_fourier(len_wavelet,
             f_start,
