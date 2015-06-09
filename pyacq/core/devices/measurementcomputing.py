@@ -274,10 +274,15 @@ def device_mainLoop(stop_flag, streams, board_num, ul_dig_ports, device_info ):
         #~ print 'half sleep'
         
     try:
-        cbw.cbStopBackground(board_num, function)
+        cbw.cbStopBackground(ctypes.c_int(board_num), ctypes.c_int(function))
         print 'cbStopBackground has stop properly'
-    except ULError:
-        print 'not able to stop cbStopBackground properly'
+    except ValueError:
+        try:
+            cbw.cbStopBackground(ctypes.c_int(board_num))
+            print 'cbStopBackground has stop properly'
+        except ULError:
+            print 'not able to stop cbStopBackground properly'
+        
     
     # if winbufaloc
     #~ try:

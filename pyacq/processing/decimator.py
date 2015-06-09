@@ -21,12 +21,13 @@ from .base import ProcessingBase
 
 class SimpleDecimator(ProcessingBase):
     def __init__(self, stream, streamhandler,
+                             parent = None,
                             autostart = True,
                             downsampling_factor = 10,
                             
                             
                             ):
-        ProcessingBase.__init__(self, stream, streamhandler =streamhandler)
+        ProcessingBase.__init__(self, stream, streamhandler =streamhandler, parent = parent)
         assert type(downsampling_factor) is int
         
         q = self.downsampling_factor = downsampling_factor

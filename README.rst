@@ -7,14 +7,16 @@ By data we mean : analog signal, digital signal, video, event.
 pyacq use zmq and so offer a simple to distribute data across thread, process and machine
 to build more complex acquisition system.
 
-pyacq implement a simple layer to inteact with some hardware device. For the list the list short:
+pyacq implement a simple layer to inteact with some hardware device. Here the list:
     * on linux : all comedi device
     * on windows : measurement computing device with Universal Library
-    * on linx/win the Emotiv EEg system.
+    * on linux/win : the Emotiv EEG system.
+    * on linux/win : the brainvision EEG with the socket.
     
 pyacq also propose some basic visualisation with Qt4 widget to be embeded in Qt application:
-   * a simple but multi signal oscilloscope
+   * a simple but multi signal continuous oscilloscope.
    * a online multisignal time frequency 
+   * a multi signal oscilloscope in triggered mode.
 
 
 

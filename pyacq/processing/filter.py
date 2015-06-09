@@ -21,11 +21,12 @@ from .base import ProcessingBase
 
 class BandPassFilter(ProcessingBase):
     def __init__(self, stream, streamhandler,
+                            parent = None,
                             autostart = True,
                             f_start = 0.,
                             f_stop = np.inf,
                             ):
-        ProcessingBase.__init__(self, stream, streamhandler =streamhandler)
+        ProcessingBase.__init__(self, stream, streamhandler =streamhandler, parent = parent)
         
         self.out_stream = self.streamhandler.new_AnalogSignalSharedMemStream(name = self.stream.name+'filtered',
                                                         sampling_rate = self.stream.sampling_rate,

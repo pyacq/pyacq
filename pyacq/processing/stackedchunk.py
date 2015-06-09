@@ -38,7 +38,7 @@ class StackedChunkOnTrigger(ProcessingBase,):
     
     def __init__(self, stream,  parent = None, **kargs):
         
-        ProcessingBase.__init__(self, stream)
+        ProcessingBase.__init__(self, stream, parent = parent)
         
         
         
