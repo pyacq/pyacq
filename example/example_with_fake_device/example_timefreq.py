@@ -25,7 +25,7 @@ def test1():
     dev = FakeMultiSignals(streamhandler = streamhandler)
     dev.configure(
                                 nb_channel = 32,
-                                sampling_rate =50000.,
+                                sampling_rate =10000.,
                                 buffer_length = 64.,
                                 packet_size = 64,
                                 )
@@ -37,10 +37,10 @@ def test1():
     w1.show()
     #~ w1.change_param_tfr(colormap = 'bone')
     visibles = np.zeros(64, dtype = bool)
-    #~ visibles[::3] = True
-    visibles[0] = True
+    visibles[::3] = True
+    #~ visibles[0] = True
     #~ w1.set_params(colormap = 'hot', visibles = visibles, xsize=5, nb_column = 8)
-    w1.set_params(colormap = 'jet', visibles = visibles, xsize=10, nb_column = 8)
+    w1.set_params(colormap = 'jet', visibles = visibles, xsize=10, nb_column = 4)
     app.exec_()
     
     # Stope and release the device

@@ -14,6 +14,7 @@ from matplotlib.cm import get_cmap
 from matplotlib.colors import ColorConverter
 
 from scipy import fftpack
+import scipy.signal
 
 param_global = [
     {'name': 'xsize', 'type': 'logfloat', 'value': 10., 'step': 0.1, 'limits' : (.1, 60)},
@@ -254,38 +255,44 @@ class TimeFreq(QtGui.QWidget, MultiChannelParamsSetter):
             self.params_time_freq[param.name()] = param.value()
         
         
+        self.wanted_size = self.paramGlobal.param('xsize').value()
+        
         # we take sampling_rate = f_stop*4 or (original sampling_rate)
         if p['f_stop']*4 < self.stream['sampling_rate']:
             p['sampling_rate'] = p['f_stop']*4
         else:
             p['sampling_rate']  = self.stream['sampling_rate']
-        self.factor = p['sampling_rate']/self.stream['sampling_rate'] # this compensate unddersampling in FFT.
+        
+        #~ print 'Wanted sampling_rate', p['sampling_rate'], 'wanted size', self.wanted_size
+        
+        # choose a 2**n length for fft and take the next multiple for the original chunk
+        self.len_wavelet = l = int(2**np.ceil(np.log(self.wanted_size*p['sampling_rate'])/np.log(2)))
+        self.sig_chunk_size = self.wanted_size*self.stream['sampling_rate']
+        self.downsampling_factor = int(np.ceil(self.sig_chunk_size/l))
+        self.sig_chunk_size = self.downsampling_factor*l
+        p['sampling_rate']  = self.stream['sampling_rate']/self.downsampling_factor
+        self.plot_length =  int(self.wanted_size*p['sampling_rate'])
+        
+        #~ print 'len_wavelet', l, 'sig_chunk_size', self.sig_chunk_size, 'sampling_rate', p['sampling_rate'], 'self.downsampling_factor', self.downsampling_factor, 'self.plot_length', self.plot_length
+        
+        # this is not stable
+        #~ self. filter_a, self.filter_b = scipy.signal.butter(2, 0.8 / self.downsampling_factor, btype='low',)
+        # so a FIR
+        self.filter_b = scipy.signal.firwin(9, 1. / self.downsampling_factor, window='hamming')
+        self.filter_a = np.array([1.])
+        #~ print 'self. filter_a, self.filter_b', self. filter_a, self.filter_b
         
         
         
-        self.xsize2 = self.paramGlobal.param('xsize').value()
-        self.len_wavelet = int(self.xsize2*p['sampling_rate'])
-        self.len_wavelet2=2**np.ceil(np.log(self.len_wavelet)/np.log(2)) # extension to next power of  2 of previous number
-        #~ self.win = fftpack.ifftshift(np.hamming(self.len_wavelet))
-        self.win = fftpack.ifftshift(np.hamming(self.len_wavelet2))
-        
-        self.factor *= self.len_wavelet2/self.len_wavelet
-        
-        
-        #~ self.xsize3 = self.xsize2 * self.len_wavelet2 / self.len_wavelet
-        #~ print 'ici', self.xsize2, self.xsize3, self.len_wavelet , self.len_wavelet2
-        
-        
+        self.win = fftpack.ifftshift(np.hanning(self.len_wavelet))
         
         if threaded:
-            #~ self.thread_initialize_tfr = ThreadInitializeWavelet(len_wavelet = self.len_wavelet, 
-            self.thread_initialize_tfr = ThreadInitializeWavelet(len_wavelet = self.len_wavelet2, 
+            self.thread_initialize_tfr = ThreadInitializeWavelet(len_wavelet = self.len_wavelet, 
                                                                 params_time_freq = p, parent = self )
             self.thread_initialize_tfr.finished.connect(self.initialize_tfr_done)
             self.thread_initialize_tfr.start()
         else:
-            #~ self.wf = generate_wavelet_fourier(len_wavelet= self.len_wavelet, ** self.params_time_freq)
-            self.wf = generate_wavelet_fourier(len_wavelet= self.len_wavelet2, ** self.params_time_freq)
+            self.wf = generate_wavelet_fourier(len_wavelet= self.len_wavelet, ** self.params_time_freq)
             self.initialize_plots()
     
     def initialize_tfr_done(self):
@@ -317,13 +324,9 @@ class TimeFreq(QtGui.QWidget, MultiChannelParamsSetter):
             clim = self.paramChannels.children()[i].param('clim').value()
             self.images[i].setImage(self.maps[i], lut = self.jet_lut, levels = [0,clim])
             
-            
             f_start, f_stop = p['f_start'], p['f_stop']
-            image.setRect(QRectF(-self.xsize2, f_start,self.xsize2, f_stop-f_start))
+            image.setRect(QRectF(-self.wanted_size, f_start,self.wanted_size, f_stop-f_start))
 
-        self.sig_chunk_size = int(np.rint(self.xsize2*self.stream['sampling_rate']))
-        self.empty_sigs = [np.zeros(self.sig_chunk_size, dtype = self.np_array.dtype) for i in range(self.stream['nb_channel'])]
-        
         self.freqs = np.arange(p['f_start'],p['f_stop'],p['deltafreq'])
         self.need_recreate_thread = True
         
@@ -338,21 +341,18 @@ class TimeFreq(QtGui.QWidget, MultiChannelParamsSetter):
         tail = head-self.sig_chunk_size
         np_arr = self.np_array[:,tail:head]
 
-        
-        #~ self.t_start, self.t_stop = self.t-self.xsize2/3. , self.t+self.xsize2*2./3.
-
         for i in range(self.stream['nb_channel']):
             if not self.paramChannels.children()[i].param('visible').value(): continue
             if self.need_recreate_thread:
-                    self.threads[i] = ThreadComputeTF(None, self.wf, self.win,i, self.factor, parent = self)
+                    self.threads[i] = ThreadComputeTF(None, self.wf, self.win,i, self.downsampling_factor, self.plot_length, self. filter_a, self.filter_b, parent = self)
                     self.threads[i].finished.connect(self.map_computed)
             self.is_computing[i] = True
             self.threads[i].sig = np_arr[i,:]
             
-            self.plots[i].setXRange( -self.xsize2, 0.)
+            self.plots[i].setXRange( -self.wanted_size, 0.)
             
             f_start, f_stop = self.params_time_freq['f_start'], self.params_time_freq['f_stop']
-            self.images[i].setRect(QRectF(-self.xsize2, f_start,self.xsize2, f_stop-f_start))
+            self.images[i].setRect(QRectF(-self.wanted_size, f_start,self.wanted_size, f_stop-f_start))
             #~ self.images[i].setRect(QRectF(-self.xsize3, f_start,self.xsize3, f_stop-f_start))
             self.threads[i].start()
         
@@ -365,56 +365,33 @@ class TimeFreq(QtGui.QWidget, MultiChannelParamsSetter):
             return
         if not self.grid_changing and self.thread_initialize_tfr is None:
             if self.images[i] is not None:
-                #~ self.images[i].updateImage(self.maps[i])
-                self.images[i].updateImage(self.maps[i][-self.len_wavelet:, :])
+                self.images[i].updateImage(self.maps[i])
         self.is_computing[i] = False
 
-
-"""
 class ThreadComputeTF(QtCore.QThread):
     finished = QtCore.pyqtSignal(int)
-    def __init__(self, sig, wf, win,n, factor, parent = None, ):
+    def __init__(self, sig, wf, win,n,  downsampling_factor, plot_length,  filter_a, filter_b, parent = None, ):
         QtCore.QThread.__init__(self, parent)
         self.sig = sig
         self.wf = wf
         self.win = win
         self.n = n
-        self.factor = factor # this compensate subsampling
+        self.downsampling_factor = downsampling_factor
+        self.plot_length = plot_length
+        self.filter_a = filter_a
+        self.filter_b = filter_b
         
-    def run(self):
-        sigf=fftpack.fft(self.sig)
-        n = self.wf.shape[0]
-        sigf = np.concatenate([sigf[0:(n+1)/2],  sigf[-(n-1)/2:]])*self.factor
-        #~ sigf *= self.win
-        wt_tmp=fftpack.ifft(sigf[:,np.newaxis]*self.wf,axis=0)
-        wt = fftpack.fftshift(wt_tmp,axes=[0])
         
-        self.parent().maps[self.n] = np.abs(wt)
-        self.finished.emit(self.n)
-"""
-
-class ThreadComputeTF(QtCore.QThread):
-    finished = QtCore.pyqtSignal(int)
-    def __init__(self, sig, wf, win,n, factor, parent = None, ):
-        QtCore.QThread.__init__(self, parent)
-        self.sig = sig
-        self.wf = wf
-        self.win = win
-        self.n = n
-        self.factor = factor # this compensate subsampling
         
     def run(self):
         #decimate
-        
-        
-        sigf=fftpack.fft(self.sig)
+        subsig = scipy.signal.filtfilt(self.filter_b, self.filter_a, self.sig)
+        subsig =subsig[::self.downsampling_factor].copy()
+        sigf=fftpack.fft(subsig)
         n = self.wf.shape[0]
-        sigf = np.concatenate([sigf[0:(n+1)/2],  sigf[-(n-1)/2:]])*self.factor
-        #~ sigf *= self.win
         wt_tmp=fftpack.ifft(sigf[:,np.newaxis]*self.wf,axis=0)
         wt = fftpack.fftshift(wt_tmp,axes=[0])
-        
-        self.parent().maps[self.n] = np.abs(wt)
+        self.parent().maps[self.n] = np.abs(wt)[-self.plot_length:]
         self.finished.emit(self.n)
 
 
