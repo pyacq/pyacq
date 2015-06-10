@@ -278,8 +278,12 @@ class TimeFreq(QtGui.QWidget, MultiChannelParamsSetter):
         # this is not stable
         #~ self. filter_a, self.filter_b = scipy.signal.butter(2, 0.8 / self.downsampling_factor, btype='low',)
         # so a FIR
-        self.filter_b = scipy.signal.firwin(9, 1. / self.downsampling_factor, window='hamming')
-        self.filter_a = np.array([1.])
+        if self.downsampling_factor>1:
+            self.filter_b = scipy.signal.firwin(9, 1. / self.downsampling_factor, window='hamming')
+            self.filter_a = np.array([1.])
+        else:
+            self.filter_b = None
+            self.filter_a = None
         #~ print 'self. filter_a, self.filter_b', self. filter_a, self.filter_b
         
         
@@ -385,7 +389,10 @@ class ThreadComputeTF(QtCore.QThread):
         
     def run(self):
         #decimate
-        subsig = scipy.signal.filtfilt(self.filter_b, self.filter_a, self.sig)
+        if self.filter_b is not None:
+            subsig = scipy.signal.filtfilt(self.filter_b, self.filter_a, self.sig)
+        else:
+            subsig = self.sig
         subsig =subsig[::self.downsampling_factor].copy()
         sigf=fftpack.fft(subsig)
         n = self.wf.shape[0]
