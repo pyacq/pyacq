@@ -2,6 +2,9 @@
 pyacq
 ====
 
+Version 0.1 is quite drafty.
+A version 0.2 is in preparation (summer 2015).
+
 pyacq is a pure python simple framework for data acquisition.
 By data we mean : analog signal, digital signal, video, event.
 pyacq use zmq and so offer a simple to distribute data across thread, process and machine
@@ -17,8 +20,6 @@ pyacq also propose some basic visualisation with Qt4 widget to be embeded in Qt 
    * a simple but multi signal continuous oscilloscope.
    * a online multisignal time frequency 
    * a multi signal oscilloscope in triggered mode.
-
-
 
 
 More information
