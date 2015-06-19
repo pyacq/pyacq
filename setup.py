@@ -13,23 +13,21 @@ setup(
     install_requires=[
                     'numpy',
                     'pyzmq',
-                    #~ 'gevent',
                     'msgpack-python',
                     'blosc',
                     ],
     author = "S.Garcia",
-    author_email = "sgarcia at olfac.univ-lyon1.fr",
+    author_email = "sam.garcia.die@gmail.com",
     description = "Simple Framework for data acquisition (signal, video) in pure python.",
     long_description = long_description,
     license = "BSD",
-    url='http://neuralensemble.org/neo',
+    url='https://github.com/pyacq/pyacq',
     classifiers = [
         'Development Status :: 4 - Beta',
         'Intended Audience :: Science/Research',
         'License :: OSI Approved :: BSD License',
         'Natural Language :: English',
         'Operating System :: OS Independent',
-        'Programming Language :: Python :: 2',
         'Programming Language :: Python :: 3',
         'Topic :: Scientific/Engineering']
 )
