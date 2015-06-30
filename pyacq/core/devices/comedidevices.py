@@ -17,6 +17,7 @@ from pycomedi.chanspec import ChanSpec
 from pycomedi.constant import (AREF, CMDF, INSN, SUBDEVICE_TYPE, TRIG_SRC, UNIT)
 from pycomedi.utility import inttrig_insn, Reader, Writer, MMapReader
 from pycomedi import PyComediError
+from pycomedi.calibration import CalibratedConverter
 
 import mmap
 
@@ -32,14 +33,18 @@ def prepare_device(dev, ai_channel_indexes, sampling_rate):
     #~ aref = AREF.ground
     aref = AREF.common
     
-    ai_channels = [ ai_subdevice.channel(i, factory=AnalogChannel, aref=aref) for i in ai_channel_indexes]
+    ai_channels = [ ai_subdevice.channel(int(i), factory=AnalogChannel, aref=aref) for i in ai_channel_indexes]
     
-    print 'in prepare_device conv',ai_channels[0].get_converter()
+    #~ print 'in prepare_device conv',ai_channels[0].get_converter()
     
     dt = ai_subdevice.get_dtype()
     itemsize = np.dtype(dt).itemsize
     
     internal_size = int(ai_subdevice.get_max_buffer_size()//nb_ai_channel//itemsize)
+    print 'internal_size', internal_size
+    #~ internal_size = int(2**np.ceil(np.log(internal_size)/np.log(2)))
+    #~ print 'internal_size', internal_size
+    
     ai_subdevice.set_buffer_size(internal_size*nb_ai_channel*itemsize)
 
     scan_period_ns = int(1e9 / sampling_rate)
@@ -80,10 +85,16 @@ def device_mainLoop(stop_flag, streams, device_path, device_info ):
     dev.open()
 
     ai_subdevice,  ai_channels, internal_size = prepare_device(dev, ai_channel_indexes, sampling_rate)
-
-    converters = [c.get_converter() for c in ai_channels]
-    print 'soft_calibrated', ai_subdevice.get_flags().soft_calibrated
-    print converters[0]
+    
+    #Bad patch
+    #~ converters = [c.get_converter() for c in ai_channels]
+    conv = CalibratedConverter(to_physical_coefficients=[-0.007396492107311303, 0.0003222102608276658,0.,0.],
+                                to_physical_expansion_origin=32767,
+                                )
+    converters = [conv for c in ai_channels]
+    #~ print 'soft_calibrated', ai_subdevice.get_flags().soft_calibrated
+    #~ print converters[0]
+    
     
     dt = ai_subdevice.get_dtype()
     itemsize = np.dtype(dt).itemsize
@@ -110,27 +121,27 @@ def device_mainLoop(stop_flag, streams, device_path, device_info ):
                 continue
                 
             
-            index = last_index + new_bytes/nb_ai_channel/itemsize
-               
+            index = last_index + new_bytes//nb_ai_channel//itemsize
             if index == last_index : 
                 time.sleep(sleep_time/2.)
                 continue
             
-            if index>=internal_size:
-                new_bytes = (internal_size-last_index)*itemsize*nb_ai_channel
-                index = internal_size
-            
-            
             #~ if index>=internal_size:
-                #~ new_samp = internal_size - last_index
-                #~ new_samp2 = min(new_samp, arr_ad.shape[1]-(pos+half_size))
-                #~ for i,c in enumerate(converters):
-                    #~ arr_ad[i,pos:pos+new_samp] = c.to_physical(ai_buffer[ last_index:internal_size, i ])
-                    #~ arr_ad[i,pos+half_size:pos+new_samp2+half_size] = arr_ad[i,pos:pos+new_samp2]
+                #~ new_bytes = (internal_size-last_index)*itemsize*nb_ai_channel
+                #~ index = internal_size
+            
+            index = index%internal_size
+            
+            if index< last_index:
+                new_samp = internal_size - last_index
+                new_samp2 = min(new_samp, arr_ad.shape[1]-(pos+half_size))
+                for i,c in enumerate(converters):
+                    arr_ad[i,pos:pos+new_samp] = c.to_physical(ai_buffer[ last_index:internal_size, i ])
+                    arr_ad[i,pos+half_size:pos+new_samp2+half_size] = arr_ad[i,pos:pos+new_samp2]
                 
-                #~ last_index = 0
+                last_index = 0
                 #~ index = index%internal_size
-                #~ abs_pos += new_samp
+                abs_pos += int(new_samp)
                 #~ pos = abs_pos%half_size
 
             new_samp = index - last_index

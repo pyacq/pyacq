@@ -33,7 +33,7 @@ def test1():
     dev = ComediMultiSignals(streamhandler = streamhandler)
     dev.configure( device_path = '/dev/comedi0',
                                 sampling_rate =15000.,
-                                buffer_length = 60.,
+                                buffer_length = 2.,
                             )
     dev.initialize()
     dev.start()
