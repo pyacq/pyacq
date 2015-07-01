@@ -4,6 +4,7 @@ import multiprocessing as mp
 import numpy as np
 import msgpack
 import time
+import resource
 
 from collections import OrderedDict
 
@@ -24,7 +25,7 @@ import mmap
 from .base import DeviceBase
 
 
-def prepare_device(dev, ai_channel_indexes, sampling_rate):
+def prepare_device(dev, ai_channel_indexes, ai_channel_ranges, sampling_rate):
     nb_ai_channel = len(ai_channel_indexes)
     #~ dev.parse_calibration()
     
@@ -34,19 +35,20 @@ def prepare_device(dev, ai_channel_indexes, sampling_rate):
     aref = AREF.common
     
     ai_channels = [ ai_subdevice.channel(int(i), factory=AnalogChannel, aref=aref) for i in ai_channel_indexes]
-    
-    #~ print 'in prepare_device conv',ai_channels[0].get_converter()
+    for chan, range_ in zip(ai_channels, ai_channel_ranges):
+        chan.range = chan.find_range(unit=UNIT.volt, min=range_[0], max=range_[1])
     
     dt = ai_subdevice.get_dtype()
     itemsize = np.dtype(dt).itemsize
     
-    internal_size = int(ai_subdevice.get_max_buffer_size()//nb_ai_channel//itemsize)
-    print 'internal_size', internal_size
-    #~ internal_size = int(2**np.ceil(np.log(internal_size)/np.log(2)))
+    # need to align to mmap page size
+    resource.getpagesize()
+    internal_size = int(ai_subdevice.get_max_buffer_size()//nb_ai_channel//itemsize//resource.getpagesize())*resource.getpagesize()
     #~ print 'internal_size', internal_size
-    
     ai_subdevice.set_buffer_size(internal_size*nb_ai_channel*itemsize)
-
+    #~ print 'buffersize', internal_size*nb_ai_channel*itemsize
+    
+    # make comedi comand
     scan_period_ns = int(1e9 / sampling_rate)
     ai_cmd = ai_subdevice.get_cmd_generic_timed(len(ai_channels), scan_period_ns)
     ai_cmd.chanlist = ai_channels
@@ -54,8 +56,8 @@ def prepare_device(dev, ai_channel_indexes, sampling_rate):
     ai_cmd.start_arg = 0
     ai_cmd.stop_src = TRIG_SRC.none
     ai_cmd.stop_arg = 0
-    
     ai_subdevice.cmd = ai_cmd
+    
     # test cmd
     for i in range(3):
         rc = ai_subdevice.command_test()
@@ -66,7 +68,7 @@ def prepare_device(dev, ai_channel_indexes, sampling_rate):
     return ai_subdevice,  ai_channels, internal_size
 
 
-def device_mainLoop(stop_flag, streams, device_path, device_info ):
+def device_mainLoop(stop_flag, streams, device_path, device_info, ai_channel_ranges ):
     streamAD = streams[0]
     
     packet_size = streamAD['packet_size']
@@ -83,54 +85,51 @@ def device_mainLoop(stop_flag, streams, device_path, device_info ):
 
     dev = Device(device_path)
     dev.open()
-
-    ai_subdevice,  ai_channels, internal_size = prepare_device(dev, ai_channel_indexes, sampling_rate)
-    
-    #Bad patch
-    #~ converters = [c.get_converter() for c in ai_channels]
-    conv = CalibratedConverter(to_physical_coefficients=[-0.007396492107311303, 0.0003222102608276658,0.,0.],
-                                to_physical_expansion_origin=32767,
-                                )
-    converters = [conv for c in ai_channels]
-    #~ print 'soft_calibrated', ai_subdevice.get_flags().soft_calibrated
-    #~ print converters[0]
-    
+    ai_subdevice,  ai_channels, internal_size = prepare_device(dev, ai_channel_indexes, ai_channel_ranges,  sampling_rate)
     
     dt = ai_subdevice.get_dtype()
     itemsize = np.dtype(dt).itemsize
-    ai_buffer = np.memmap(dev.file, dtype = dt, mode = 'r', shape = (internal_size, nb_ai_channel))
     
+    #~ try:
+        #~ dev.parse_calibration()
+        #~ for chan in ai_channels:
+            #~ print chan.index, chan.range, chan.get_converter()
+        #~ converters = [c.get_converter() for c in ai_channels]
+        #~ print 'with comedi calibrate'
+    #~ except PyComediError as e:
+    if 1:
+        # if comedi calibrate not work we put manual pylynom
+        converters = [ ]
+        for chan in ai_channels:
+            phys_range = float(chan.range.max - chan.range.min)
+            logic_range = np.iinfo(dt).max-np.iinfo(dt).min
+            conv = CalibratedConverter(to_physical_coefficients=[-phys_range/logic_range*2., phys_range/logic_range,0.,0.],
+                                        to_physical_expansion_origin=logic_range//2-1,
+                                        )
+            converters.append(conv)
+        print 'manual callibration with linear polynom'
+
+    
+    ai_buffer = np.memmap(dev.file, dtype = dt, mode = 'r', shape = (internal_size, nb_ai_channel))
     ai_subdevice.command()
     
     pos = abs_pos = 0
     last_index = 0
-    
     socketAD.send(msgpack.dumps(abs_pos))
     
-    sleep_time = 0.02
+    sleep_time = 0.01
     while True:
-        #~ try:
-        if 1:
+        try:
+        #~ if 1:
             new_bytes =  ai_subdevice.get_buffer_contents()
+            remaining_bytes = new_bytes%(nb_ai_channel*itemsize)
+            new_bytes = new_bytes - remaining_bytes
             
-            new_bytes = new_bytes - new_bytes%(nb_ai_channel*itemsize)
+            index = (last_index + new_bytes//nb_ai_channel//itemsize)%internal_size
             
-            
-            if new_bytes ==0:
-                time.sleep(sleep_time/2.)
-                continue
-                
-            
-            index = last_index + new_bytes//nb_ai_channel//itemsize
             if index == last_index : 
-                time.sleep(sleep_time/2.)
+                time.sleep(sleep_time)
                 continue
-            
-            #~ if index>=internal_size:
-                #~ new_bytes = (internal_size-last_index)*itemsize*nb_ai_channel
-                #~ index = internal_size
-            
-            index = index%internal_size
             
             if index< last_index:
                 new_samp = internal_size - last_index
@@ -140,9 +139,8 @@ def device_mainLoop(stop_flag, streams, device_path, device_info ):
                     arr_ad[i,pos+half_size:pos+new_samp2+half_size] = arr_ad[i,pos:pos+new_samp2]
                 
                 last_index = 0
-                #~ index = index%internal_size
                 abs_pos += int(new_samp)
-                #~ pos = abs_pos%half_size
+                pos = abs_pos%half_size
 
             new_samp = index - last_index
             new_samp2 = min(new_samp, arr_ad.shape[1]-(pos+half_size))
@@ -151,20 +149,18 @@ def device_mainLoop(stop_flag, streams, device_path, device_info ):
             for i,c in enumerate(converters):
                 arr_ad[i,pos:pos+new_samp] = c.to_physical(ai_buffer[ last_index:index, i ])
                 arr_ad[i,pos+half_size:pos+new_samp2+half_size] = arr_ad[i,pos:pos+new_samp2]
-                
             
             abs_pos += int(new_samp)
             pos = abs_pos%half_size
             last_index = index%internal_size
             
-            msgpack.dumps(abs_pos)
             socketAD.send(msgpack.dumps(abs_pos))
             
             ai_subdevice.mark_buffer_read(new_bytes)
             
-        #~ except :
-            #~ print 'Problem in acquisition loop'
-            #~ break
+        except :
+            print 'Problem in acquisition loop'
+            break
             
         if stop_flag.value:
             print 'should stop properly'
@@ -187,7 +183,7 @@ def create_analog_subdevice_param(n):
                                         'channel_indexes' : range(n),
                                         'channel_names' : [ 'AI Channel {}'.format(i) for i in range(n)],
                                         'channel_selection' : [True]*n,
-                                        'channel_ranges' : [ [-10., 10] for i in range(n) ],
+                                        'channel_ranges' : [ [-10., 10.] for i in range(n) ],
                                         }
             }
     return d
@@ -257,7 +253,6 @@ class ComediMultiSignals(DeviceBase):
                                     sampling_rate =1000.,
                                     subdevices = None,
                                     ):
-            
         self.params = {'device_path' : device_path,
                                 'buffer_length' : buffer_length,
                                 'sampling_rate' : sampling_rate,
@@ -277,13 +272,14 @@ class ComediMultiSignals(DeviceBase):
         self.nb_channel = np.sum(sel)
         channel_indexes = [e   for e, s in zip(sub0['by_channel_params']['channel_indexes'], sel) if s]
         channel_names = [e  for e, s in zip(sub0['by_channel_params']['channel_names'], sel) if s]
+        self.ai_channel_ranges = [e  for e, s in zip(sub0['by_channel_params']['channel_ranges'], sel) if s]
         self.packet_size = int(info['device_packet_size']/self.nb_channel)
         
         # compute the real sampling rate
         print 'sampling_rate wanted:', self.sampling_rate
         dev = Device(self.device_path)
         dev.open()
-        ai_subdevice,  ai_channels, internal_size = prepare_device(dev, channel_indexes, self.sampling_rate)
+        ai_subdevice,  ai_channels, internal_size = prepare_device(dev, channel_indexes, self.ai_channel_ranges,  self.sampling_rate)
         self.sampling_rate = 1.e9/ai_subdevice.cmd.convert_arg/len(ai_channels)
         dev.close()
         print 'sampling_rate real:', self.sampling_rate
@@ -308,16 +304,16 @@ class ComediMultiSignals(DeviceBase):
     def start(self):
         self.stop_flag = mp.Value('i', 0)
         
-        self.process = mp.Process(target = device_mainLoop,  args=(self.stop_flag, self.streams, self.device_path, self.device_info) )
+        self.process = mp.Process(target = device_mainLoop,  args=(self.stop_flag, self.streams, self.device_path, self.device_info, self.ai_channel_ranges) )
         self.process.start()
         
-        print 'MeasurementComputingMultiSignals started:', self.name
+        print 'ComediMultiSignals started:', self.name
         self.running = True
     
     def stop(self):
         self.stop_flag.value = 1
         self.process.join()
-        print 'MeasurementComputingMultiSignals stopped:', self.name
+        print 'ComediMultiSignals stopped:', self.name
         
         self.running = False
     

@@ -99,7 +99,8 @@ class AnalogSignalSharedMemStream(Stream):
         s['channel_names'] = channel_names
         s['channel_indexes'] = channel_indexes
         
-        l = int(sampling_rate*buffer_length)
+        l = int(np.rint(sampling_rate*buffer_length))
+        #~ print 'ici', l
         if packet_size is not None:
             assert l%packet_size ==0, 'buffer should be a multilple of packet_size {} {}'.format(l, packet_size)
         shape = (nb_channel, l*2)
