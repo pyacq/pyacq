@@ -39,7 +39,7 @@ class Future(concurrent.futures.Future):
         return False
 
     def result(self, timeout=None):
-        self.socket.process_until_return(timeout=timeout, call_id=self.call_id)
+        self.socket.process_until_future(self, timeout=timeout)
         return concurrent.futures.Future.result(self)
 
 
@@ -79,18 +79,15 @@ class RPCClientSocket(object):
             except zmq.error.Again:
                 break  # no messages left
 
-    def process_until_return(self, call_id, timeout=None):
-        """Process all incoming messages until receiving a result for *call_id* 
+    def process_until_future(self, future, timeout=None):
+        """Process all incoming messages until receiving a result for *future*. 
         """
-        fut = self.futures[call_id]
-        while True:
+        while not future.done():
             # wait patiently with blocking calls.
             # TODO: implement timeout
             ident = self.socket.recv()
             msg = self.socket.recv_json()
             self._process_msg(ident, msg)
-            if fut.done():
-                return
 
     def _process_msg(self, ident, msg):
         if msg['action'] == 'return':
