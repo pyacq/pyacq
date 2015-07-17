@@ -165,7 +165,11 @@ class RPCServer(object):
 
     def running(self):
         return not self._closed
-        
+    
+    def run_forever(self):
+        while self.running():
+            self._process_one()
+
 
 if __name__ == '__main__':
     import threading, atexit
@@ -176,12 +180,8 @@ if __name__ == '__main__':
         def add(self, a, b):
             return a + b
     
-    server = Server1(name='some_server')
-    def process_server():
-        while server.running():
-            server._process_one()
-        print("\nserver shut down\n")
-    serve_thread = threading.Thread(target=process_server, daemon=True)
+    server = Server1(name='some_server', addr='tcp://localhost:5152')
+    serve_thread = threading.Thread(target=server.run_forever, daemon=True)
     serve_thread.start()
     
     client = sock.get_client('some_server')
