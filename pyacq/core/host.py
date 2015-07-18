@@ -19,4 +19,4 @@ class Host(RPCServer):
         self.nodegroup_process[name] = ProcessSpawner(NodeGroup, name, addr)
     
     def stop_nodegroup(self, name):
-        self.nodegroup_process[name].stop()
+        self.nodegroup_process[name].delete()
