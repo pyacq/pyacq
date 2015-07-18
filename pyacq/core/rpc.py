@@ -86,7 +86,7 @@ class RPCClientSocket(object):
         cmd = {'action': action, 'call_id': call_id,
                'args': args, 'kwds': kwds}
         cmd = json.dumps(cmd).encode()
-        #print("SEND:", name, cmd)
+        #print("SEND REQUEST:", self.socket.getsockopt(zmq.IDENTITY), name, cmd)
         self.socket.send_multipart([name, cmd])
         fut = Future(self, call_id)
         self.futures[call_id] = fut
@@ -94,6 +94,8 @@ class RPCClientSocket(object):
 
     def process(self):
         """Process all available incoming messages.
+        
+        Return immediately if no messages are available.
         """
         while True:
             try:
@@ -105,12 +107,29 @@ class RPCClientSocket(object):
 
     def process_until_future(self, future, timeout=None):
         """Process all incoming messages until receiving a result for *future*.
+        
+        If the future result is not raised before the timeout, then raise
+        TimeoutError.
         """
+        start = time.perf_counter()
         while not future.done():
             # wait patiently with blocking calls.
-            # TODO: implement timeout
-            name = self.socket.recv()
+            if timeout is None:
+                itimeout = -1
+            else:
+                dt = time.perf_counter() - start
+                itimeout = int((timeout - dt) * 1000)
+                if itimeout < 0:
+                    raise TimeoutError("Timeout waiting for Future result.")
+            try:
+                self.socket.setsockopt(zmq.RCVTIMEO, itimeout)
+                name = self.socket.recv()
+            except zmq.error.Again:
+                raise TimeoutError("Timeout waiting for Future result.")
+            
+            self.socket.setsockopt(zmq.RCVTIMEO, 10000)
             msg = self.socket.recv_json()
+            
             self._process_msg(name, msg)
 
     def _process_msg(self, name, msg):
@@ -119,6 +138,7 @@ class RPCClientSocket(object):
         This takes care of assigning return values or exceptions to existing
         Future instances.
         """
+        #print("RECV RESULT:", name, msg)
         if msg['action'] == 'return':
             call_id = msg['call_id']
             if call_id not in self.futures:
@@ -159,12 +179,38 @@ class RPCClient(object):
         self._name = name.encode()
         self._socket = socket
         self._methods = {}
+        self._connect_established = False
+        self._establishing_connect = False
         
     def __getattr__(self, name):
         return self._methods.setdefault(name, RPCMethod(self, name))
     
     def _call_method(self, method_name, *args, **kwds):
+        """Request the remote server to call a method.
+        """
+        if not self._connect_established:
+            self._ensure_connection()
         return self._socket.send(self._name, 'call', method_name, *args, **kwds)
+
+    def _ensure_connection(self, timeout=10):
+        """Make sure RPC server is connected and available.
+        """
+        if self._establishing_connect:
+            return
+        self._establishing_connect = True
+        try:
+            start = time.time()
+            while time.time() < start + timeout:
+                fut = self.ping()
+                try:
+                    result = fut.result(timeout=0.1)
+                    self._connect_established = True
+                    return
+                except TimeoutError:
+                    continue
+            raise TimeoutError("Could not establish connection with RPC server.")
+        finally:
+            self._establishing_connect = False
 
     
 class RPCMethod(object):
@@ -210,6 +256,7 @@ class RPCServer(object):
         """
         name = self._socket.recv()
         msg = self._socket.recv_json()
+        #print("RECV REQUEST:", name, msg)
         if msg['action'] == 'call':
             method, args = msg['args'][0], msg['args'][1:]
             kwds = msg['kwds']
@@ -232,9 +279,9 @@ class RPCServer(object):
                     self._send_result(name, call_id, error=(exc[0].__name__, exc_str))
         
     def _send_result(self, name, call_id, rval=None, error=None):
-        #print("RESULT:", name, call_id, rval, error)
         result = {'action': 'return', 'call_id': call_id,
                   'rval': rval, 'error': error}
+        #print("SEND RESULT:", name, result)
         self._socket.send_multipart([name, json.dumps(result).encode()])
 
     def close(self):
@@ -251,3 +298,6 @@ class RPCServer(object):
     def run_forever(self):
         while self.running():
             self._process_one()
+
+    def ping(self):
+        return 'pong'
