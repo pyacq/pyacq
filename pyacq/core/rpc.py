@@ -246,3 +246,7 @@ class RPCServer(object):
         """Boolean indicating whether the server is still running.
         """
         return not self._closed
+    
+    def run_forever(self):
+        while self.running():
+            self._process_one()
