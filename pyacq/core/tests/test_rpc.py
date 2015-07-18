@@ -31,12 +31,24 @@ def test_rpc():
     except RemoteCallException as err:
         if err.type_str != 'TypeError':
             raise
+    else:
+        raise AssertionError('should have raised TypeError')
 
     try:
         client.fn().result()
     except RemoteCallException as err:
         if err.type_str != 'AttributeError':
             raise
+    else:
+        raise AssertionError('should have raised AttributeError')
+
+    # test timeouts
+    try:
+        client.sleep(0.2).result(timeout=0.01)
+    except TimeoutError:
+        pass
+    else:
+        raise AssertionError('should have raised TimeoutError')
 
     # test result order
     a = client.add(1, 2)
@@ -54,6 +66,8 @@ def test_rpc():
     assert a.result() == 3
     assert c.result() == 11
 
+
+    
 
 if __name__ == '__main__':
     test_rpc()
