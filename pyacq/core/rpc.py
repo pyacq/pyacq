@@ -86,7 +86,7 @@ class RPCClientSocket(object):
         cmd = {'action': action, 'call_id': call_id,
                'args': args, 'kwds': kwds}
         cmd = json.dumps(cmd).encode()
-        print("SEND:", name, cmd)
+        #print("SEND:", name, cmd)
         self.socket.send_multipart([name, cmd])
         fut = Future(self, call_id)
         self.futures[call_id] = fut
@@ -126,7 +126,7 @@ class RPCClientSocket(object):
             fut = self.futures[call_id]
             if msg['error'] is not None:
                 exc = RemoteCallException(*msg['error'])
-                print("GOT EXC:", exc)
+                #print("GOT EXC:", exc)
                 fut.set_exception(exc)
             else:
                 fut.set_result(msg['rval'])
@@ -199,7 +199,7 @@ class RPCServer(object):
         self._socket.setsockopt(zmq.IDENTITY, self._name)
         self._socket.bind(addr)
         self._closed = False
-        print("START SERVER:", self._name)
+        #print("START SERVER:", self._name)
 
     def _process_one(self):
         """Read one message from the remote client and invoke the requested
@@ -209,9 +209,7 @@ class RPCServer(object):
         error message.
         """
         name = self._socket.recv()
-        print("RECV:", name)
         msg = self._socket.recv_json()
-        print("RECV:", msg)
         if msg['action'] == 'call':
             method, args = msg['args'][0], msg['args'][1:]
             kwds = msg['kwds']
@@ -234,11 +232,10 @@ class RPCServer(object):
                     self._send_result(name, call_id, error=(exc[0].__name__, exc_str))
         
     def _send_result(self, name, call_id, rval=None, error=None):
-        print("RESULT:", name, call_id, rval, error)
-        self._socket.send(name)
-        self._socket.send_json({'action': 'return', 'call_id': call_id,
-                                'rval': rval, 'error': error})
-        print("  (sent)")
+        #print("RESULT:", name, call_id, rval, error)
+        result = {'action': 'return', 'call_id': call_id,
+                  'rval': rval, 'error': error}
+        self._socket.send_multipart([name, json.dumps(result).encode()])
 
     def close(self):
         """Close this RPC server.

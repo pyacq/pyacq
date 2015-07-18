@@ -11,19 +11,10 @@ def test_rpc():
     server = Server1(name='some_server', addr='tcp://*:5152')
     serve_thread = threading.Thread(target=server.run_forever, daemon=True)
     serve_thread.start()
-
+    
     client = RPCClient('some_server', 'tcp://localhost:5152')
     atexit.register(client.close)
     
-    #mon = client._socket.socket.get_monitor_socket()
-    #def monitor():
-        #while mon.poll():
-            #evt = zmq.utils.monitor.recv_monitor_message(mon)
-            #print("MON:", evt)
-    #mon_thread = threading.Thread(target=monitor, daemon=True)
-    #mon_thread.start()
-            
-
     time.sleep(0.4)
     fut = client.add(7, 5)
     assert fut.result() == 12
