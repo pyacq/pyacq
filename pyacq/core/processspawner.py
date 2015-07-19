@@ -2,10 +2,12 @@
 import sys
 import subprocess
 
-from .rpc import RPCClientSocket
+from .rpc import RPCClient
 
 class ProcessSpawner:
     def __init__(self, rpcserverclass, name, addr, **kargs):
+        self.name = name
+        self.addr = addr
         executable = sys.executable
         bootstrap = 'from pyacq import {0}; server={0}(name = {1}, addr = {2}'.format(rpcserverclass.__name__,repr(name), repr(addr) )
         bootstrap += ','.join( '{} = {}'.format(k, repr(v)) for k, v in kargs.items())
@@ -20,27 +22,7 @@ class ProcessSpawner:
         self.proc.wait()
 
     def stop(self):
-        #TODO send a message to server
-        sock = RPCClientSocket()
-        client = sock.get_client('some_server')
-        
+        client = RPCClient(self.name, self.addr)
+        client.close()
         self.proc.wait()
 
-
-
-
-if __name__ == '__main__':
-    import time
-    
-    class MyServer(RPCServer):
-        def method1(self):
-            return
-    
-    p1 = ProcessSpawer(MyServer, 'server1','tcp://localhost:5000')
-    p2 = ProcessSpawer(MyServer, 'server1','tcp://localhost:5001')
-    p3 = ProcessSpawer(MyServer, 'server1','tcp://localhost:5002')
-
-    time.sleep(2.)
-    p1.wait()
-    p2.wait()
-    p3.wait()
