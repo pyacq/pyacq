@@ -72,7 +72,7 @@ def test_rpc():
     serve_thread2.start()
     
     client3 = RPCClient('some_server2', 'tcp://localhost:5153',
-                        socket=client2._socket)
+                        shared_client=client2)
     
     a = client2.add(1, 2)
     b = client3.add(3, 4)

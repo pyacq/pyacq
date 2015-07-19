@@ -123,12 +123,10 @@ class RPCClientSocket(object):
                     raise TimeoutError("Timeout waiting for Future result.")
             try:
                 self.socket.setsockopt(zmq.RCVTIMEO, itimeout)
-                name = self.socket.recv()
+                name, msg = self.socket.recv_multipart()
+                msg = json.loads(msg.decode())
             except zmq.error.Again:
                 raise TimeoutError("Timeout waiting for Future result.")
-            
-            self.socket.setsockopt(zmq.RCVTIMEO, 10000)
-            msg = self.socket.recv_json()
             
             self._process_msg(name, msg)
 
@@ -168,16 +166,19 @@ class RPCClient(object):
         The identifier used by the remote server.
     addr : URL
         Address of RPC server to connect to.
-    socket : None or RPCClientSocket
-        Optional RPCClientSocket object. Used to allow multiple RPCClients to
-        share a single zmq socket.
+    shared_client : None or RPCClient
+        Optional RPCClient with which to share a zmq socket. This allows return
+        values to be processed for multiple RPC servers without needing to poll
+        as many sockets.
     """
-    def __init__(self, name, addr, socket=None):
-        if socket is None:
-            socket = RPCClientSocket()
-        socket.connect(addr)
+    def __init__(self, name, addr, shared_client=None):
+        if shared_client is None:
+            rpc_socket = RPCClientSocket()
+        else:
+            rpc_socket = shared_client._rpc_socket
+        rpc_socket.connect(addr)
         self._name = name.encode()
-        self._socket = socket
+        self._rpc_socket = rpc_socket
         self._methods = {}
         self._connect_established = False
         self._establishing_connect = False
@@ -190,7 +191,7 @@ class RPCClient(object):
         """
         if not self._connect_established:
             self._ensure_connection()
-        return self._socket.send(self._name, 'call', method_name, *args, **kwds)
+        return self._rpc_socket.send(self._name, 'call', method_name, *args, **kwds)
 
     def _ensure_connection(self, timeout=10):
         """Make sure RPC server is connected and available.
