@@ -293,8 +293,11 @@ class RPCServer(object):
                 if ret:
                     self._send_result(name, call_id, rval=rval)
             except:
+                exc_str = ["Error while processing request %s(%s, %s)" % (method, args, kwds)]
+                exc_str += traceback.format_stack()
+                exc_str += [" < exception caught here >\n"]
                 exc = sys.exc_info()
-                exc_str = traceback.format_exception(*exc)
+                exc_str += traceback.format_exception(*exc)
                 if ret:
                     self._send_result(name, call_id, error=(exc[0].__name__, exc_str))
         if not self.running:

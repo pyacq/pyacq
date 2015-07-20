@@ -17,7 +17,7 @@ class Manager(RPCServer):
         self._rpc_socket = RPCClientSocket()
 
     def connect_host(self, name, addr):
-        if name not in self._hosts:
+        if name not in self.hosts:
             hp = HostProxy(self, name, addr)
             self.hosts[name] = hp
         return self.hosts[name]
@@ -40,7 +40,7 @@ class HostProxy(object):
         self.rpc_name = name
         self.client = RPCClient(name, addr)
         self.nodegroups = {}
-        self.rpc_hostname = 
+        self.rpc_hostname = name.partition('//')[2].rpartition(':')[0]
 
     def add_nodegroup(self, name):
         ng = self.mgr.add_nodegroup(self.rpc_name, name)
