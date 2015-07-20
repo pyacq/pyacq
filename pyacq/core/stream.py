@@ -3,7 +3,7 @@ import blosc
 import numpy as np
 
 
-default_stream = dict( protocol = 'tcp', addr = '127.0.0.1', port = '8000',
+default_stream = dict( protocol = 'tcp', interface = '127.0.0.1', port = '8000',
                         transfertmode = 'plaindata', streamtype = 'analogsignal',
                         dtype = 'float32', shape = (-1, 16), compression ='',
                         scale = None, offset = None, units = '')
@@ -14,7 +14,7 @@ common_doc = """
     ----------
     protocol : 'tcp', 'udp', 'inproc' or 'inpc' (linux only)
         The type of protocol user for the zmq.PUB socket
-    addr : str
+    interface : str
         The bind adress for the zmq.PUB socket
     port : str
         The port for the zmq.PUB socket
@@ -61,10 +61,10 @@ class StreamSender:
         self.params = dict(default_stream)
         self.params.update(kargs)
         
-        url = '{protocol}://{addr}:{port}'.format(**self.params)
+        self.url = '{protocol}://{interface}:{port}'.format(**self.params)
         context = zmq.Context.instance()
         self.socket = context.socket(zmq.PUB)
-        self.socket.bind(url)
+        self.socket.bind(self.url)
 
         self.funcs = []
         
@@ -78,7 +78,7 @@ class StreamSender:
             #cname for ['blosclz', 'lz4', 'lz4hc', 'snappy', 'zlib']
             self.funcs.append(self._compress_blosclz)
         elif self.params['compression'] == 'blosc-lz4':
-            self.funcs.append(_compress_blosclz4)
+            self.funcs.append(self._compress_blosclz4)
             
         
         #send or cpy to buffer
@@ -114,12 +114,16 @@ class StreamSender:
         raise(NotImplemented)
     
     def _compress_blosclz(self, index, data):
-        data = blosc.pack_array(datacname = 'blosclz')
+        data = blosc.pack_array(data, cname = 'blosclz')
         return index, data
     
     def _compress_blosclz4(self, index, data):
-        data = blosc.pack_array(datacname = 'lz4')
+        data = blosc.pack_array(data, cname = 'lz4')
         return index, data
+    
+    def close(self):
+        self.socket.unbind(self.url)
+        self.socket.close()
 
 
 class StreamReceiver:
@@ -131,11 +135,11 @@ class StreamReceiver:
         self.params = dict(default_stream)
         self.params.update(kargs)
 
-        url = '{protocol}://{addr}:{port}'.format(**self.params)
+        self.url = '{protocol}://{interface}:{port}'.format(**self.params)
         context = zmq.Context.instance()
         self.socket = context.socket(zmq.SUB)
         self.socket.setsockopt(zmq.SUBSCRIBE,b'')
-        self.socket.connect(url)
+        self.socket.connect(self.url)
         
         
         self.funcs = []
@@ -179,6 +183,8 @@ class StreamReceiver:
         data = blosc.unpack_array(data)
         return index, data
     
+    def close(self):
+        self.socket.close()
     
     
 
