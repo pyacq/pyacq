@@ -166,16 +166,13 @@ class RPCClient(object):
         The identifier used by the remote server.
     addr : URL
         Address of RPC server to connect to.
-    shared_client : None or RPCClient
-        Optional RPCClient with which to share a zmq socket. This allows return
-        values to be processed for multiple RPC servers without needing to poll
-        as many sockets.
+    rpc_socket : None or RPCClientSocket
+        Optional RPCClientSocket with which to connect to the server. This
+        allows multiple RPC connections to share a single socket.
     """
-    def __init__(self, name, addr, shared_client=None):
-        if shared_client is None:
+    def __init__(self, name, addr, rpc_socket=None):
+        if rpc_socket is None:
             rpc_socket = RPCClientSocket()
-        else:
-            rpc_socket = shared_client._rpc_socket
         rpc_socket.connect(addr)
         self._name = name.encode()
         self._rpc_socket = rpc_socket

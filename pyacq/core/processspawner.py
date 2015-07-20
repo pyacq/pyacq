@@ -4,13 +4,23 @@ import subprocess
 
 from .rpc import RPCClientSocket
 
+
+bootstrap_template = """
+from pyacq import {class_name} 
+server = {class_name}({args})
+server.run_forever()
+"""
+
+
 class ProcessSpawner:
-    def __init__(self, rpcserverclass, name, addr, **kargs):
+    def __init__(self, rpcserverclass, **kargs):
+        self.rpc_name = name
+        self.rpc_address = addr
+        class_name = rpcserverclass.__name__
+        args = ','.join('{}={}'.format(k, repr(v)) for k, v in kargs.items())
+        bootstrap = bootstrap_template.format(class_name=class_name, args=args)
         executable = sys.executable
-        bootstrap = 'from pyacq import {0}; server={0}(name = {1}, addr = {2}'.format(rpcserverclass.__name__,repr(name), repr(addr) )
-        bootstrap += ','.join( '{} = {}'.format(k, repr(v)) for k, v in kargs.items())
-        bootstrap += '); server.run_forever();'
-        self.proc = subprocess.Popen((executable, '-c', bootstrap))#, stdout = sys.stdout, stderr = sys.stderr)
+        self.proc = subprocess.Popen((executable, '-c', bootstrap))
 
     def wait(self):
         self.proc.wait()
