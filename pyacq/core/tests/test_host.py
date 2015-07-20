@@ -10,7 +10,7 @@ def test_host1():
     process_host1  = ProcessSpawner(Host,  'host1', 'tcp://127.0.0.1:5407')
     
     client0 = RPCClient('host0', 'tcp://127.0.0.1:5406')
-    print('on ping: ', client0.ping().result())
+    print('on ping: ', client0.ping())
     
     time.sleep(1.)
     
@@ -24,13 +24,13 @@ def test_host2():
     
     client0 = RPCClient('host0', 'tcp://127.0.0.1:5406')
     
-    client0.new_nodegroup('nodegroup 0.1', 'tcp://127.0.0.1:6000').result()
-    client0.new_nodegroup('nodegroup 0.2', 'tcp://127.0.0.1:6001').result()
+    client0.new_nodegroup('nodegroup 0.1', 'tcp://127.0.0.1:6000')
+    client0.new_nodegroup('nodegroup 0.2', 'tcp://127.0.0.1:6001')
     
     time.sleep(2.)
     
-    client0.close_nodegroup('nodegroup 0.1').result()
-    client0.close_nodegroup('nodegroup 0.2').result()
+    client0.close_nodegroup('nodegroup 0.1')
+    client0.close_nodegroup('nodegroup 0.2')
     
     time.sleep(1.)
     

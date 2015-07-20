@@ -38,6 +38,6 @@ class Host(RPCServer):
         # TODO Ensure that all Node in NodeGroup are not running.
         
         client = RPCClient(name, self.nodegroup_process[name].addr)
-        assert not client.any_node_running().result()
+        assert not client.any_node_running()
         self.nodegroup_process[name].stop()
 
