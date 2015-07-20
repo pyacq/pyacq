@@ -2,40 +2,79 @@ import sys
 import subprocess
 import atexit
 import logging
+import zmq
 
 from .rpc import RPCClient
 
 
 bootstrap_template = """
+import zmq
+import time
+import logging
+import pyacq
+
+logging.getLogger().level={loglevel}
+
 try:
-    print("Start `{class_name}({args})`")
+    # Create server
+    logging.info("Start `{class_name}({args})`")
     from pyacq import {class_name}
     server = {class_name}({args})
-    server.run_forever()
-    
 except:
     print("Error starting process with `{class_name}({args})`:")
     raise
+    
+# Report server status to spawner
+status = {{'addr': server._addr.decode()}}
+bootstrap_sock = zmq.Context.instance().socket(zmq.PAIR)
+bootstrap_sock.connect({bootstrap_addr})
+while True:
+    # send status repeatedly until spawner gives a reply.
+    bootstrap_sock.send_json(status)
+    try:
+        bootstrap_sock.recv(zmq.NOBLOCK)
+    except zmq.error.Again:
+        time.sleep(0.01)
+        continue
+
+# Run server until heat death of universe
+server.run_forever()
 """
 
 
 class ProcessSpawner:
     def __init__(self, rpcserverclass, name, addr, **kargs):
         self.name = name
-        self.addr = addr
+        
+        # temporary socket to allow the remote process to report its status.
+        bootstrap_addr = 'tcp://127.0.0.1:*'
+        bootstrap_sock = zmq.Context.instance().socket(zmq.PAIR)
+        bootstrap_sock.bind(bootstrap_addr)
+        bootstrap_addr = bootstrap_sock.getsockopt(zmq.LAST_ENDPOINT)
+        
+        # Spawn new process
         class_name = rpcserverclass.__name__
         kargs.update({'name': name, 'addr': addr})
         args = ', '.join('{}={}'.format(k, repr(v)) for k, v in kargs.items())
-        bootstrap = bootstrap_template.format(class_name=class_name, args=args)
+        loglevel = str(logging.getLogger().getEffectiveLevel())
+        bootstrap = bootstrap_template.format(class_name=class_name, args=args,
+                                              bootstrap_addr=bootstrap_addr,
+                                              loglevel=loglevel)
         executable = sys.executable
         self.proc = subprocess.Popen((executable, '-c', bootstrap))
-        logging.info("Spawn process: %d", self.proc.pid)
-        self.client = RPCClient(name, addr)
-        assert self.client.ping() == 'pong', "Failed to start process."
+        logging.info("Spawned process: %d", self.proc.pid)
         
-        # automatically shut down process when we exit. 
+        # Automatically shut down process when we exit. 
         atexit.register(self.kill)
-
+        
+        # Receive status information (especially the final RPC address)
+        self._status = bootstrap_sock.recv_json()
+        bootstrap_sock.send(b'OK')
+        self.addr = self._status['addr']
+        
+        self.client = RPCClient(name, self.addr)
+        assert self.client.ping() == 'pong', "Failed to connect to RPC server."
+        
     def wait(self):
         self.proc.wait()
 

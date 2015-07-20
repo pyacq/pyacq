@@ -3,7 +3,7 @@ import logging
 from pyacq.core.rpc import RPCClient, RemoteCallException, RPCServer
 import zmq.utils.monitor
 
-#logging.basicConfig(level=logging.INFO)
+logging.getLogger().level=logging.INFO
 
 
 def test_rpc():

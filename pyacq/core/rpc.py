@@ -16,12 +16,8 @@ import json
 import concurrent.futures
 import traceback
 import zmq
-import logging
 import atexit
-
-
-def info(msg, *args):
-    logging.info("[%d] %s" % (os.getpid(), msg), *args)
+from logging import info
 
 
 class RemoteCallException(Exception):
@@ -185,7 +181,7 @@ class RPCClient(object):
     def __init__(self, name, addr, rpc_socket=None):
         if rpc_socket is None:
             rpc_socket = RPCClientSocket()
-        info("RPC connect %s => %s %s", rpc_socket._name, name, addr)
+        info("RPC connect %s => %s@%s", rpc_socket._name, name, addr)
         rpc_socket.connect(addr)
         self._name = name.encode()
         self._rpc_socket = rpc_socket
@@ -261,8 +257,9 @@ class RPCServer(object):
         self._socket = zmq.Context.instance().socket(zmq.ROUTER)
         self._socket.setsockopt(zmq.IDENTITY, self._name)
         self._socket.bind(addr)
+        self._addr = self._socket.getsockopt(zmq.LAST_ENDPOINT)
         self._closed = False
-        info("RPC start server: %s", self._name)
+        info("RPC start server: %s@%s", self._name.decode(), self._addr.decode())
         atexit.register(self.close)
 
     def __del__(self):

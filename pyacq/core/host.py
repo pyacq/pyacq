@@ -1,4 +1,3 @@
-
 from .processspawner import ProcessSpawner
 from .rpc import RPCServer, RPCClient
 from .nodegroup import NodeGroup
@@ -22,12 +21,15 @@ class Host(RPCServer):
         self.nodegroup_process = {}
     
     def new_nodegroup(self, name, addr):
-        """
-        Create a new NodeGroup in a new process.
+        """Create a new NodeGroup in a new process.
+        
+        Return the RPC name and address of the new nodegroup.
         """
         assert name not in self.nodegroup_process, 'This node group already exists'
         #print(self._name, 'start_nodegroup', name)
-        self.nodegroup_process[name] = ProcessSpawner(NodeGroup, name, addr)
+        ps = ProcessSpawner(NodeGroup, name, addr)
+        self.nodegroup_process[name] = ps
+        return ps.name, ps.addr
     
     def close_nodegroup(self, name):
         """
@@ -40,4 +42,13 @@ class Host(RPCServer):
         client = RPCClient(name, self.nodegroup_process[name].addr)
         assert not client.any_node_running()
         self.nodegroup_process[name].stop()
+        del self.nodegroup_process[name]
 
+    def close_all_nodegroups(self):
+        """Close all NodeGroups belonging to this host.
+        """
+        for name, spawner in self.nodegroup_process:
+            spawner.kill()
+        self.nodegroup_process = {}
+        
+    
