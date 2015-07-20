@@ -1,6 +1,9 @@
 import threading, atexit, time
+import logging
 from pyacq.core.rpc import RPCClient, RemoteCallException, RPCServer
 import zmq.utils.monitor
+
+#logging.basicConfig(level=logging.INFO)
 
 
 def test_rpc():
@@ -17,17 +20,17 @@ def test_rpc():
     client = RPCClient('some_server', 'tcp://localhost:5152')
     atexit.register(client.close)
     
-    # test call / return
-    fut = client.add(7, 5)
-    assert fut.result() == 12
+    # test call / sync return
+    assert client.add(7, 5) == 12
 
-    fut = client.sleep(0.1)
+    # test async return
+    fut = client.sleep(0.1, _sync=False)
     assert not fut.done()
     assert fut.result() is None
 
     # Test remote exception raising
     try:
-        client.add(7, 'x').result()
+        client.add(7, 'x')
     except RemoteCallException as err:
         if err.type_str != 'TypeError':
             raise
@@ -35,7 +38,7 @@ def test_rpc():
         raise AssertionError('should have raised TypeError')
 
     try:
-        client.fn().result()
+        client.fn()
     except RemoteCallException as err:
         if err.type_str != 'AttributeError':
             raise
@@ -44,24 +47,24 @@ def test_rpc():
 
     # test timeouts
     try:
-        client.sleep(0.2).result(timeout=0.01)
+        client.sleep(0.2, _timeout=0.01)
     except TimeoutError:
         pass
     else:
         raise AssertionError('should have raised TimeoutError')
 
     # test result order
-    a = client.add(1, 2)
-    b = client.add(3, 4)
+    a = client.add(1, 2, _sync=False)
+    b = client.add(3, 4, _sync=False)
     assert b.result() == 7
     assert a.result() == 3
 
     # test multiple clients per server
     client2 = RPCClient('some_server', 'tcp://localhost:5152')
     
-    a = client2.add(1, 2)
-    b = client.add(3, 4)
-    c = client2.add(5, 6)
+    a = client2.add(1, 2, _sync=False)
+    b = client.add(3, 4, _sync=False)
+    c = client2.add(5, 6, _sync=False)
     assert b.result() == 7
     assert a.result() == 3
     assert c.result() == 11
@@ -72,10 +75,10 @@ def test_rpc():
     serve_thread2.start()
     
     client3 = RPCClient('some_server2', 'tcp://localhost:5153',
-                        shared_client=client2)
+                        rpc_socket=client2._rpc_socket)
     
-    a = client2.add(1, 2)
-    b = client3.add(3, 4)
+    a = client2.add(1, 2, _sync=False)
+    b = client3.add(3, 4, _sync=False)
     assert b.result() == 7
     assert a.result() == 3
 

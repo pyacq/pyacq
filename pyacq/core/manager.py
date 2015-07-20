@@ -23,12 +23,12 @@ class Manager(RPCServer):
 
     def add_nodegroup(self, host, name):
         addr = ...
-        self._hosts[host].client.start_nodegroup(name, addr)
+        self._hosts[host].client.new_nodegroup(name, addr)
         ng = NodeGroupProxy(self, name, addr)
         self._nodegroups[name] = ng
 
     def select_free_address(self, host, prot='tcp'):
-        
+        pass
 
         
 class HostProxy(object):
