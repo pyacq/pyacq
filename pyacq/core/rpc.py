@@ -17,7 +17,7 @@ import concurrent.futures
 import traceback
 import zmq
 import logging
-
+import atexit
 
 
 def info(msg, *args):
@@ -68,6 +68,7 @@ class RPCClientSocket(object):
         self.clients = {}
         self.next_call_id = 0
         self.futures = weakref.WeakValueDictionary()
+        atexit.register(self.close)
         
     def connect(self, addr):
         """Conncet the socket to an RPCServer address.
@@ -154,6 +155,12 @@ class RPCClientSocket(object):
             else:
                 fut.set_result(msg['rval'])
     
+    def close(self):
+        self.socket.close()
+
+    def __del__(self):
+        self.close()
+
 
 class RPCClient(object):
     """Connection to an RPC server.
@@ -196,7 +203,7 @@ class RPCClient(object):
             self._ensure_connection()
         return self._rpc_socket.send(self._name, 'call', method_name, *args, **kwds)
 
-    def _ensure_connection(self, timeout=10):
+    def _ensure_connection(self, timeout=3):
         """Make sure RPC server is connected and available.
         """
         if self._establishing_connect:
@@ -256,6 +263,10 @@ class RPCServer(object):
         self._socket.bind(addr)
         self._closed = False
         info("RPC start server: %s", self._name)
+        atexit.register(self.close)
+
+    def __del__(self):
+        self.close()
 
     def _process_one(self):
         """Read one message from the remote client and invoke the requested
@@ -264,6 +275,8 @@ class RPCServer(object):
         This method sends back to the client either the return value or an
         error message.
         """
+        if not self.running:
+            raise RuntimeError("RPC server socket is already closed.")
         name = self._socket.recv()
         msg = self._socket.recv_json()
         info("RPC recv req: %s %s", name, msg)
@@ -287,6 +300,8 @@ class RPCServer(object):
                 exc_str = traceback.format_exception(*exc)
                 if ret:
                     self._send_result(name, call_id, error=(exc[0].__name__, exc_str))
+        if not self.running:
+            self._socket.close()
         
     def _send_result(self, name, call_id, rval=None, error=None):
         result = {'action': 'return', 'call_id': call_id,
@@ -298,6 +313,8 @@ class RPCServer(object):
         """Close this RPC server.
         """
         self._closed = True
+        # keep the socket open just long enough to send a confirmation of
+        # closure.
 
     def running(self):
         """Boolean indicating whether the server is still running.

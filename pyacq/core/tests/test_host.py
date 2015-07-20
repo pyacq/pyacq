@@ -1,8 +1,12 @@
 import time
+import logging
 
 from pyacq.core.host import Host
 from pyacq.core.processspawner import ProcessSpawner
 from pyacq.core.rpc import RPCClient
+
+logging.basicConfig(level=logging.INFO)
+
 
 def test_host1():
     
