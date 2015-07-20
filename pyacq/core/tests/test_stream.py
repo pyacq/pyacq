@@ -2,59 +2,32 @@
 #~ import pytest
 #~ import logging
 
-from pyacq.core.rpc import RPCClient, RemoteCallException
-from pyacq.core.processspawner import ProcessSpawner
-from pyacq.core.nodegroup import NodeGroup
-from pyacq.core.node import Node
-
+from pyacq.core.stream  import StreamSender, StreamReceiver
+import numpy as np
 
 
 def test_stream():
-    name, addr = 'nodegroup', 'tcp://127.0.0.1:6000'
-    process_nodegroup0  = ProcessSpawner(NodeGroup,  name, addr)
-    client0 = RPCClient(name, addr)
+    nb_channel = 16
+    chunksize = 1024
+    stream_dict = dict(protocol = 'tcp', addr = '127.0.0.1', port = '8000',
+                        transfertmode = 'plaindata', streamtype = 'analogsignal',
+                        dtype = 'float32', shape = (-1, nb_channel), compression ='',
+                        scale = None, offset = None, units = '' )
     
-    client0.create_node('mynode0', '_MyTestNode')
-    client0.create_node('mynode1', '_MyTestNode')
+    sender = StreamSender(**stream_dict)
+    receiver = StreamReceiver(**stream_dict)
     
-    protocol = tcp/udp/inproc/ipc
-    addr
-    port
-    
-    transfertmode = plaindata/sharedmeme/(sharecuda/sharecl)
-    streamtype = analogsignal/digitalsignal/event/image/video
-    dtype =  float64/float32/int32
-    nb channel/shape
-    shape
-    compression None/blosc(blosc-lz4-snappy-../)/codec_avi
-    axislabel = 
-    scale
-    offset
-    units
-    
-    
-    
-    stream =Stream(
-    
-    some_stream_dict = stream.to_json()
-    
-    some_stream_dict = {'addr' : 'localhost' }
-    
-    client0.control_node('mynode0', 'set_source', args = some_stream_dict)
-    
-    
-    
-    
-    mystreamout.new_frame(lkjlskdjfsdf)
-    
-    
-    mystreamin.get_last_frame()
-    mystreamin.get_a_slice()
-    
-    
-    
-    
-
+    index = 0
+    for i in range(5):
+        #send
+        index += chunksize
+        arr = np.random.rand(1024, nb_channel).astype(stream_dict['dtype'])
+        sender.send(index, arr)
+        
+        #recv
+        index2, arr2 = receiver.recv()
+        assert index2==index
+        assert np.all((arr-arr2)==0.)
 
 
 if __name__ == '__main__':

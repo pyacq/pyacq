@@ -1,7 +1,9 @@
 import zmq
+import blosc
+import numpy as np
 
 
-default_stream = dict( protocol = 'tcp', bind_addr = '127.0.0.1', port = '8000',
+default_stream = dict( protocol = 'tcp', addr = '127.0.0.1', port = '8000',
                         transfertmode = 'plaindata', streamtype = 'analogsignal',
                         dtype = 'float32', shape = (-1, 16), compression ='',
                         scale = None, offset = None, units = '')
@@ -30,7 +32,7 @@ common_doc = """
         The shape of each data frame. Unknown dim are -1 in case of variable chunk.
             * for image it is HxW.
             * for analogsignal it can (nb_sample x nb_channel) or (-1 x nb_channel)
-    compression: '', 'blosc', 'blosc-lz4', 'mp4', 'h264'
+    compression: '', 'blosclz', 'blosc-lz4', 'mp4', 'h264'
         The compression for the data stream, the default is no compression ''.
     scale: float
         In case when dtype is integer, you can give optional scale and offset. 
@@ -54,48 +56,70 @@ class StreamDef:
 class StreamSender:
     """
     A StreamSender is a helper class to send data.
-    
-    
     """
     def __init__(self, **kargs):
         self.params = dict(default_stream)
         self.params.update(kargs)
         
         url = '{protocol}://{addr}:{port}'.format(**self.params)
-        
         context = zmq.Context.instance()
         self.socket = context.socket(zmq.PUB)
         self.socket.bind(url)
+
+        self.funcs = []
         
-        if compression != '':
+        if self.params['compression'] != '':
             assert self.params['transfertmode'] == 'plaindata', 'Compression only for transfertmode=plaindata'
         
-        self.funcs = []
-        if self.params['transfertmode'] == 'plaindata':
+        #compression
+        if self.params['compression'] == '':
             pass
-        elif self.params['transfertmode'] == 'shared_mem':
-            pass
+        elif self.params['compression'] == 'blosc-blosclz':
+            #cname for ['blosclz', 'lz4', 'lz4hc', 'snappy', 'zlib']
+            self.funcs.append(self._compress_blosclz)
+        elif self.params['compression'] == 'blosc-lz4':
+            self.funcs.append(_compress_blosclz4)
+            
         
+        #send or cpy to buffer
+        if self.params['transfertmode'] == 'plaindata':
+            self.funcs.append(self._send_plain)
+        elif self.params['transfertmode'] == 'shared_mem':
+            self.funcs.append(self._copy_to_shmem)
         #elif self.params['transfertmode'] == 'shared_cuda_buffer':
         #    pass
         #elif self.params['transfertmode'] == 'share_opencl_buffer':
         #   pass
 
-        
-    
     def send(self, index, data):
         """
+        Send the data chunk and its frame index.
         
+        Parameters
+        ----------
+        index: int
+            The absolut sample index. If the chunk is multiple sample then index is the last one (head).
+        data: np.ndarray or bytes
+            The chunk of data to be send
         """
         for f in self.funcs:
-            data = f(data)
+            index, data = f(index, data)
 
-
-    #~ def _send_plaindata(self):
-        
     
-
-
+    def _send_plain(self, index, data):
+        self.socket.send_multipart([np.int64(index), data])
+        return None, None
+    
+    def _copy_to_shmem(self, index, data):
+        raise(NotImplemented)
+    
+    def _compress_blosclz(self, index, data):
+        data = blosc.pack_array(datacname = 'blosclz')
+        return index, data
+    
+    def _compress_blosclz4(self, index, data):
+        data = blosc.pack_array(datacname = 'lz4')
+        return index, data
 
 
 class StreamReceiver:
@@ -106,5 +130,56 @@ class StreamReceiver:
     def __init__(self, **kargs):
         self.params = dict(default_stream)
         self.params.update(kargs)
+
+        url = '{protocol}://{addr}:{port}'.format(**self.params)
+        context = zmq.Context.instance()
+        self.socket = context.socket(zmq.SUB)
+        self.socket.setsockopt(zmq.SUBSCRIBE,b'')
+        self.socket.connect(url)
+        
+        
+        self.funcs = []
+        #send or cpy to buffer
+        if self.params['transfertmode'] == 'plaindata':
+            self.funcs.append(self._recv_plain)
+        elif self.params['transfertmode'] == 'shared_mem':
+            self.funcs.append(self._recv_from_shmem)
+        
+        #compression
+        if self.params['compression'] == '':
+            self.funcs.append(self._numpy_fromstring)
+        elif self.params['compression'] in ['blosc-blosclz', 'blosc-lz4']:
+            self.funcs.append(self._uncompress_blosc)
+
+    
+    def recv(self):
+        """
+        Receive the data chunk
+        """
+        index, data = self.funcs[0]()
+        for f in self.funcs[1:]:
+            index, data = f(index, data)
+        return index, data
+    
+    def _recv_plain(self):
+        m0,m1 = self.socket.recv_multipart()
+        index = np.fromstring(m0, dtype = 'int64')[0]
+        return index, m1
+
+    def _recv_from_shmem(self):
+        #~ m0 = self.socket.recv()
+        #~ index = np.fromstring(m0, dtype = 'int64')[0]
+        raise(NotImplemented)
+    
+    def _numpy_fromstring(self, index, data):
+        data  = np.frombuffer(data, dtype = self.params['dtype']).reshape(self.params['shape'])
+        return index, data
+    
+    def _uncompress_blosc(self, index, data):
+        data = blosc.unpack_array(data)
+        return index, data
+    
+    
+    
 
 
