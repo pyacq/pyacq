@@ -45,15 +45,19 @@ class WidgetNode(Node):
     def __init__(self, **kargs):
         Node.__init__(self, **kargs)
         self.widget = None
-
-    def create_widget(self):
+        
+        app = QtGui.QApplication.instance()
+        self.need_create_widget.connect(app.create_widget_of_node)
+        self.need_show_widget.connect(app.show_widget_of_node)        
         self.need_create_widget.emit()
         
-    def _create_widget(self):
+    def create_widget(self):
         raise(NotImplementedError)
     
     def show(self):
         self.need_show_widget.emit()
+
+
 
 
 
@@ -78,7 +82,7 @@ register_node(_MyTestNode)
 
 
 class _MyTestNodeQWidget(WidgetNode):
-    def _create_widget(self):
+    def create_widget(self):
         self.widget = QtGui.QLabel('Hi!')
 register_node(_MyTestNodeQWidget)
 

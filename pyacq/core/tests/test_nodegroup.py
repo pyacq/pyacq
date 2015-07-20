@@ -1,10 +1,13 @@
 import time
 import pytest
+import logging
 
 from pyacq.core.rpc import RPCClient, RemoteCallException
 from pyacq.core.processspawner import ProcessSpawner
 from pyacq.core.nodegroup import NodeGroup
 from pyacq.core.node import Node
+
+#logging.basicConfig(level=logging.INFO)
 
 def test_nodegroup0():
     name, addr = 'nodegroup', 'tcp://127.0.0.1:6000'
@@ -47,14 +50,12 @@ def test_qwidget_node():
     process_nodegroup0  = ProcessSpawner(NodeGroup,  name, addr)
     client0 = RPCClient(name, addr)
     client0.create_node('mynode', '_MyTestNodeQWidget')
-    client0.control_node('mynode', 'create_widget')
     client0.control_node('mynode', 'show')
     
     name, addr = 'nodegroup1', 'tcp://127.0.0.1:6001'
     process_nodegroup1  = ProcessSpawner(NodeGroup,  name, addr)
     client1 = RPCClient(name, addr)
     client1.create_node('mynode', '_MyTestNodeQWidget')
-    client1.control_node('mynode', 'create_widget')
     client1.control_node('mynode', 'show')
     
     time.sleep(5.)
@@ -66,7 +67,7 @@ def test_qwidget_node():
 
 
 if __name__ == '__main__':
-    test_nodegroup0()
-    test_cannot_delete_node_while_running()
+    #~ test_nodegroup0()
+    #~ test_cannot_delete_node_while_running()
     test_qwidget_node()
 

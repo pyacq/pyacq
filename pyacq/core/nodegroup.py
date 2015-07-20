@@ -18,7 +18,7 @@ class RpcThread( QtCore.QThread):
 class MyApplication(QtGui.QApplication):
     def create_widget_of_node(self):
         node = self.sender()
-        node._create_widget()
+        node.create_widget()
         
     def show_widget_of_node(self):
         node = self.sender()
@@ -64,10 +64,7 @@ class _NodeGroup(RPCServer):
         class_ = all_nodes[classname] 
         node = class_(name = name, **kargs)
         
-        if isinstance(node, WidgetNode):
-            app = QtGui.QApplication.instance()
-            node.need_create_widget.connect(app.create_widget_of_node)
-            node.need_show_widget.connect(app.show_widget_of_node)
+
         
         self.nodes[name] = node
     
