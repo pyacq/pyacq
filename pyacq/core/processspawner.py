@@ -36,6 +36,7 @@ while True:
     except zmq.error.Again:
         time.sleep(0.01)
         continue
+    break
 
 # Run server until heat death of universe
 server.run_forever()
@@ -69,6 +70,7 @@ class ProcessSpawner:
         
         # Receive status information (especially the final RPC address)
         self._status = bootstrap_sock.recv_json()
+        logging.info("recv status %s", self._status)
         bootstrap_sock.send(b'OK')
         self.addr = self._status['addr']
         

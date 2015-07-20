@@ -17,10 +17,12 @@ class RpcThread( QtCore.QThread):
 
 class NodeGroup:
     """
-    Node gourp is not directly a RPCServer.
+    Node group is not directly a RPCServer.
     """
     def __init__(self, name, addr):
         self.rpc_server = _NodeGroup(name, addr)
+        self._name = name
+        self._addr = self.rpc_server._addr
         self.nodes = {}
 
     def run_forever(self):
