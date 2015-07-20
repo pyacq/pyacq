@@ -62,11 +62,11 @@ sender = StreamSender(**stream_dict)
 time.sleep(.5)
 receiver = StreamReceiver(**stream_dict)
 
+arr = np.random.rand(1024, nb_channel).astype(stream_dict['dtype'])
 def start_loop(sender, receiver):
     index = 0
     for i in range(nloop):
         index += chunksize
-        arr = np.random.rand(1024, nb_channel).astype(stream_dict['dtype'])
         sender.send(index, arr)
         index2, arr2 = receiver.recv()
     """
