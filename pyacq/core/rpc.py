@@ -16,6 +16,12 @@ import json
 import concurrent.futures
 import traceback
 import zmq
+import logging
+import atexit
+
+
+def info(msg, *args):
+    logging.info("[%d] %s" % (os.getpid(), msg), *args)
 
 
 class RemoteCallException(Exception):
@@ -57,11 +63,12 @@ class RPCClientSocket(object):
     """
     def __init__(self):
         self.socket = zmq.Context.instance().socket(zmq.ROUTER)
-        self._name = ('%d-%d' % (os.getpid(), id(self))).encode()
+        self._name = ('%d-%x' % (os.getpid(), id(self))).encode()
         self.socket.setsockopt(zmq.IDENTITY, self._name)
         self.clients = {}
         self.next_call_id = 0
         self.futures = weakref.WeakValueDictionary()
+        atexit.register(self.close)
         
     def connect(self, addr):
         """Conncet the socket to an RPCServer address.
@@ -86,7 +93,7 @@ class RPCClientSocket(object):
         cmd = {'action': action, 'call_id': call_id,
                'args': args, 'kwds': kwds}
         cmd = json.dumps(cmd).encode()
-        #print("SEND REQUEST:", self.socket.getsockopt(zmq.IDENTITY), name, cmd)
+        info("RPC send req: %s => %s, %s", self.socket.getsockopt(zmq.IDENTITY), name, cmd)
         self.socket.send_multipart([name, cmd])
         fut = Future(self, call_id)
         self.futures[call_id] = fut
@@ -136,7 +143,7 @@ class RPCClientSocket(object):
         This takes care of assigning return values or exceptions to existing
         Future instances.
         """
-        #print("RECV RESULT:", name, msg)
+        info("RPC recv res: %s %s", name, msg)
         if msg['action'] == 'return':
             call_id = msg['call_id']
             if call_id not in self.futures:
@@ -144,11 +151,16 @@ class RPCClientSocket(object):
             fut = self.futures[call_id]
             if msg['error'] is not None:
                 exc = RemoteCallException(*msg['error'])
-                #print("GOT EXC:", exc)
                 fut.set_exception(exc)
             else:
                 fut.set_result(msg['rval'])
     
+    def close(self):
+        self.socket.close()
+
+    def __del__(self):
+        self.close()
+
 
 class RPCClient(object):
     """Connection to an RPC server.
@@ -166,16 +178,14 @@ class RPCClient(object):
         The identifier used by the remote server.
     addr : URL
         Address of RPC server to connect to.
-    shared_client : None or RPCClient
-        Optional RPCClient with which to share a zmq socket. This allows return
-        values to be processed for multiple RPC servers without needing to poll
-        as many sockets.
+    rpc_socket : None or RPCClientSocket
+        Optional RPCClientSocket with which to connect to the server. This
+        allows multiple RPC connections to share a single socket.
     """
-    def __init__(self, name, addr, shared_client=None):
-        if shared_client is None:
+    def __init__(self, name, addr, rpc_socket=None):
+        if rpc_socket is None:
             rpc_socket = RPCClientSocket()
-        else:
-            rpc_socket = shared_client._rpc_socket
+        info("RPC connect %s => %s %s", rpc_socket._name, name, addr)
         rpc_socket.connect(addr)
         self._name = name.encode()
         self._rpc_socket = rpc_socket
@@ -193,7 +203,7 @@ class RPCClient(object):
             self._ensure_connection()
         return self._rpc_socket.send(self._name, 'call', method_name, *args, **kwds)
 
-    def _ensure_connection(self, timeout=10):
+    def _ensure_connection(self, timeout=3):
         """Make sure RPC server is connected and available.
         """
         if self._establishing_connect:
@@ -202,7 +212,7 @@ class RPCClient(object):
         try:
             start = time.time()
             while time.time() < start + timeout:
-                fut = self.ping()
+                fut = self.ping(_sync=False)
                 try:
                     result = fut.result(timeout=0.1)
                     self._connect_established = True
@@ -225,7 +235,13 @@ class RPCMethod(object):
         self.method = method
         
     def __call__(self, *args, **kwds):
-        return self.client._call_method(self.method, *args, **kwds)
+        sync = kwds.pop('_sync', True)
+        timeout = kwds.pop('_timeout', None)
+        fut = self.client._call_method(self.method, *args, **kwds)
+        if sync:
+            return fut.result(timeout=timeout)
+        else:
+            return fut
 
 
 class RPCServer(object):
@@ -246,7 +262,11 @@ class RPCServer(object):
         self._socket.setsockopt(zmq.IDENTITY, self._name)
         self._socket.bind(addr)
         self._closed = False
-        #print("START SERVER:", self._name)
+        info("RPC start server: %s", self._name)
+        atexit.register(self.close)
+
+    def __del__(self):
+        self.close()
 
     def _process_one(self):
         """Read one message from the remote client and invoke the requested
@@ -255,9 +275,11 @@ class RPCServer(object):
         This method sends back to the client either the return value or an
         error message.
         """
+        if not self.running:
+            raise RuntimeError("RPC server socket is already closed.")
         name = self._socket.recv()
         msg = self._socket.recv_json()
-        #print("RECV REQUEST:", name, msg)
+        info("RPC recv req: %s %s", name, msg)
         if msg['action'] == 'call':
             method, args = msg['args'][0], msg['args'][1:]
             kwds = msg['kwds']
@@ -278,18 +300,21 @@ class RPCServer(object):
                 exc_str = traceback.format_exception(*exc)
                 if ret:
                     self._send_result(name, call_id, error=(exc[0].__name__, exc_str))
+        if not self.running:
+            self._socket.close()
         
     def _send_result(self, name, call_id, rval=None, error=None):
         result = {'action': 'return', 'call_id': call_id,
                   'rval': rval, 'error': error}
-        #print("SEND RESULT:", name, result)
+        info("RPC send res: %s %s", name, result)
         self._socket.send_multipart([name, json.dumps(result).encode()])
 
     def close(self):
         """Close this RPC server.
         """
         self._closed = True
-        self.socket.close()
+        # keep the socket open just long enough to send a confirmation of
+        # closure.
 
     def running(self):
         """Boolean indicating whether the server is still running.

@@ -15,18 +15,18 @@ def test_nodegroup0():
     n = 5
     
     for i in range(n):
-        client0.create_node('mynode{}'.format(i), '_MyTestNode').result()
+        client0.create_node('mynode{}'.format(i), '_MyTestNode')
 
     for i in range(n):
-        client0.control_node('mynode{}'.format(i), 'start').result()
+        client0.control_node('mynode{}'.format(i), 'start')
     #time.sleep(1.)
 
     for i in range(n):
-        client0.control_node('mynode{}'.format(i), 'stop').result()
+        client0.control_node('mynode{}'.format(i), 'stop')
 
 
     for i in range(n):
-        client0.delete_node('mynode{}'.format(i)).result()
+        client0.delete_node('mynode{}'.format(i))
     
     #time.sleep(1.)
     
@@ -41,13 +41,13 @@ def test_cannot_stop_running_node():
     process_nodegroup0  = ProcessSpawner(NodeGroup,  name, addr)
     client0 = RPCClient(name, addr)
     
-    client0.create_node('mynode', '_MyTestNode').result()
-    client0.control_node('mynode', 'start').result()
+    client0.create_node('mynode', '_MyTestNode')
+    client0.control_node('mynode', 'start')
     
 
     with pytest.raises(RemoteCallException):
         # a running node cannot be delete
-        client0.delete_node('mynode').result()
+        client0.delete_node('mynode')
 
     process_nodegroup0.stop()
 
