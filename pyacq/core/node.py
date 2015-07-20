@@ -1,5 +1,6 @@
 from pyqtgraph.Qt import QtCore
 
+from .nodelist import register_node
 
 class Node(QtCore.QObject):
     """
@@ -12,12 +13,12 @@ class Node(QtCore.QObject):
     def __init__(self, name = '', parent = None):
         QtCore.QObject.__init__(self, parent)
         self.name = name
-        self.running = False
+        self._running = False
         
         self.sources = [ ]
     
     def isrunning(self):
-        return self.running
+        return self._running
     
     def start(self):
         raise(NotImplementedError)
@@ -38,3 +39,23 @@ class Node(QtCore.QObject):
         pass
 
 
+
+
+
+class _MyTestNode(Node):
+    def start(self):
+        print('I am node ', self.name, 'started')
+        self._running = True
+
+    def stop(self):
+        print('I am node ', self.name, 'stopped')
+        self._running = False
+    
+    def initialize(self, **kargs):
+        raise(NotImplementedError)
+
+    def configure(self, **kargs):
+        raise(NotImplementedError)
+
+
+register_node(_MyTestNode)
