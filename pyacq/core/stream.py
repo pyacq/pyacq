@@ -65,6 +65,7 @@ class StreamSender:
         context = zmq.Context.instance()
         self.socket = context.socket(zmq.PUB)
         self.socket.bind(self.url)
+        
 
         self.funcs = []
         
@@ -90,6 +91,9 @@ class StreamSender:
         #    pass
         #elif self.params['transfertmode'] == 'share_opencl_buffer':
         #   pass
+        
+        #TODO check if this is needed
+        self.copy = self.params['protocol'] == 'inproc'
 
     def send(self, index, data):
         """
@@ -107,7 +111,8 @@ class StreamSender:
 
     
     def _send_plain(self, index, data):
-        self.socket.send_multipart([np.int64(index), data])
+        
+        self.socket.send_multipart([np.int64(index), data], copy = self.copy)
         return None, None
     
     def _copy_to_shmem(self, index, data):
@@ -122,7 +127,8 @@ class StreamSender:
         return index, data
     
     def close(self):
-        self.socket.unbind(self.url)
+        if self.params['protocol'] == 'tcp':
+            self.socket.unbind(self.url)
         self.socket.close()
 
 
