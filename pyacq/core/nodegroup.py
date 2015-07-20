@@ -2,10 +2,8 @@ from pyqtgraph.Qt import QtCore, QtGui
 
 from .rpc import RPCServer
 from .node import Node
+from .nodelist import all_nodes
 
-all_nodes = { }
-def register_node(node_class):
-    all_nodes[all_nodes.__name__] = node_class
 
 
 class RpcThread( QtCore.QThread):
@@ -48,9 +46,12 @@ class _NodeGroup(RPCServer):
         RPCServer.__init__(self, name, addr)
         self.nodes = {}
     
-    def create_node(self, name, classname, kargs):
+    def create_node(self, name, classname, **kargs):
+        #print(self._name, 'create_node', name, classname)
         assert name not in self.nodes, 'This node already exists'
-        node = all_nodes[classname](**kargs)
+        assert classname in all_nodes, 'The node {} is not registered'.format(classname)
+        #print(all_nodes[classname])
+        node = all_nodes[classname](name = name, **kargs)
         self.nodes[name] = node
     
     def any_node_running(self):
@@ -59,10 +60,11 @@ class _NodeGroup(RPCServer):
     def delete_node(self, name):
         node = self.nodes[name]
         assert not node.isrunning(), 'The node {} is running'.format(name)
-        self.nodes.pop(node)
+        self.nodes.pop(name)
     
-    def control_node(self, name, method, kargs):
-        getattr(self.nodes[name], method(**kargs))
+    def control_node(self, name, method, **kargs):
+        #print(self._name, 'control_node', name, method)
+        getattr(self.nodes[name], method)(**kargs)
     
     
     def start_all(self):
@@ -72,6 +74,6 @@ class _NodeGroup(RPCServer):
     def stop_all(self):
         for node in self.nodes.values():
             node.stop()
-        
+
     
     

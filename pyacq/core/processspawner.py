@@ -12,7 +12,7 @@ class ProcessSpawner:
         bootstrap = 'from pyacq import {0}; server={0}(name = {1}, addr = {2}'.format(rpcserverclass.__name__,repr(name), repr(addr) )
         bootstrap += ','.join( '{} = {}'.format(k, repr(v)) for k, v in kargs.items())
         bootstrap += '); server.run_forever();'
-        self.proc = subprocess.Popen((executable, '-c', bootstrap))#, stdout = sys.stdout, stderr = sys.stderr)
+        self.proc = subprocess.Popen((executable, '-c', bootstrap), stdout = sys.stdout, stderr = sys.stderr)
 
     def wait(self):
         self.proc.wait()
