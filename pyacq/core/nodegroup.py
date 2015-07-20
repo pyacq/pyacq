@@ -15,7 +15,7 @@ class RpcThread( QtCore.QThread):
         while self.rpc_server.running():
             self.rpc_server._process_one()
 
-class MyApplication(QtGui.QApplication):
+class NodeGroupApplication(QtGui.QApplication):
     def create_widget_of_node(self):
         node = self.sender()
         node.create_widget()
@@ -34,7 +34,7 @@ class NodeGroup:
         self.nodes = {}
 
     def run_forever(self):
-        self.app = MyApplication([])
+        self.app = NodeGroupApplication([])
         self.rpc_thread = RpcThread(self.rpc_server, parent = None)
         self.rpc_thread.finished.connect(self.app.quit)
         self.rpc_thread.start()
