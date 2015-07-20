@@ -1,7 +1,7 @@
 from pyqtgraph.Qt import QtCore, QtGui
 
 from .rpc import RPCServer
-from .node import Node
+from .node import Node, WidgetNode
 from .nodelist import all_nodes
 
 
@@ -15,6 +15,16 @@ class RpcThread( QtCore.QThread):
         while self.rpc_server.running():
             self.rpc_server._process_one()
 
+class MyApplication(QtGui.QApplication):
+    def create_widget_of_node(self):
+        node = self.sender()
+        node._create_widget()
+        
+    def show_widget_of_node(self):
+        node = self.sender()
+        node.widget.show()
+
+
 class NodeGroup:
     """
     Node gourp is not directly a RPCServer.
@@ -24,12 +34,12 @@ class NodeGroup:
         self.nodes = {}
 
     def run_forever(self):
-        self.app = QtGui.QApplication([])
+        self.app = MyApplication([])
         self.rpc_thread = RpcThread(self.rpc_server, parent = None)
         self.rpc_thread.finished.connect(self.app.quit)
         self.rpc_thread.start()
         self.app.exec_()
-        
+    
 
 
 class _NodeGroup(RPCServer):
@@ -51,7 +61,14 @@ class _NodeGroup(RPCServer):
         assert name not in self.nodes, 'This node already exists'
         assert classname in all_nodes, 'The node {} is not registered'.format(classname)
         #print(all_nodes[classname])
-        node = all_nodes[classname](name = name, **kargs)
+        class_ = all_nodes[classname] 
+        node = class_(name = name, **kargs)
+        
+        if isinstance(node, WidgetNode):
+            app = QtGui.QApplication.instance()
+            node.need_create_widget.connect(app.create_widget_of_node)
+            node.need_show_widget.connect(app.show_widget_of_node)
+        
         self.nodes[name] = node
     
     def any_node_running(self):
@@ -75,5 +92,4 @@ class _NodeGroup(RPCServer):
         for node in self.nodes.values():
             node.stop()
 
-    
-    
+

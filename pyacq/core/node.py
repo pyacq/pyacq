@@ -1,4 +1,4 @@
-from pyqtgraph.Qt import QtCore
+from pyqtgraph.Qt import QtCore, QtGui
 
 from .nodelist import register_node
 
@@ -39,6 +39,22 @@ class Node(QtCore.QObject):
         pass
 
 
+class WidgetNode(Node):
+    need_create_widget = QtCore.Signal()
+    need_show_widget = QtCore.Signal()
+    def __init__(self, **kargs):
+        Node.__init__(self, **kargs)
+        self.widget = None
+
+    def create_widget(self):
+        self.need_create_widget.emit()
+        
+    def _create_widget(self):
+        raise(NotImplementedError)
+    
+    def show(self):
+        self.need_show_widget.emit()
+
 
 
 
@@ -57,5 +73,13 @@ class _MyTestNode(Node):
     def configure(self, **kargs):
         raise(NotImplementedError)
 
-
 register_node(_MyTestNode)
+
+
+
+class _MyTestNodeQWidget(WidgetNode):
+    def _create_widget(self):
+        self.widget = QtGui.QLabel('Hi!')
+register_node(_MyTestNodeQWidget)
+
+
