@@ -58,6 +58,16 @@ class Manager(RPCServer):
         else:
             return self.nodegroups[nodegroup].list_nodes()
 
+    def control_node(self, name, method, **kwargs):
+        ng = self.nodes[name].nodegroup
+        return ng.client.control_node(name, method, **kwargs)
+    
+    def delete_node(self, name):
+        ng = self.nodes[name].nodegroup
+        ng.client.delete_node(name)
+        del self.nodes[name]
+        ng.delete_node(name)
+
         
 class _Host(object):
     def __init__(self, name, addr):
@@ -87,6 +97,9 @@ class _NodeGroup(object):
 
     def list_nodes(self):
         return list(self.nodes.keys())
+
+    def delete_node(self, name):
+        del self.nodes[name]
     
         
 class _Node(object):

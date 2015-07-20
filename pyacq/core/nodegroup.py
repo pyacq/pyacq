@@ -68,7 +68,6 @@ class _NodeGroup(RPCServer):
         #print(self._name, 'control_node', name, method)
         getattr(self.nodes[name], method)(**kargs)
     
-    
     def start_all(self):
         for node in self.nodes.values():
             node.start()
