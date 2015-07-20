@@ -7,8 +7,8 @@ class Manager(RPCServer):
        * centralize all rpc commands to distribute them
        * centralize all info about all Node, NodeGroup, Host, ...
     """
-    def __init__(self, addr):
-        RPCServer.__init__(self, 'manager', addr)
+    def __init__(self, name, addr):
+        RPCServer.__init__(self, name, addr)
         self._hosts = {}
         self._rpc_socket = RPCClientSocket()
 
