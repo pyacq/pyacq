@@ -1,6 +1,10 @@
 import zmq
-import blosc
 import numpy as np
+try:
+    import blosc
+    HAVE_BLOSC = True
+except ImportError:
+    HAVE_BLOSC = False
 
 
 default_stream = dict( protocol = 'tcp', interface = '127.0.0.1', port = '8000',
@@ -19,28 +23,28 @@ common_doc = """
     port : str
         The port for the zmq.PUB socket
     transfertmode: 'plain_data', 'shared_mem', (not done 'shared_cuda_buffer' or 'share_opencl_buffer')
-        The way how the data transfet is done:
-            * 'plain_data' :  the data is send in the socket with a two part : one for frame index one for data.
-            * 'shared_mem' : the data is share in memory in a ring buffer, the socket only send the frame index
-            * 'shared_cuda_buffer' the data is share in Cuda buffer, the socket only send the frame index
-            * 'share_opencl_buffer' the data is share in OpenCL buffer, the socket only send the frame index
+        The method used for data transfer:
+            * 'plain_data': data are sent over a plain socket in two parts: (frame index, data).
+            * 'shared_mem': data are stored in shared memory in a ring buffer and the current frame index is sent over the socket.
+            * 'shared_cuda_buffer': data are stored in shared Cuda buffer and the current frame index is sent over the socket.
+            * 'share_opencl_buffer': data are stored in shared OpenCL buffer and the current frame index is sent over the socket.
     streamtype: 'analogsignal', 'digitalsignal', 'event' or 'image/video'
-        The type of data that are transfert.
+        The type of data to be transferred.
     dtype: str ('float32','float64', [('r', 'uint16'), ('g', 'uint16'), , ('b', 'uint16')], ...)
         The numpy.dtype of the data buffer. It can be a composed dtype for event or images.
     shape: list
         The shape of each data frame. Unknown dim are -1 in case of variable chunk.
-            * for image it is HxW.
-            * for analogsignal it can (nb_sample x nb_channel) or (-1 x nb_channel)
+            * for image it is (-1, H, W).
+            * for analogsignal it can be (-1, nb_channel, nb_sample) or (-1, nb_channel)
     compression: '', 'blosclz', 'blosc-lz4', 'mp4', 'h264'
         The compression for the data stream, the default is no compression ''.
     scale: float
-        In case when dtype is integer, you can give optional scale and offset. 
-        real_data = offset + scale*data
+        An optional scale factor + offset to apply to the data before it is sent over the stream.
+        real_data = offset + scale * data
     offset:
         See scale.
     units: str
-        Units of the stream. mainly used for 'analogsignal'
+        Units of the stream. Mainly used for 'analogsignal'.
 """
 
 class StreamDef:
@@ -119,10 +123,12 @@ class StreamSender:
         raise(NotImplemented)
     
     def _compress_blosclz(self, index, data):
+        assert HAVE_BLOSC, "Cannot use blosclz compression; blosc package is not importable."
         data = blosc.pack_array(data, cname = 'blosclz')
         return index, data
     
     def _compress_blosclz4(self, index, data):
+        assert HAVE_BLOSC, "Cannot use blosclz4 compression; blosc package is not importable."
         data = blosc.pack_array(data, cname = 'lz4')
         return index, data
     
