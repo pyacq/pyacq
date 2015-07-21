@@ -9,8 +9,8 @@ except ImportError:
 
 default_stream = dict( protocol = 'tcp', interface = '127.0.0.1', port = '8000',
                         transfermode = 'plaindata', streamtype = 'analogsignal',
-                        dtype = 'float32', shape = (-1, 16), compression ='',
-                        scale = None, offset = None, units = '')
+                        dtype = 'float32', shape = (-1, 16), time_axis = 0, 
+                        compression ='', scale = None, offset = None, units = '')
 
 
 common_doc = """
@@ -34,8 +34,12 @@ common_doc = """
         The numpy.dtype of the data buffer. It can be a composed dtype for event or images.
     shape: list
         The shape of each data frame. Unknown dim are -1 in case of variable chunk.
-            * for image it is (-1, H, W).
-            * for analogsignal it can be (-1, nb_channel, nb_sample) or (-1, nb_channel)
+            * for image it is (-1, H, W), (n_frames, H, W), or (H, W).
+            * for analogsignal it can be (n_samples, n_channels) or (-1, n_channels)
+    time_axis: int
+        The index of the axis that represents time within a single data chunk, or
+        -1 if the chunk lacks this axis (in this case, each chunk represents exactly one
+        timepoint).
     compression: '', 'blosclz', 'blosc-lz4', 'mp4', 'h264'
         The compression for the data stream, the default is no compression ''.
     scale: float
