@@ -27,10 +27,12 @@ class NodeGroupApplication(QtGui.QApplication):
 
 class NodeGroup:
     """
-    Node gourp is not directly a RPCServer.
+    Node group is not directly a RPCServer.
     """
     def __init__(self, name, addr):
         self.rpc_server = _NodeGroup(name, addr)
+        self._name = name
+        self._addr = self.rpc_server._addr
         self.nodes = {}
 
     def run_forever(self):
@@ -79,7 +81,6 @@ class _NodeGroup(RPCServer):
     def control_node(self, name, method, **kargs):
         #print(self._name, 'control_node', name, method)
         getattr(self.nodes[name], method)(**kargs)
-    
     
     def start_all(self):
         for node in self.nodes.values():
