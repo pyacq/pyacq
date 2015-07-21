@@ -195,9 +195,18 @@ class RPCClient(object):
     def _call_method(self, method_name, *args, **kwds):
         """Request the remote server to call a method.
         """
+        sync = kwds.pop('_sync', True)
+        timeout = kwds.pop('_timeout', None)
+        
         if not self._connect_established:
             self._ensure_connection()
-        return self._rpc_socket.send(self._name, 'call', method_name, *args, **kwds)
+        
+        fut = self._rpc_socket.send(self._name, 'call', method_name, *args, **kwds)
+        
+        if sync:
+            return fut.result(timeout=timeout)
+        else:
+            return fut
 
     def _ensure_connection(self, timeout=3):
         """Make sure RPC server is connected and available.
@@ -231,13 +240,7 @@ class RPCMethod(object):
         self.method = method
         
     def __call__(self, *args, **kwds):
-        sync = kwds.pop('_sync', True)
-        timeout = kwds.pop('_timeout', None)
-        fut = self.client._call_method(self.method, *args, **kwds)
-        if sync:
-            return fut.result(timeout=timeout)
-        else:
-            return fut
+        return self.client._call_method(self.method, *args, **kwds)
 
 
 class RPCServer(object):
@@ -293,7 +296,7 @@ class RPCServer(object):
                 if ret:
                     self._send_result(name, call_id, rval=rval)
             except:
-                exc_str = ["Error while processing request %s(%s, %s)" % (method, args, kwds)]
+                exc_str = ["Error while processing request %s.%s(%s, %s)" % (str(self), method, args, kwds)]
                 exc_str += traceback.format_stack()
                 exc_str += [" < exception caught here >\n"]
                 exc = sys.exc_info()
