@@ -2,10 +2,22 @@ from .rpc import RPCServer, RPCClientSocket, RPCClient
 
 
 class Manager(RPCServer):
-    """
-    This class:
-       * centralize all rpc commands to distribute them
-       * centralize all info about all Node, NodeGroup, Host, ...
+    """Manager is a central point of control for connecting to hosts, creating
+    Nodegroups and Nodes, and interacting with Nodes.
+    
+    It can either be instantiated directly or in a subprocess and accessed
+    remotely by RPC::
+    
+        mgr_proc = ProcessSpawner(Manager, name='manager', addr='tcp://127.0.0.1:*')
+        mgr = RPCClient(mgr_proc.name, mgr_proc.addr)
+        
+       
+    Parameters
+    ----------
+    name : str
+        A unique identifier for this manager.
+    addr : str
+        The address for the manager's RPC server.
     """
     def __init__(self, name, addr):
         RPCServer.__init__(self, name, addr)
@@ -17,17 +29,37 @@ class Manager(RPCServer):
         self._rpc_socket = RPCClientSocket()
 
     def connect_host(self, name, addr):
+        """Connect the manager to a Host.
+        
+        Hosts are used as a stable service on remote machines from which new
+        Nodegroups can be spawned or closed.
+        """
         if name not in self.hosts:
             hp = _Host(name, addr)
             self.hosts[name] = hp
 
     def disconnect_host(self, name):
+        """Disconnect the Manager from the Host identified by *name*.
+        """
         self.hosts[name].close()
 
     def list_hosts(self):
+        """Return a list of the identifiers for Hosts that the Manager is
+        connected to.
+        """
         return list(self.hosts.keys())
     
     def create_nodegroup(self, host, name):
+        """Create a new Nodegroup.
+        
+        Parameters
+        ----------
+        host : str
+            The identifier of the Host that should be used to spawn the new
+            Nodegroup.
+        name : str
+            A unique identifier for the new Nodegroup.
+        """
         if name in self.nodegroups:
             raise KeyError("Nodegroup named %s already exists" % name)
         host = self.hosts[host]
