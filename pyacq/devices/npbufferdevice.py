@@ -7,7 +7,6 @@ from pyqtgraph.Qt import QtCore, QtGui
 class NumpyDeviceBuffer(Node):
     def __init__(self, **kargs):
         Node.__init__(self, **kargs)
-        
     
     def start(self):
         print(self.name, 'start')
