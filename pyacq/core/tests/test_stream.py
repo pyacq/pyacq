@@ -11,7 +11,7 @@ def test_stream_plaindata():
     nb_channel = 16
     chunksize = 1024
     stream_dict = dict(protocol = 'tcp', interface = '127.0.0.1', port = '9000',
-                        transfertmode = 'plaindata', streamtype = 'analogsignal',
+                        transfermode = 'plaindata', streamtype = 'analogsignal',
                         dtype = 'float32', shape = (-1, nb_channel), compression ='',
                         scale = None, offset = None, units = '' )
     

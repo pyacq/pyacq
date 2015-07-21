@@ -8,7 +8,7 @@ except ImportError:
 
 
 default_stream = dict( protocol = 'tcp', interface = '127.0.0.1', port = '8000',
-                        transfertmode = 'plaindata', streamtype = 'analogsignal',
+                        transfermode = 'plaindata', streamtype = 'analogsignal',
                         dtype = 'float32', shape = (-1, 16), compression ='',
                         scale = None, offset = None, units = '')
 
@@ -22,7 +22,7 @@ common_doc = """
         The bind adress for the zmq.PUB socket
     port : str
         The port for the zmq.PUB socket
-    transfertmode: 'plain_data', 'shared_mem', (not done 'shared_cuda_buffer' or 'share_opencl_buffer')
+    transfermode: 'plain_data', 'shared_mem', (not done 'shared_cuda_buffer' or 'share_opencl_buffer')
         The method used for data transfer:
             * 'plain_data': data are sent over a plain socket in two parts: (frame index, data).
             * 'shared_mem': data are stored in shared memory in a ring buffer and the current frame index is sent over the socket.
@@ -48,9 +48,7 @@ common_doc = """
 """
 
 class StreamDef:
-    """
-    A StreamDef define a connection between 2 nodes.
-    
+    """StreamDef defines a connection between 2 nodes.
     """+common_doc
     def __init__(self,**karg):
         self.params = dict(default_stream)
@@ -58,8 +56,7 @@ class StreamDef:
     
 
 class StreamSender:
-    """
-    A StreamSender is a helper class to send data.
+    """A StreamSender is a helper class to send data.
     """
     def __init__(self, **kargs):
         self.params = dict(default_stream)
@@ -74,7 +71,7 @@ class StreamSender:
         self.funcs = []
         
         if self.params['compression'] != '':
-            assert self.params['transfertmode'] == 'plaindata', 'Compression only for transfertmode=plaindata'
+            assert self.params['transfermode'] == 'plaindata', 'Compression only for transfermode=plaindata'
         
         #compression
         if self.params['compression'] == '':
@@ -87,13 +84,13 @@ class StreamSender:
             
         
         #send or cpy to buffer
-        if self.params['transfertmode'] == 'plaindata':
+        if self.params['transfermode'] == 'plaindata':
             self.funcs.append(self._send_plain)
-        elif self.params['transfertmode'] == 'shared_mem':
+        elif self.params['transfermode'] == 'shared_mem':
             self.funcs.append(self._copy_to_shmem)
-        #elif self.params['transfertmode'] == 'shared_cuda_buffer':
+        #elif self.params['transfermode'] == 'shared_cuda_buffer':
         #    pass
-        #elif self.params['transfertmode'] == 'share_opencl_buffer':
+        #elif self.params['transfermode'] == 'share_opencl_buffer':
         #   pass
         
         #TODO check if this is needed
@@ -139,9 +136,7 @@ class StreamSender:
 
 
 class StreamReceiver:
-    """
-    A StreamSender is a helper class to receiv data.
-    
+    """StreamSender is a helper class to receive data.
     """
     def __init__(self, **kargs):
         self.params = dict(default_stream)
@@ -156,9 +151,9 @@ class StreamReceiver:
         
         self.funcs = []
         #send or cpy to buffer
-        if self.params['transfertmode'] == 'plaindata':
+        if self.params['transfermode'] == 'plaindata':
             self.funcs.append(self._recv_plain)
-        elif self.params['transfertmode'] == 'shared_mem':
+        elif self.params['transfermode'] == 'shared_mem':
             self.funcs.append(self._recv_from_shmem)
         
         #compression
@@ -167,7 +162,6 @@ class StreamReceiver:
         elif self.params['compression'] in ['blosc-blosclz', 'blosc-lz4']:
             self.funcs.append(self._uncompress_blosc)
 
-    
     def recv(self):
         """
         Receive the data chunk
@@ -197,7 +191,3 @@ class StreamReceiver:
     
     def close(self):
         self.socket.close()
-    
-    
-
-
