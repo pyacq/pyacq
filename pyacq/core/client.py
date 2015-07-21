@@ -2,9 +2,8 @@ from .rpc import RPCClient
 
 
 class ManagerProxy(RPCClient):
-    def __init__(self, proc):
-        self.proc = proc
-        RPCClient.__init__(self, proc.name, proc.addr)
+    def __init__(self, name, addr):
+        RPCClient.__init__(self, name, addr)
         self._host_proxy = {}
 
     def connect_host(self, name, addr):
@@ -19,9 +18,10 @@ class ManagerProxy(RPCClient):
             self._host_proxy[name] = HostProxy(self, name, addr)
         return self._host_proxy[name]
 
-    def create_nodegroup(self, host=None, name=None):
-        if host is None:
-            host = self.default_host()
+    def create_nodegroup(self, name=None):
+        """
+        """
+        host = self.default_host()
         return host.create_nodegroup(name)
 
 
@@ -55,7 +55,7 @@ class NodeGroupProxy(RPCClient):
             name = self.mgr.suggest_node_name()
         self.mgr.create_node(self.name, name, classname, **kwargs)
         self._node_proxy[name] = NodeProxy(self, name)
-        
+        return self._node_proxy[name]
         
 class NodeProxy(object):
     def __init__(self, nodegroup, name):
@@ -63,4 +63,4 @@ class NodeProxy(object):
         self.name = name
         
     def __getattr__(self, name):
-        return lambda *args, **kwargs: getattr(self.nodegroup, name)(*args, **kwargs)
+        return lambda *args, **kwargs: getattr(self.nodegroup, 'control_node')(self.name, name, *args, **kwargs)

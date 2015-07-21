@@ -5,11 +5,13 @@ from .host import Host
 
 
 def create_manager(mode='rpc'):
+    """Create a new Manager either in this process or in a new process.
+    """
     if mode == 'local':
         return Manager(name='manager', addr='tcp://*:*')
     else:
         proc = ProcessSpawner(Manager, name='manager', addr='tcp://127.0.0.1:*')
-        return ManagerProxy(proc)
+        return ManagerProxy(proc.name, proc.addr)
         
 
 class Manager(RPCServer):
