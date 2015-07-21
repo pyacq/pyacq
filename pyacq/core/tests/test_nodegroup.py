@@ -67,7 +67,7 @@ def test_qwidget_node():
 
 
 if __name__ == '__main__':
-    #~ test_nodegroup0()
-    #~ test_cannot_delete_node_while_running()
+    test_nodegroup0()
+    test_cannot_delete_node_while_running()
     test_qwidget_node()
 

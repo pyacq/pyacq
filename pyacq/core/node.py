@@ -1,6 +1,8 @@
 from pyqtgraph.Qt import QtCore, QtGui
 
 from .nodelist import register_node
+from .stream import StreamDef, StreamSender, StreamReceiver
+
 
 class Node(QtCore.QObject):
     """
@@ -15,9 +17,11 @@ class Node(QtCore.QObject):
         self.name = name
         self._running = False
         
-        self.sources = [ ]
+        self.sources = []
+        self.out_streams = []
+        self.in_streams = []
     
-    def isrunning(self):
+    def running(self):
         return self._running
     
     def start(self):
@@ -32,11 +36,22 @@ class Node(QtCore.QObject):
     def configure(self, **kargs):
         raise(NotImplementedError)
     
-    def set_sources(self, ):
-        assert not self.isrunnng(), 'Cannot change source while running'
-        #TODO check the source list
-        #TODO create zmq.SUB socket
-        pass
+    def create_outputs(self, streamdef_list):
+        assert not self.running(), 'Cannot change source while running'
+        print('#####', self.name, len(self.out_streams))
+        assert len(self.out_streams)==0, 'Output Stream are already there'
+        # TODO check the compatibility are of the request and the Node possiobility
+        # todo check the len(self.out_streams) is the number of outputs
+        for streamdef in streamdef_list:
+            self.out_streams.append(StreamReceiver(**streamdef))
+    
+    def set_sources(self, streamdef_list):
+        assert not self.running(), 'Cannot change source while running'
+        assert len(self.in_streams)==0, 'Input Stream are already there'
+        # TODO check the compatibility are of the request and the Node possiobility
+        # todo check the len(self.in_streams) is the number of outputs
+        for streamdef in streamdef_list:
+            self.in_streams.append(StreamReceiver(**streamdef))
 
 
 class WidgetNode(Node):

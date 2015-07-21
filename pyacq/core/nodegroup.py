@@ -71,16 +71,16 @@ class _NodeGroup(RPCServer):
         self.nodes[name] = node
     
     def any_node_running(self):
-        return any(node.running for node in self.nodes.values())
+        return any(node.running() for node in self.nodes.values())
     
     def delete_node(self, name):
         node = self.nodes[name]
-        assert not node.isrunning(), 'The node {} is running'.format(name)
+        assert not node.running(), 'The node {} is running'.format(name)
         self.nodes.pop(name)
     
-    def control_node(self, name, method, **kargs):
+    def control_node(self, name, method, *args, **kargs):
         #print(self._name, 'control_node', name, method)
-        getattr(self.nodes[name], method)(**kargs)
+        getattr(self.nodes[name], method)(*args, **kargs)
     
     def start_all(self):
         for node in self.nodes.values():
