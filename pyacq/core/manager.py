@@ -72,6 +72,7 @@ class Manager(RPCServer):
             self.nodegroup = nodegroup
             self.name = name
             self.classname = classname
+            self.outputs = [ ]# list of StreamDef
     
     
     def __init__(self, name, addr):
@@ -137,11 +138,14 @@ class Manager(RPCServer):
             raise KeyError("Nodegroup named %s already exists" % name)
         host = self.hosts[host]
         addr = 'tcp://%s:*' % (host.rpc_hostname)
-        _, addr = host.client.new_nodegroup(name, addr)
+        _, addr = host.client.create_nodegroup(name, addr)
         ng = Manager._NodeGroup(host, name, addr)
         host.add_nodegroup(ng)
         self.nodegroups[name] = ng
         return name, addr
+    
+    #~ def close_nodegroup(self, name):
+        #~ self.nodegroups[name].host.client.close_nodegroup(name)
 
     def list_nodegroups(self, host=None):
         if host is None:
@@ -184,4 +188,21 @@ class Manager(RPCServer):
         self._next_node_name += 1
         return name
     
+    def start_all_nodes(self):
+        #~ print
+        for ng in self.nodegroups.values():
+            ng.client.start_all_nodes()
     
+    def stop_all_nodes(self):
+        for ng in self.nodegroups.values():
+            ng.client.stop_all_nodes()
+
+    def create_node_outputs(self, nodename, streamdef):
+        ng = self.nodes[nodename].nodegroup
+        self.nodes[nodename].streamdef = ng.client.control_node(nodename, 'create_outputs', streamdef)
+    
+    
+        
+    
+
+

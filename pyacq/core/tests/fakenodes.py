@@ -10,14 +10,14 @@ import sys
 class FakeSender(Node):
     def __init__(self, **kargs):
         Node.__init__(self, **kargs)
-        self.beat = QtCore.QTimer(singleShot = False, interval = 500)
-        self.beat.timeout.connect(self.send_data)
-        self.beat.timeout.connect(self.print_beat)
-        self.beat.start()
+        #~ self.beat = QtCore.QTimer(singleShot = False, interval = 500)
+        #~ self.beat.timeout.connect(self.send_data)
+        #~ self.beat.timeout.connect(self.print_beat)
+        #~ self.beat.start()
     
-    def print_beat(self):
-        print(self.name, 'print_beat')
-        sys.stdout.flush()
+    #~ def print_beat(self):
+        #~ print(self.name, 'print_beat')
+        #~ sys.stdout.flush()
     
     def start(self):
         print(self.name, 'started')

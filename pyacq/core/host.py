@@ -20,7 +20,7 @@ class Host(RPCServer):
         RPCServer.__init__(self, name, addr)
         self.nodegroup_process = {}
     
-    def new_nodegroup(self, name, addr):
+    def create_nodegroup(self, name, addr):
         """Create a new NodeGroup in a new process.
         
         Return the RPC name and address of the new nodegroup.

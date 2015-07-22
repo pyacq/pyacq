@@ -51,12 +51,10 @@ common_doc = """
         Units of the stream. Mainly used for 'analogsignal'.
 """
 
-class StreamDef:
+class StreamDef(dict):
     """StreamDef defines a connection between 2 nodes.
     """+common_doc
-    def __init__(self,**karg):
-        self.params = dict(default_stream)
-        self.params.update(kargs)
+    
     
 
 class StreamSender:
