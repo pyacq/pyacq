@@ -268,18 +268,35 @@ class RPCServer(object):
     def __del__(self):
         self.close()
 
-    def _process_one(self):
+    def _read_and_process_one(self):
         """Read one message from the remote client and invoke the requested
         action.
         
         This method sends back to the client either the return value or an
         error message.
         """
+        
+        name, msg = self._read_socket()
+        self._process_one(name, msg)
+        
+    def _read_socket(self):
+        """Read one message from the remote client
+        """
         if not self.running:
             raise RuntimeError("RPC server socket is already closed.")
-        name = self._socket.recv()
-        msg = self._socket.recv_json()
+            
+        name, msg = self._socket.recv_multipart()
+        
+        #~ name = self._socket.recv()
+        #~ msg = self._socket.recv_json()
         info("RPC recv req: %s %s", name, msg)
+        return name, msg
+        
+    def _process_one(self, name, msg):
+        """
+        Invoke the requested action.
+        """
+        msg = json.loads(msg.decode())
         if msg['action'] == 'call':
             method, args = msg['args'][0], msg['args'][1:]
             kwds = msg['kwds']
@@ -305,7 +322,8 @@ class RPCServer(object):
                     self._send_result(name, call_id, error=(exc[0].__name__, exc_str))
         if not self.running:
             self._socket.close()
-        
+   
+    
     def _send_result(self, name, call_id, rval=None, error=None):
         result = {'action': 'return', 'call_id': call_id,
                   'rval': rval, 'error': error}
@@ -326,7 +344,7 @@ class RPCServer(object):
     
     def run_forever(self):
         while self.running():
-            self._process_one()
+            self._read_and_process_one()
 
     def ping(self):
         return 'pong'

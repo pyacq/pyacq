@@ -62,14 +62,15 @@ class WidgetNode(Node):
         
         app = QtGui.QApplication.instance()
         self.need_create_widget.connect(app.create_widget_of_node)
-        self.need_show_widget.connect(app.show_widget_of_node)        
         self.need_create_widget.emit()
+        self.create_widget()
         
     def create_widget(self):
         raise(NotImplementedError)
+        #self.whidget = ...
     
     def show(self):
-        self.need_show_widget.emit()
+        self.widget.show()
 
 
 
@@ -106,9 +107,11 @@ class _MyReceiverNode(Node):
     
     def start(self):
         self.timer.start()
+        self._running = True
 
     def stop(self):
         self.timer.stop()
+        self._running = False
     
     def close(self):
         pass
@@ -125,6 +128,7 @@ class _MyReceiverNode(Node):
         print('I am node ', self.name, 'configured')
     
     def poll_socket(self):
+        print(self._name, 'poll_socket')
         event = self.stream.socket.poll(0)
         if event!=0:
             index, data = self.stream.recv()
