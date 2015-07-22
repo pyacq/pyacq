@@ -2,10 +2,8 @@ import time
 
 from pyacq import create_manager
 
-import logging
+#~ import logging
 #~ logging.getLogger().level=logging.INFO
-
-import atexit
 
 
 def test_npbufferdevice():
@@ -21,24 +19,20 @@ def test_npbufferdevice():
     dev.create_outputs([ stream_dict ])    
     dev.initialize()
     
-    
-    
-    # create some receveiver
-    receiver_names = [ 'receiver{}'.format(i) for i in range(3) ]
-    
     # create stream
-    receivers = [ nodegroup.create_node('_MyReceiverNode', name = 'receiver{}'.format(i)) for i in range(3) ]
+    nodegroup.register_node_from_module('pyacq.core.tests.fakenodes', 'FakeReceiver' )
+    receivers = [ nodegroup.create_node('FakeReceiver', name = 'receiver{}'.format(i)) for i in range(3) ]
     for receiver in receivers:
         receiver.configure()
         receiver.set_inputs([ stream_dict ])
         receiver.initialize()
     
-    nodegroup.start_all()
+    nodegroup.start_all_nodes()
     
     print(nodegroup.any_node_running())
     time.sleep(5.)
     
-    nodegroup.stop_all()
+    nodegroup.stop_all_nodes()
     print(nodegroup.any_node_running())
 
     man.default_host().close()

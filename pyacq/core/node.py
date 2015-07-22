@@ -2,6 +2,7 @@ from pyqtgraph.Qt import QtCore, QtGui
 
 from .nodelist import register_node
 from .stream import StreamDef, StreamSender, StreamReceiver
+from logging import info
 
 
 class Node(QtCore.QObject):
@@ -54,15 +55,15 @@ class Node(QtCore.QObject):
 
 
 class WidgetNode(Node):
-    need_create_widget = QtCore.Signal()
-    need_show_widget = QtCore.Signal()
+    #~ need_create_widget = QtCore.Signal()
+    #~ need_show_widget = QtCore.Signal()
     def __init__(self, **kargs):
         Node.__init__(self, **kargs)
         self.widget = None
         
         app = QtGui.QApplication.instance()
-        self.need_create_widget.connect(app.create_widget_of_node)
-        self.need_create_widget.emit()
+        #~ self.need_create_widget.connect(app.create_widget_of_node)
+        #~ self.need_create_widget.emit()
         self.create_widget()
         
     def create_widget(self):
@@ -74,64 +75,24 @@ class WidgetNode(Node):
 
 
 
-
-
-
-class _MyTestNode(Node):
+# For test purpos only
+class _MyTest:
     def start(self):
-        print('I am node ', self.name, 'started')
+        print(self.name, 'started')
         self._running = True
-
     def stop(self):
-        print('I am node ', self.name, 'stopped')
+        print(self.name, 'stoped')
         self._running = False
+    def initialize(self):
+        pass
+    def configure(self):
+        pass
 
-    def configure(self, **kargs):
-        print('I am node ', self.name, 'configured')
-    
-    def initialize(self, **kargs):
-        print('I am node ', self.name, 'initialized')
+class _MyTestNode(_MyTest, Node):
+    pass
 register_node(_MyTestNode)
 
-
-
-class _MyTestNodeQWidget(WidgetNode):
+class _MyTestNodeQWidget(_MyTest, WidgetNode):
     def create_widget(self):
         self.widget = QtGui.QLabel('Hi!')
 register_node(_MyTestNodeQWidget)
-
-
-class _MyReceiverNode(Node):
-    def __init__(self, **kargs):
-        Node.__init__(self, **kargs)
-    
-    def start(self):
-        self.timer.start()
-        self._running = True
-
-    def stop(self):
-        self.timer.stop()
-        self._running = False
-    
-    def close(self):
-        pass
-    
-    def initialize(self):
-        assert len(self.in_streams)!=0, 'create_outputs must be call first'
-        self.stream =self.in_streams[0]
-        
-        self.timer = QtCore.QTimer(singleShot = False)
-        self.timer.setInterval(50)
-        self.timer.timeout.connect(self.poll_socket)
-
-    def configure(self, **kargs):
-        print('I am node ', self.name, 'configured')
-    
-    def poll_socket(self):
-        #~ print(self.name, 'poll_socket')
-        event = self.stream.socket.poll(0)
-        if event!=0:
-            index, data = self.stream.recv()
-            print(self.name, 'recv', index)
-        
-register_node(_MyReceiverNode)

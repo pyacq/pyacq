@@ -6,8 +6,12 @@ from pyacq.core.rpc import RPCClient, RemoteCallException
 from pyacq.core.processspawner import ProcessSpawner
 from pyacq.core.nodegroup import NodeGroup
 from pyacq.core.node import Node
+from pyacq.core.nodelist import register_node
 
-#logging.basicConfig(level=logging.INFO)
+from pyacq import create_manager
+
+
+#~ logging.getLogger().level=logging.INFO
 
 def test_nodegroup0():
     name, addr = 'nodegroup', 'tcp://127.0.0.1:6000'
@@ -42,6 +46,9 @@ def test_cannot_delete_node_while_running():
     with pytest.raises(RemoteCallException):
         # a running node cannot be delete
         client0.delete_node('mynode')
+    
+    client0.control_node('mynode', 'stop')
+    client0.delete_node('mynode')
 
     process_nodegroup0.stop()
 
@@ -58,16 +65,46 @@ def test_remotly_show_qwidget_node():
     client1.create_node('mynode', '_MyTestNodeQWidget')
     client1.control_node('mynode', 'show')
     
-    time.sleep(5.)
+    time.sleep(3.)
     
     process_nodegroup0.stop()
     process_nodegroup1.stop()
 
 
+def test_register_node_from_module():
+    man = create_manager()
+    nodegroup = man.create_nodegroup()
+    
+    nodegroup.register_node_from_module('pyacq.core.tests.fakenodes', 'NoneRegisteredClass' )
+    nodegroup.create_node( 'NoneRegisteredClass')
+    
+    man.default_host().close()
+    man.close()
+
+
+
+class MyNewNode(Node):
+    pass
+
+def test_register_node_with_pickle():
+    man = create_manager()
+    nodegroup = man.create_nodegroup()
+    import pickle
+    picklizedclass = pickle.dumps(MyNewNode)
+    print(picklizedclass)
+    nodegroup.register_node_with_pickle(picklizedclass, 'MyNewNode')
+    nodegroup.create_node( 'MyNewNode')
+    
+    man.default_host().close()
+    man.close()
+
+
 
 
 if __name__ == '__main__':
-    test_nodegroup0()
-    test_cannot_delete_node_while_running()
-    test_remotly_show_qwidget_node()
+    #~ test_nodegroup0()
+    #~ test_cannot_delete_node_while_running()
+    #~ test_remotly_show_qwidget_node()
+    test_register_node_from_module()
+    #test_register_node_with_pickle()  ### not working at the moment
 
