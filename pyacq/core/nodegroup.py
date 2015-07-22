@@ -75,11 +75,6 @@ class NodeGroup(RPCServer):
         #~ print(node.parent())
         self.nodes[name] = node
     
-    def test1(self, name):
-        node = self.nodes[name]
-        node.send_data()
-        
-    
     def any_node_running(self):
         return any(node.running() for node in self.nodes.values())
     

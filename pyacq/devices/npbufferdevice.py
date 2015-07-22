@@ -9,14 +9,10 @@ class NumpyDeviceBuffer(Node):
         Node.__init__(self, **kargs)
     
     def start(self):
-        print(self.name, 'start')
-        import sys
-        sys.stdout.flush()
         self.timer.start()
         self._running = True
 
     def stop(self):
-        print(self.name, 'stop')
         self.timer.stop()
         self._running = False
     
@@ -27,9 +23,7 @@ class NumpyDeviceBuffer(Node):
         assert len(self.out_streams)!=0, 'create_outputs must be call first'
         self.stream =self.out_streams[0]
         self.head = 0
-        
-        self.timer = QtCore.QTimer(singleShot = False)
-        self.timer.setInterval(int(self.sample_interval*1000))
+        self.timer = QtCore.QTimer(singleShot = False, interval = int(self.chunksize*self.sample_interval*1000))
         self.timer.timeout.connect(self.send_data)
 
     def configure(self, nb_channel = 16, sample_interval = 0.001):
@@ -37,7 +31,7 @@ class NumpyDeviceBuffer(Node):
         self.sample_interval = sample_interval
         
         self.nloop = 20
-        self.chunksize = 1024
+        self.chunksize = 256
         self.length =self.nloop*self.chunksize
         t = np.arange(self.length)
         self.buffer = np.random.rand(self.length, nb_channel)*.2
@@ -45,9 +39,12 @@ class NumpyDeviceBuffer(Node):
         self.buffer = self.buffer.astype('float32')
     
     def send_data(self):
-        print(self.name, 'send_data', self.head)
-        i1 = self.head%elf.length
+        print('send_data', self.head)
+        import sys
+        sys.stdout.flush()
+        i1 = self.head%self.length
         self.head += self.chunksize
-        i2 = self.head%elf.length
-        self.out_streams[0].send(self.buffer[i1:i2, :])
+        i2 = self.head%self.length
+        self.out_streams[0].send(self.head, self.buffer[i1:i2, :])
+
 register_node(NumpyDeviceBuffer)

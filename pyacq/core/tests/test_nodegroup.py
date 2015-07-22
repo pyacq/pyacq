@@ -45,7 +45,7 @@ def test_cannot_delete_node_while_running():
 
     process_nodegroup0.stop()
 
-def test_qwidget_node():
+def test_remotly_show_qwidget_node():
     name, addr = 'nodegroup0', 'tcp://127.0.0.1:6000'
     process_nodegroup0  = ProcessSpawner(NodeGroup,  name, addr)
     client0 = RPCClient(name, addr)
@@ -69,5 +69,5 @@ def test_qwidget_node():
 if __name__ == '__main__':
     test_nodegroup0()
     test_cannot_delete_node_while_running()
-    test_qwidget_node()
+    test_remotly_show_qwidget_node()
 

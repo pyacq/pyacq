@@ -128,7 +128,7 @@ class _MyReceiverNode(Node):
         print('I am node ', self.name, 'configured')
     
     def poll_socket(self):
-        print(self._name, 'poll_socket')
+        #~ print(self.name, 'poll_socket')
         event = self.stream.socket.poll(0)
         if event!=0:
             index, data = self.stream.recv()

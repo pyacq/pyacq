@@ -1,52 +1,50 @@
 import time
 
-from pyacq.core.nodegroup import NodeGroup
-from pyacq.core.processspawner import ProcessSpawner
-from pyacq.core.rpc import RPCClient, RemoteCallException
-from pyacq.core.node import Node
-from pyacq.core.stream import StreamSender, StreamReceiver
-from pyacq.devices.npbufferdevice import NumpyDeviceBuffer
+from pyacq import create_manager
+
+import logging
+#~ logging.getLogger().level=logging.INFO
+
+import atexit
 
 
 def test_npbufferdevice():
-    name, addr = 'nodegroup', 'tcp://127.0.0.1:6000'
-    process_nodegroup0  = ProcessSpawner(NodeGroup,  name, addr)
-    client0 = RPCClient(name, addr)
+    man = create_manager()
+    nodegroup = man.create_nodegroup()
     
-    # create and configure device
-    client0.create_node('dev', 'NumpyDeviceBuffer')
-    client0.control_node('dev', 'configure', nb_channel = 16, sample_interval = 0.001)
+    dev = nodegroup.create_node('NumpyDeviceBuffer', name = 'dev')
+    dev.configure( nb_channel = 16, sample_interval = 0.001)
     stream_dict = dict(protocol = 'tcp', interface = '127.0.0.1', port = '9000',
                         transfertmode = 'plaindata', streamtype = 'analogsignal',
                         dtype = 'float32', shape = (-1, 16), compression ='',
                         scale = None, offset = None, units = '' )
-    client0.control_node('dev', 'create_outputs', [ stream_dict ])
-    client0.control_node('dev', 'initialize')
+    dev.create_outputs([ stream_dict ])    
+    dev.initialize()
+    
+    
     
     # create some receveiver
     receiver_names = [ 'receiver{}'.format(i) for i in range(3) ]
     
     # create stream
-    for name in receiver_names:
-        client0.create_node(name, '_MyReceiverNode')
-        client0.control_node(name, 'configure')
-        client0.control_node(name, 'set_inputs', [ stream_dict ])
-        client0.control_node(name, 'initialize')
+    receivers = [ nodegroup.create_node('_MyReceiverNode', name = 'receiver{}'.format(i)) for i in range(3) ]
+    for receiver in receivers:
+        receiver.configure()
+        receiver.set_inputs([ stream_dict ])
+        receiver.initialize()
     
-    time.sleep(1.)
-    client0.start_all()
-    print(client0.any_node_running())
-    time.sleep(3.)
+    nodegroup.start_all()
     
-    client0.stop_all()
-    print(client0.any_node_running())
-    process_nodegroup0.stop()
+    print(nodegroup.any_node_running())
+    time.sleep(5.)
     
+    nodegroup.stop_all()
+    print(nodegroup.any_node_running())
+
+    man.default_host().close()
+    man.close()
 
 
-
-    
-    
 if __name__ == '__main__':
     test_npbufferdevice()
 
