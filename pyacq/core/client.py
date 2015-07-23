@@ -25,24 +25,15 @@ class ManagerProxy(RPCClient):
         host = self.default_host()
         return host.create_nodegroup(name)
     
-    #~ def __getattr__(self, name, *args, **kargs):
+    def __getattr__(self, name, *args, **kargs):
+        print('__getattr__', name,  args, kargs)
         #~ """
-        #~ This a hack in case we call remote method on on proxy:
-        #~ When one of the *args is itself MagicProxy it is change in the name
-        
         #~ This allow this kind of shortcuts:
         #~ manager.create_node_outputs(node, streamdef)
         #~ instead of normally
         #~ manager.create_node_outputs(node.name, streamdef)
         #~ """
-        #~ args2 = [ ]
-        #~ for arg in args:
-            #~ print(name, type(arg), isinstance(arg, NodeProxy))
-            #~ if isinstance(arg, NodeProxy):
-                #~ args2.append(arg._name)
-            #~ else:
-                #~ args2.append(arg)
-        #~ return RPCClient.__getattr__(self, name, *args2, **kargs)
+        return RPCClient.__getattr__(self, name, *args, **kargs)
         
 
 

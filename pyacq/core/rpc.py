@@ -268,7 +268,23 @@ class RPCMethod(object):
         self.method = method
         
     def __call__(self, *args, **kwds):
-        return self.client._call_method(self.method, *args, **kwds)
+        # This little hack could be a help for manger remote method when dealing with node
+        # for instance:
+        # nodename = mynodeproxy.name
+        # manager.create_node_outputs(nodename, streamdef)
+        # could be directly be
+        # manager.create_node_outputs(mynodeproxy, streamdef)
+        
+        args2 = [ ]
+        for arg in args:
+            if arg.__class__.__name__ == 'NodeProxy':
+                args2.append(arg.name)
+            else:
+                args2.append(arg)
+        return self.client._call_method(self.method, *args2, **kwds)
+        
+        #original code
+        #return self.client._call_method(self.method, *args, **kwds)
 
 
 class RPCServer(object):
