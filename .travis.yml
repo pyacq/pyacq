@@ -19,6 +19,8 @@ if [[ "$DISTRIB" == "ubuntu" ]]; then
     virtualenv --system-site-packages testvenv
     source testvenv/bin/activate
     pip install pytest
+    cd pyacq
+    python setup.py develop
 fi
 
 script:
