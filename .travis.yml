@@ -1,8 +1,11 @@
 language: python
 sudo : false
 python:
-  - "3.4"
+  - 3.4
 
+virtualenv:
+    system_site_packages: true
+  
 matrix:
   include:
     - env env: DISTRIB="ubuntu" PYTHON_VERSION="3.4"
@@ -17,9 +20,6 @@ matrix:
 install:
 
     - if [[ "$DISTRIB" == "ubuntu" ]]; then
-        deactivate;
-        virtualenv --system-site-packages testvenv;
-        source testvenv/bin/activate;
         pip install pytest;
       fi;
 
