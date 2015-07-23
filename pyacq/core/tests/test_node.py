@@ -4,7 +4,7 @@ from pyacq import create_manager
 from pyacq.core.node import Node
 
 def test_stream_between_node():
-    # this is done a Node level for testing
+    # this is done at Node level the manager do not known the connection
     man = create_manager()
     nodegroup = man.create_nodegroup()
     
@@ -43,7 +43,7 @@ def test_stream_between_node():
 
 
 def test_stream_between_node2():
-    # this is done a Node level for testing
+    # this is done at Manager level the manager do known the connection
     man = create_manager()
     nodegroup = man.create_nodegroup()
     
@@ -57,8 +57,10 @@ def test_stream_between_node2():
                         dtype = 'float32', shape = (-1, 16), compression ='',
                         scale = None, offset = None, units = '' )
     sender.configure(sample_interval = 0.001)
+    
     #~ sender.create_outputs([ streamdef0 ])
     man.create_node_outputs(sender.name, [streamdef0])
+    #man.create_node_outputs(sender, [streamdef0])
     sender.initialize()
     
     receiver = nodegroup.create_node('FakeReceiver', name = 'receiver')
