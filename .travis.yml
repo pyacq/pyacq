@@ -13,14 +13,15 @@ matrix:
               - python-numpy
               - python-zmq
               - python-qt4
+
 install:
-    if [[ "$DISTRIB" == "ubuntu" ]]; then
+
+    - if [[ "$DISTRIB" == "ubuntu" ]]; then
         deactivate
         virtualenv --system-site-packages testvenv
         source testvenv/bin/activate
         pip install pytest
       fi;
-
 
 
 script:
