@@ -102,7 +102,7 @@ def test_visual_node_both_in_main_qapp_and_remote_qapp():
     sender.initialize()
     
     #receiver0 is in remote QApp (in nodegroup)
-    receiver0 = nodegroup.create_node('ReceiverWidget', name = 'receiver0', tag ='I am in distant QApp')
+    receiver0 = nodegroup.create_node('ReceiverWidget', name = 'receiver0', tag ='<b>I am in distant QApp</b>')
     receiver0.configure()
     receiver0.set_inputs([ streamdef0 ])
     receiver0.initialize()
@@ -113,7 +113,7 @@ def test_visual_node_both_in_main_qapp_and_remote_qapp():
     from pyqtgraph.Qt import QtCore, QtGui
     from pyacq.core.tests.fakenodes import ReceiverWidget
     app = QtGui.QApplication([])
-    receiver1 = ReceiverWidget(name = 'receiver1', tag ='I am in local QApp')
+    receiver1 = ReceiverWidget(name = 'receiver1', tag ='<b>I am in local QApp</b>')
     receiver1.configure()
     receiver1.set_inputs([ streamdef0 ])
     receiver1.initialize()
@@ -127,7 +127,6 @@ def test_visual_node_both_in_main_qapp_and_remote_qapp():
     
     app.exec_()
     
-    time.sleep(2.)
     
     sender.stop()
     receiver0.stop()

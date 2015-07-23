@@ -26,13 +26,6 @@ class ManagerProxy(RPCClient):
         return host.create_nodegroup(name)
     
     def __getattr__(self, name, *args, **kargs):
-        print('__getattr__', name,  args, kargs)
-        #~ """
-        #~ This allow this kind of shortcuts:
-        #~ manager.create_node_outputs(node, streamdef)
-        #~ instead of normally
-        #~ manager.create_node_outputs(node.name, streamdef)
-        #~ """
         return RPCClient.__getattr__(self, name, *args, **kargs)
         
 
