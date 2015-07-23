@@ -91,3 +91,44 @@ class FakeReceiver(Node):
         if event!=0:
             index, data = self.stream.recv()
             print(self.name, 'recv', index, data.shape)
+
+
+class ReceiverWidget(WidgetNode):
+    def __init__(self, tag = 'label', **kargs):
+        Node.__init__(self, **kargs)
+        self.tag = tag
+        self.label = QtGui.QLabel()
+        self.widget = self.label
+        
+    
+    def start(self):
+        self.timer.start()
+        self._running = True
+
+    def stop(self):
+        self.timer.stop()
+        self._running = False
+    
+    def close(self):
+        pass
+    
+    def initialize(self):
+        assert len(self.in_streams)!=0, 'create_outputs must be call first'
+        self.stream =self.in_streams[0]
+        
+        self.timer = QtCore.QTimer(singleShot = False)
+        self.timer.setInterval(50)
+        self.timer.timeout.connect(self.poll_socket)
+
+    def configure(self, **kargs):
+        print('I am node ', self.name, 'configured')
+    
+    def poll_socket(self):
+        #~ print(self.name, 'poll_socket')
+        event = self.stream.socket.poll(0)
+        if event!=0:
+            index, data = self.stream.recv()
+            #~ print(self.name, 'recv', index, data.shape)
+            self.label.setText('{}  {}   Recv: {} {}'.format(self.name,self.tag, 'recv', index, data.shape))
+            
+            
