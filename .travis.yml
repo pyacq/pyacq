@@ -17,10 +17,10 @@ matrix:
 install:
 
     - if [[ "$DISTRIB" == "ubuntu" ]]; then
-        deactivate
-        virtualenv --system-site-packages testvenv
-        source testvenv/bin/activate
-        pip install pytest
+        deactivate;
+        virtualenv --system-site-packages testvenv;
+        source testvenv/bin/activate;
+        pip install pytest;
       fi;
 
 
