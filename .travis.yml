@@ -13,15 +13,17 @@ matrix:
               - python-numpy
               - python-zmq
               - python-qt4
+install:
+    - if [[ "$DISTRIB" == "ubuntu" ]]; then
+        deactivate
+        virtualenv --system-site-packages testvenv
+        source testvenv/bin/activate
+        pip install pytest
+      fi
 
-if [[ "$DISTRIB" == "ubuntu" ]]; then
-    deactivate
-    virtualenv --system-site-packages testvenv
-    source testvenv/bin/activate
-    pip install pytest
-    cd pyacq
-    python setup.py develop
-fi
+
 
 script:
   py.test
+
+
