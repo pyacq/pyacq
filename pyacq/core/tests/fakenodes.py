@@ -98,8 +98,9 @@ class ReceiverWidget(WidgetNode):
         Node.__init__(self, **kargs)
         self.tag = tag
         self.label = QtGui.QLabel()
-        self.widget = self.label
-        
+        self.layout = QtGui.QHBoxLayout()
+        self.layout.addWidget(self.label)
+        self.setLayout(self.layout)
     
     def start(self):
         self.timer.start()
@@ -129,6 +130,6 @@ class ReceiverWidget(WidgetNode):
         if event!=0:
             index, data = self.stream.recv()
             #~ print(self.name, 'recv', index, data.shape)
-            self.label.setText('{}  {}   Recv: {} {}'.format(self.name,self.tag, 'recv', index, data.shape))
+            self.label.setText('{}  {}   Recv: {} {}'.format(self.name,self.tag,  index, data.shape))
             
             

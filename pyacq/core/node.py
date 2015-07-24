@@ -54,11 +54,13 @@ class Node(QtCore.QObject):
             self.in_streams.append(StreamReceiver(**streamdef))
 
 
-class WidgetNode(Node):
+class WidgetNode(QtGui.QWidget, Node, ):
     #~ need_create_widget = QtCore.Signal()
     #~ need_show_widget = QtCore.Signal()
-    def __init__(self, **kargs):
+    def __init__(self, parent = None, **kargs):
+        QtGui.QWidget.__init__(self, parent = parent)
         Node.__init__(self, **kargs)
+        
         self.widget = None
         
         app = QtGui.QApplication.instance()
@@ -66,12 +68,12 @@ class WidgetNode(Node):
         #~ self.need_create_widget.emit()
         self.create_widget()
         
-    def create_widget(self):
-        raise(NotImplementedError)
+    #~ def create_widget(self):
+        #~ raise(NotImplementedError)
         #self.whidget = ...
     
-    def show(self):
-        self.widget.show()
+    #~ def show(self):
+        #~ self.widget.show()
 
 
 
