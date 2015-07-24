@@ -261,14 +261,14 @@ class StreamReceiver:
         #send or cpy to buffer
         if self.params['transfermode'] == 'plaindata':
             self.funcs.append(self._recv_plain)
+            #compression
+            if self.params['compression'] == '':
+                self.funcs.append(self._numpy_fromstring)
+            elif self.params['compression'] in ['blosc-blosclz', 'blosc-lz4']:
+                self.funcs.append(self._uncompress_blosc)
         elif self.params['transfermode'] == 'shared_array':
             self.funcs.append(self._recv_from_shmem)
         
-        #compression
-        if self.params['compression'] == '':
-            self.funcs.append(self._numpy_fromstring)
-        elif self.params['compression'] in ['blosc-blosclz', 'blosc-lz4']:
-            self.funcs.append(self._uncompress_blosc)
 
     def recv(self):
         """
@@ -285,9 +285,9 @@ class StreamReceiver:
         return index, m1
 
     def _recv_from_shmem(self):
-        #~ m0 = self.socket.recv()
-        #~ index = np.fromstring(m0, dtype = 'int64')[0]
-        raise(NotImplemented)
+        m0 = self.socket.recv()
+        index = np.fromstring(m0, dtype = 'int64')[0]
+        return index, None
     
     def _numpy_fromstring(self, index, data):
         data  = np.frombuffer(data, dtype = self.params['dtype']).reshape(self.params['shape'])

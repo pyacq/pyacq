@@ -109,7 +109,7 @@ def test_stream_sharedarray():
             sender = StreamSender(**stream_dict)
             time.sleep(.5)
             print('shm_id', sender.params['shm_id'])
-            #~ receiver = StreamReceiver(sender.params)
+            receiver = StreamReceiver(**sender.params)
             
             index = 0
             for i in range(30):
@@ -122,18 +122,19 @@ def test_stream_sharedarray():
                     arr = np.random.rand(nb_channel, chunksize).astype(stream_dict['dtype'])
                 sender.send(index, arr)
             
-            #~ #recv
-            #~ index2, arr2 = receiver.recv()
-            #~ assert index2==index
+                #recv
+                index2, arr2 = receiver.recv()
+                assert index2==index
+                assert arr2 is None
             #~ assert np.all((arr-arr2)==0.)
     
             sender.close()
-            #~ receiver.close()
+            receiver.close()
     
 
 
 if __name__ == '__main__':
-    test_stream_plaindata()
+    #~ test_stream_plaindata()
     #benchmark_stream()
     test_stream_sharedarray()
 
