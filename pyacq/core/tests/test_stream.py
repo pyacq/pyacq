@@ -12,7 +12,7 @@ def test_stream_plaindata():
     chunksize = 1024
     stream_dict = dict(protocol = 'tcp', interface = '127.0.0.1', port = '9000',
                         transfermode = 'plaindata', streamtype = 'analogsignal',
-                        dtype = 'float32', shape = (-1, nb_channel), compression ='',
+                        dtype = 'float32', shape = (-1, nb_channel), time_axis = 0, compression ='',
                         scale = None, offset = None, units = '' )
     
     for protocol in ['tcp',  'inproc', 'ipc']: #'udp' is not working
@@ -40,10 +40,6 @@ def test_stream_plaindata():
             sender.close()
             receiver.close()
 
-
-
-    
-    
     
 def benchmark_stream():
     setup = """
@@ -88,7 +84,56 @@ start_loop(sender, receiver)
                 time.sleep(1.)
     
 
+def test_stream_sharedarray():
+    nb_channel = 16
+    chunksize = 1024
+    ring_size = chunksize * 5 - 334
+    stream_dict = dict(protocol = 'tcp', interface = '127.0.0.1', port = '9000',
+                        transfermode = 'shared_array', streamtype = 'analogsignal',
+                        dtype = 'float32', shape = (-1, nb_channel), time_axis = 0, compression ='',
+                        scale = None, offset = None, units = '',
+                        shared_array_shape = ( ring_size, nb_channel), ring_buffer_method= 'single',
+                        )
+    protocol = 'tcp'
+    for ring_buffer_method in['single', 'double',]:
+        for time_axis in [0, 1]:
+            print(ring_buffer_method, 'time_axis', time_axis)
+            stream_dict['ring_buffer_method'] = ring_buffer_method
+            stream_dict['time_axis'] = time_axis
+            if time_axis == 0:
+                stream_dict['shape'] =  (-1, nb_channel)
+                stream_dict['shared_array_shape'] =  ( ring_size, nb_channel)
+            elif time_axis == 1:
+                stream_dict['shape'] =  (nb_channel, -1)
+                stream_dict['shared_array_shape'] =  (nb_channel,  ring_size)
+            sender = StreamSender(**stream_dict)
+            time.sleep(.5)
+            print('shm_id', sender.params['shm_id'])
+            #~ receiver = StreamReceiver(sender.params)
+            
+            index = 0
+            for i in range(30):
+                print(i)
+                #send
+                index += chunksize
+                if time_axis==0:
+                    arr = np.random.rand(chunksize, nb_channel).astype(stream_dict['dtype'])
+                elif time_axis==1:
+                    arr = np.random.rand(nb_channel, chunksize).astype(stream_dict['dtype'])
+                sender.send(index, arr)
+            
+            #~ #recv
+            #~ index2, arr2 = receiver.recv()
+            #~ assert index2==index
+            #~ assert np.all((arr-arr2)==0.)
+    
+            sender.close()
+            #~ receiver.close()
+    
+
 
 if __name__ == '__main__':
     test_stream_plaindata()
-    benchmark_stream()
+    #benchmark_stream()
+    test_stream_sharedarray()
+
