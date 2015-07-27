@@ -55,8 +55,6 @@ class Node(QtCore.QObject):
 
 
 class WidgetNode(QtGui.QWidget, Node, ):
-    #~ need_create_widget = QtCore.Signal()
-    #~ need_show_widget = QtCore.Signal()
     def __init__(self, parent = None, **kargs):
         QtGui.QWidget.__init__(self, parent = parent)
         Node.__init__(self, **kargs)
@@ -64,17 +62,6 @@ class WidgetNode(QtGui.QWidget, Node, ):
         self.widget = None
         
         app = QtGui.QApplication.instance()
-        #~ self.need_create_widget.connect(app.create_widget_of_node)
-        #~ self.need_create_widget.emit()
-        self.create_widget()
-        
-    #~ def create_widget(self):
-        #~ raise(NotImplementedError)
-        #self.whidget = ...
-    
-    #~ def show(self):
-        #~ self.widget.show()
-
 
 
 # For test purpos only

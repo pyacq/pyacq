@@ -141,8 +141,8 @@ def test_visual_node_both_in_main_qapp_and_remote_qapp():
     
 
 if __name__ == '__main__':
-    #~ test_stream_between_node()
-    #~ test_stream_between_node2()
+    test_stream_between_node()
+    test_stream_between_node2()
     test_visual_node_both_in_main_qapp_and_remote_qapp()
 
 

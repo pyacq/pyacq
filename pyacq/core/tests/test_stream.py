@@ -1,7 +1,6 @@
 import time
 import timeit
-#~ import pytest
-#~ import logging
+import pytest
 
 from pyacq.core.stream  import StreamSender, StreamReceiver
 import numpy as np
@@ -97,8 +96,7 @@ def test_stream_sharedarray():
                         shared_array_shape = ( ring_size, nb_channel), ring_buffer_method= 'single',
                         )
     protocol = 'tcp'
-    #~ for ring_buffer_method in['single', 'double',]:
-    for ring_buffer_method in[ 'double',]:
+    for ring_buffer_method in['single', 'double',]:
         for time_axis in [0, 1]:
             print(ring_buffer_method, 'time_axis', time_axis)
             stream_dict['ring_buffer_method'] = ring_buffer_method
