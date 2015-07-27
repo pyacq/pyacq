@@ -85,7 +85,9 @@ start_loop(sender, receiver)
     
 
 def test_stream_sharedarray():
-    nb_channel = 16
+    #~ nb_channel = 16
+    nb_channel = 1
+    
     chunksize = 1024
     ring_size = chunksize * 5 - 334
     stream_dict = dict(protocol = 'tcp', interface = '127.0.0.1', port = '9000',
@@ -95,7 +97,8 @@ def test_stream_sharedarray():
                         shared_array_shape = ( ring_size, nb_channel), ring_buffer_method= 'single',
                         )
     protocol = 'tcp'
-    for ring_buffer_method in['single', 'double',]:
+    #~ for ring_buffer_method in['single', 'double',]:
+    for ring_buffer_method in[ 'double',]:
         for time_axis in [0, 1]:
             print(ring_buffer_method, 'time_axis', time_axis)
             stream_dict['ring_buffer_method'] = ring_buffer_method
@@ -110,31 +113,41 @@ def test_stream_sharedarray():
             time.sleep(.5)
             print('shm_id', sender.params['shm_id'])
             receiver = StreamReceiver(**sender.params)
-            
+            time.sleep(.5)
             index = 0
             for i in range(30):
                 print(i)
+                
                 #send
-                index += chunksize
                 if time_axis==0:
-                    arr = np.random.rand(chunksize, nb_channel).astype(stream_dict['dtype'])
+                    arr = np.tile(np.arange(index, index+chunksize)[:, None], (1,nb_channel)).astype(stream_dict['dtype'])
+                    #~ arr = np.random.rand(chunksize, nb_channel).astype(stream_dict['dtype'])
                 elif time_axis==1:
-                    arr = np.random.rand(nb_channel, chunksize).astype(stream_dict['dtype'])
+                    arr = np.tile(np.arange(index, index+chunksize)[None ,:], (nb_channel, 1)).astype(stream_dict['dtype'])
+                    #~ arr = np.random.rand(nb_channel, chunksize).astype(stream_dict['dtype'])
+                index += chunksize
                 sender.send(index, arr)
             
                 #recv
                 index2, arr2 = receiver.recv()
                 assert index2==index
                 assert arr2 is None
-            #~ assert np.all((arr-arr2)==0.)
-    
+                
+                # get a buffer of size chunksize*3
+                if ring_buffer_method == 'double' and index>chunksize*3:
+                    arr2 = receiver.get_array_slice(index2, chunksize*3)
+                    if time_axis==0:
+                        assert np.all(arr2[:,0]==np.arange(index-chunksize*3, index).astype('float32'))
+                    elif time_axis==1:
+                        assert np.all(arr2[0,:]==np.arange(index-chunksize*3, index).astype('float32'))
+            
             sender.close()
             receiver.close()
     
 
 
 if __name__ == '__main__':
-    #~ test_stream_plaindata()
+    test_stream_plaindata()
     #benchmark_stream()
     test_stream_sharedarray()
 

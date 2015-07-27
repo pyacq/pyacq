@@ -50,6 +50,9 @@ common_doc = """
         See scale.
     units: str
         Units of the stream. Mainly used for 'analogsignal'.
+    sampling_rate: float or None
+        Sampling rate of the stream in Hz.
+    sampling_interval: float or None
         
     
     Parameters when using `transfermode` = 'shared_array'
@@ -268,16 +271,38 @@ class StreamReceiver:
                 self.funcs.append(self._uncompress_blosc)
         elif self.params['transfermode'] == 'shared_array':
             self.funcs.append(self._recv_from_shmem)
-        
-
+            
+            self._time_axis = self.params['time_axis']
+            self._ring_size = self.params['shared_array_shape'][self._time_axis]
+            shared_array_shape = list(self.params['shared_array_shape'])
+            self._ndim = len(shared_array_shape)
+            assert self._ndim==len(self.params['shape']), 'shared_array_shape and shape must coherent!'
+            if self.params['ring_buffer_method'] == 'double':
+                shared_array_shape[self._time_axis] = self._ring_size*2
+            self._sharedarray = SharedArray(shape = shared_array_shape, dtype = self.params['dtype'], shm_id = self.params['shm_id'])
+            self._numpyarr = self._sharedarray.to_numpy()
+    
     def recv(self):
         """
-        Receive the data chunk
+        Receive the index and the data chunk.
         """
         index, data = self.funcs[0]()
         for f in self.funcs[1:]:
             index, data = f(index, data)
         return index, data
+    
+    def get_array_slice(self, index, length):
+        """
+        For shared_array transfert, you can a any chunk size (no more than the ring size)
+        """
+        assert self.params['transfermode'] == 'shared_array', 'For shared_array only'
+        assert self.params['ring_buffer_method'] == 'double', 'For double ring buffer only'
+        assert length<self._ring_size, 'The ring size is too small {} {}'.format(self._ring_size, length)
+        i2 = index%self._ring_size + self._ring_size
+        i1 = i2 - length
+        sl = [slice(None)] * self._ndim 
+        sl[self._time_axis] = slice(i1,i2)
+        return self._numpyarr[sl]
     
     def _recv_plain(self):
         m0,m1 = self.socket.recv_multipart()
