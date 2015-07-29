@@ -3,15 +3,12 @@ from pyqtgraph.Qt import QtCore, QtGui
 
 
 # create a device in a new pocess
-#~ man = create_manager()
-#~ nodegroup = man.create_nodegroup()
-#~ dev = nodegroup.create_node('WebCamImageIO', name = 'cam0')
+man = create_manager()
+nodegroup = man.create_nodegroup()
+#dev = nodegroup.create_node('WebCamImageIO', name = 'cam0')
+dev = nodegroup.create_node('WebCamAV', name = 'cam0')
 
-# create a device in the main loop
-from pyacq import WebCamImageIO
-dev = WebCamImageIO(name = 'cam0')
-
-dev.configure(camera_num = 0)
+dev.configure(camera_num = 1)
 stream_dict = dict(protocol = 'tcp', interface = '127.0.0.1', port = '9000',
                     transfertmode = 'plaindata', streamtype = 'video',
                     dtype = 'uint8', shape = (480, 640, 3), compression ='',

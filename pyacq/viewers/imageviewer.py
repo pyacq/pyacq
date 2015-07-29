@@ -20,6 +20,8 @@ class ImageViewer(WidgetNode):
         self.layout.addWidget(self.canvas.native)
         self.view = self.canvas.central_widget.add_view()
         self.view.camera = vispy.scene.PanZoomCamera(aspect=1)
+        #~ self.view.camera = vispy.scene.MagnifyCamera(aspect=1)
+        
         
     def start(self):
         self.timer.start()
