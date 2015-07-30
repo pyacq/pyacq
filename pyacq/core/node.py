@@ -67,10 +67,10 @@ class WidgetNode(QtGui.QWidget, Node, ):
 # For test purpos only
 class _MyTest:
     def start(self):
-        print(self.name, 'started')
+        #print(self.name, 'started')
         self._running = True
     def stop(self):
-        print(self.name, 'stoped')
+        #print(self.name, 'stoped')
         self._running = False
     def initialize(self):
         pass

@@ -25,10 +25,6 @@ class ManagerProxy(RPCClient):
         host = self.default_host()
         return host.create_nodegroup(name)
     
-    def __getattr__(self, name, *args, **kargs):
-        return RPCClient.__getattr__(self, name, *args, **kargs)
-        
-
 
 class HostProxy(RPCClient):
     def __init__(self, mgr, name, addr):
