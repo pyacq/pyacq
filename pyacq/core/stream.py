@@ -70,8 +70,9 @@ class StreamSender:
         context = zmq.Context.instance()
         self.socket = context.socket(zmq.PUB)
         self.socket.bind(self.url)
+        self.addr = self.socket.getsockopt(zmq.LAST_ENDPOINT).decode()
+        self.port = self.addr.rpartition(':')[2]
         
-
         self.funcs = []
         
         if self.params['compression'] != '':
@@ -113,7 +114,6 @@ class StreamSender:
         """
         for f in self.funcs:
             index, data = f(index, data)
-
     
     def _send_plain(self, index, data):
         
@@ -135,7 +135,7 @@ class StreamSender:
     
     def close(self):
         if self.params['protocol'] == 'tcp':
-            self.socket.unbind(self.url)
+            self.socket.unbind(self.addr)
         self.socket.close()
 
 
@@ -151,7 +151,6 @@ class StreamReceiver:
         self.socket = context.socket(zmq.SUB)
         self.socket.setsockopt(zmq.SUBSCRIBE,b'')
         self.socket.connect(self.url)
-        
         
         self.funcs = []
         #send or cpy to buffer
