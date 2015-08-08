@@ -9,7 +9,7 @@ import pyacq
 setup(
     name = "pyacq",
     version = pyacq.__version__,
-    packages = ['pyacq', ],
+    packages = ['pyacq', 'pyacq.core'],
     install_requires=[
                     'numpy',
                     'pyzmq',
