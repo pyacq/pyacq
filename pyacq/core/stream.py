@@ -134,8 +134,6 @@ class StreamSender:
         return index, data
     
     def close(self):
-        if self.params['protocol'] == 'tcp':
-            self.socket.unbind(self.addr)
         self.socket.close()
 
 

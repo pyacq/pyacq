@@ -134,11 +134,11 @@ script:
       python setup.py --quiet install;
       check_output "install test";
     
-    # Check double-install fails
-    # Note the bash -c is because travis strips off the ! otherwise.
-    - start_test "double install test";
-      bash -c "! python setup.py --quiet install";
-      check_output "double install test";
+    ## Check double-install fails
+    ## Note the bash -c is because travis strips off the ! otherwise.
+    #- start_test "double install test";
+    #  bash -c "! python setup.py --quiet install";
+    #  check_output "double install test";
       
     # Check we can import
     - start_test "import test";
