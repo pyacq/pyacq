@@ -101,7 +101,7 @@ script:
     
     # Run unit tests
     - start_test "unit tests";
-      PYTHONPATH=. py.test --cov pyacq -n 4 -sv;
+      PYTHONPATH=. py.test --cov pyacq -sv;
       check_output "unit tests";
     
     # check line endings
