@@ -39,10 +39,10 @@ install:
     - conda update conda --yes
     - conda create -n test_env python=${PYTHON} --yes
     - source activate test_env
-    - conda install numpy pyzmq pytest pyqt flake8 --yes
+    - conda install numpy pyqt flake8 --yes
     
-    # not provided by conda:
-    - pip install pytest-xdist pytest-cov blosc pyqtgraph
+    # not provided by conda (or conda version is too old):
+    - pip install pyzmq pytest pytest-xdist pytest-cov blosc pyqtgraph
 
 before_script:
     - which python
