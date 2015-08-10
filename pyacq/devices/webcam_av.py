@@ -17,6 +17,7 @@ except ImportError:
 
 import time
 
+
 class AVThread(QtCore.QThread):
     def __init__(self, out_stream, container, parent = None):
         QtCore.QThread.__init__(self)
@@ -36,9 +37,11 @@ class AVThread(QtCore.QThread):
                     n += 1
                     self.out_stream.send(n, arr)
 
+
 class WebCamAV(Node):
     def __init__(self, **kargs):
         Node.__init__(self, **kargs)
+        assert HAVE_AV, "WebCamAV node depends on the `av` package, but it could not be imported."
     
 
     def configure(self, camera_num = 0, **options):
@@ -78,6 +81,6 @@ class WebCamAV(Node):
     
     def close(self):
         self.container.close()
+
         
-if HAVE_AV:
-    register_node(WebCamAV)
+register_node(WebCamAV)
