@@ -9,19 +9,19 @@ import numpy as np
 def test_stream_plaindata():
     nb_channel = 16
     chunksize = 1024
-    stream_dict = dict(protocol = 'tcp', interface = '127.0.0.1', port = '9000',
-                        transfermode = 'plaindata', streamtype = 'analogsignal',
-                        dtype = 'float32', shape = (-1, nb_channel), time_axis = 0, compression ='',
-                        scale = None, offset = None, units = '' )
+    stream_dict = dict(protocol = 'tcp', interface = '127.0.0.1',
+                       transfermode = 'plaindata', streamtype = 'analogsignal',
+                       dtype = 'float32', shape = (-1, nb_channel), compression ='',
+                       scale = None, offset = None, units = '')
     
     for protocol in ['tcp',  'inproc', 'ipc']: #'udp' is not working
         for compression in ['', 'blosc-blosclz', 'blosc-lz4']:
             print(protocol, compression)
             stream_dict['protocol'] = protocol
             stream_dict['compression'] = compression
-            sender = StreamSender(**stream_dict)
+            sender = StreamSender(port='*', **stream_dict)
             time.sleep(.5)
-            receiver = StreamReceiver(**stream_dict)
+            receiver = StreamReceiver(**sender.params)
             
             index = 0
             for i in range(5):
