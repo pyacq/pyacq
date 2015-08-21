@@ -37,10 +37,6 @@ def test_stream_between_node():
     receiver.stop()
     print(nodegroup.any_node_running())
     
-    nodegroup.close()
-    man.default_host().close()
-    man.close()
-
 
 def test_stream_between_node2():
     # this is done at Manager level the manager do known the connection
@@ -80,9 +76,6 @@ def test_stream_between_node2():
     receiver.stop()
     print(nodegroup.any_node_running())
     
-    nodegroup.close()
-    man.default_host().close()
-    man.close()
 
 def test_visual_node_both_in_main_qapp_and_remote_qapp():
     man = create_manager()
@@ -127,6 +120,9 @@ def test_visual_node_both_in_main_qapp_and_remote_qapp():
     receiver1.start()
     print(nodegroup.any_node_running())
     
+    timer = QtCore.QTimer(singleShot = True, interval = 7000)
+    timer.timeout.connect(app.quit)
+    timer.start()
     app.exec_()
     
     
@@ -135,9 +131,6 @@ def test_visual_node_both_in_main_qapp_and_remote_qapp():
     receiver1.stop()
     print(nodegroup.any_node_running())
     
-    nodegroup.close()
-    man.default_host().close()
-    man.close()
     
 
 if __name__ == '__main__':

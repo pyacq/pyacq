@@ -78,8 +78,6 @@ def test_register_node_from_module():
     nodegroup.register_node_from_module('pyacq.core.tests.fakenodes', 'NoneRegisteredClass' )
     nodegroup.create_node( 'NoneRegisteredClass')
     
-    man.default_host().close()
-    man.close()
 
 
 
@@ -95,8 +93,6 @@ def test_register_node_with_pickle():
     nodegroup.register_node_with_pickle(picklizedclass, 'MyNewNode')
     nodegroup.create_node( 'MyNewNode')
     
-    man.default_host().close()
-    man.close()
 
 
 

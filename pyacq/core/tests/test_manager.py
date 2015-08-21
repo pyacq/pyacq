@@ -1,15 +1,19 @@
 import logging
+import time
 from pyacq.core import Manager, Host
 from pyacq.core.processspawner import ProcessSpawner
 from pyacq.core.rpc import RPCClient
 
+
 logging.getLogger().level=logging.INFO
 
-# Create a local Host to communicate with
-test_host = ProcessSpawner(Host, name='test-host', addr='tcp://127.0.0.1:*')
 
-
-def test_manager():
+def basic_test_manager():
+    # Create a local Host to communicate with
+    test_host = ProcessSpawner(Host, name='test-host', addr='tcp://127.0.0.1:*')
+    host_cli = RPCClient(test_host.name, test_host.addr)
+    
+    
     mgr = ProcessSpawner(Manager, name='manager', addr='tcp://127.0.0.1:*')
     mcli = RPCClient(mgr.name, mgr.addr)
     
@@ -30,7 +34,11 @@ def test_manager():
     mcli.control_node('node1', 'stop')
     mcli.delete_node('node1')
     assert mcli.list_nodes('nodegroup1') == []
-
+    
+    mcli.close()
+    host_cli.close()
     
 if __name__ == '__main__':
-    test_manager()
+    basic_test_manager()
+    
+    

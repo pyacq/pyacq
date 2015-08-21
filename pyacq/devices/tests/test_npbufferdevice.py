@@ -35,9 +35,6 @@ def test_npbufferdevice():
     nodegroup.stop_all_nodes()
     print(nodegroup.any_node_running())
 
-    man.default_host().close()
-    man.close()
-
 
 if __name__ == '__main__':
     test_npbufferdevice()
