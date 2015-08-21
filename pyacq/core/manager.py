@@ -1,17 +1,27 @@
+import atexit
+
 from .rpc import RPCServer, RPCClientSocket, RPCClient
 from .client import ManagerProxy
 from .processspawner import ProcessSpawner
 from .host import Host
 
 
-def create_manager(mode='rpc'):
+def create_manager(mode='rpc', auto_close_at_exit = True):
     """Create a new Manager either in this process or in a new process.
+    
+    Parameters
+    ----------
+    auto_close_at_exit : bool
+        call close automatiqcally if the programme exit.
     """
     if mode == 'local':
         return Manager(name='manager', addr='tcp://*:*')
     else:
         proc = ProcessSpawner(Manager, name='manager', addr='tcp://127.0.0.1:*')
-        return ManagerProxy(proc.name, proc.addr)
+        man = ManagerProxy(proc.name, proc.addr)
+        if auto_close_at_exit:
+            atexit.register(man.close)
+        return man
         
 
 class Manager(RPCServer):
@@ -90,7 +100,7 @@ class Manager(RPCServer):
         
         # shared socket for all RPC client connections
         self._rpc_socket = RPCClientSocket()
-
+    
     def connect_host(self, name, addr):
         """Connect the manager to a Host.
         
@@ -104,7 +114,7 @@ class Manager(RPCServer):
     def disconnect_host(self, name):
         """Disconnect the Manager from the Host identified by *name*.
         """
-        self.hosts[name].close()
+        self.hosts[name].client.close()
         
     def default_host(self):
         """Return the RPC name and address of a default Host created by the
@@ -116,6 +126,15 @@ class Manager(RPCServer):
             self._default_host = proc
             self.connect_host(proc.name, proc.addr)
         return self._default_host.name, self._default_host.addr
+    
+    def close(self):
+        """
+        Close the manager
+        And close the default Host too.
+        """
+        if self._default_host is not None:
+            self.disconnect_host('default-host')
+        RPCServer.close(self)
 
     def list_hosts(self):
         """Return a list of the identifiers for Hosts that the Manager is

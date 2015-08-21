@@ -42,8 +42,8 @@ class Serializer:
             return json.loads(msg.decode())
         elif self.mode=='msgpack':
             return msgpack.loads(msg, encoding = 'utf8')
-#serializer = Serializer('json')
-serializer = Serializer('msgpack')
+serializer = Serializer('json')
+#serializer = Serializer('msgpack')
 
 
 

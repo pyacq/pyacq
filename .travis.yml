@@ -1,0 +1,152 @@
+# Credit: Original .travis.yml lifted from VisPy and PyQtGraph
+language: python
+sudo: false
+
+notifications:
+  email: false
+
+env:
+    - PYTHON=3.4 TEST=extra
+
+
+before_install:
+    # Use miniconda because it provides PyQt4
+    - wget http://repo.continuum.io/miniconda/Miniconda3-3.5.5-Linux-x86_64.sh -O miniconda.sh
+    - chmod +x miniconda.sh
+    - ./miniconda.sh -b -p /home/travis/mc
+    - export PATH=/home/travis/mc/bin:$PATH
+    
+    # not sure what is if block is for
+    - if [ "${TRAVIS_PULL_REQUEST}" != "false" ]; then
+          GIT_TARGET_EXTRA="+refs/heads/${TRAVIS_BRANCH}";
+          GIT_SOURCE_EXTRA="+refs/pull/${TRAVIS_PULL_REQUEST}/merge";
+      else
+          GIT_TARGET_EXTRA="";
+          GIT_SOURCE_EXTRA="";
+      fi;
+
+    # to aid in debugging
+    - echo ${TRAVIS_BRANCH}
+    - echo ${TRAVIS_REPO_SLUG}
+    - echo ${GIT_TARGET_EXTRA}
+    - echo ${GIT_SOURCE_EXTRA}
+
+install:
+    - echo ${TEST}
+    - echo ${PYTHON}
+    
+    - export GIT_FULL_HASH=`git rev-parse HEAD`
+    - conda update conda --yes
+    - conda create -n test_env python=${PYTHON} --yes
+    - source activate test_env
+    - conda install numpy pyqt flake8 --yes
+    
+    # not provided by conda (or conda version is too old):
+    - pip install pyzmq pytest pytest-xdist pytest-cov blosc pyqtgraph
+
+before_script:
+    - which python
+    - python --version
+    - pwd
+    - ls
+
+    # We need to create a (fake) display on Travis, let's use a funny resolution
+    - export DISPLAY=:99.0
+    - "sh -e /etc/init.d/xvfb start"
+    - /sbin/start-stop-daemon --start --quiet --pidfile /tmp/custom_xvfb_99.pid --make-pidfile --background --exec /usr/bin/Xvfb -- :99 -screen 0 1400x900x24 -ac +extension GLX +render
+
+    
+    # Help color output from each test
+    - RESET='\033[0m';
+      RED='\033[00;31m';
+      GREEN='\033[00;32m';
+      YELLOW='\033[00;33m';
+      BLUE='\033[00;34m';
+      PURPLE='\033[00;35m';
+      CYAN='\033[00;36m';
+      WHITE='\033[00;37m';
+      start_test() {
+        echo -e "${BLUE}======== Starting $1 ========${RESET}";
+      };
+      check_output() {
+        ret=$?;
+        if [ $ret == 0 ]; then
+            echo -e "${GREEN}>>>>>>    $1 passed    <<<<<<${RESET}";
+        else
+            echo -e "${RED}>>>>>>    $1 FAILED    <<<<<<${RESET}";
+        fi;
+        return $ret;
+      };
+
+    - start_test "repo size check";
+      mkdir ~/repo-clone && cd ~/repo-clone &&
+      git init && git remote add -t ${TRAVIS_BRANCH} origin git://github.com/${TRAVIS_REPO_SLUG}.git &&
+      git fetch origin ${GIT_TARGET_EXTRA} &&
+      git checkout -qf FETCH_HEAD &&
+      git tag travis-merge-target &&
+      git gc --aggressive &&
+      TARGET_SIZE=`du -s . | sed -e "s/\t.*//"` &&
+      git pull origin ${GIT_SOURCE_EXTRA} &&
+      git gc --aggressive &&
+      MERGE_SIZE=`du -s . | sed -e "s/\t.*//"` &&
+      if [ "${MERGE_SIZE}" != "${TARGET_SIZE}" ]; then
+        SIZE_DIFF=`expr \( ${MERGE_SIZE} - ${TARGET_SIZE} \)`;
+      else
+        SIZE_DIFF=0;
+      fi;
+
+script:
+  
+    - source activate test_env
+    
+    # Run unit tests
+    - start_test "unit tests";
+      PYTHONPATH=. py.test --cov pyacq -sv;
+      check_output "unit tests";
+    
+    # check line endings
+    - if [ "${TEST}" == "extra" ]; then
+        start_test "line ending check";
+        ! find ./ -name "*.py" | xargs file | grep CRLF &&
+        ! find ./ -name "*.rst" | xargs file | grep CRLF;
+        check_output "line ending check";
+      fi;
+
+    # Check repo size does not expand too much
+    - if [ "${TEST}" == "extra" ]; then
+        start_test "repo size check";
+        echo -e "Estimated content size difference = ${SIZE_DIFF} kB" &&
+        test ${SIZE_DIFF} -lt 100;
+        check_output "repo size check";
+      fi;
+
+    ## Check for style issues
+    #- if [ "${TEST}" == "extra" ]; then
+        #start_test "style check";
+        #cd ~/repo-clone &&
+        #git reset -q travis-merge-target &&
+        #python setup.py style &&
+        #check_output "style check";
+      #fi;
+
+    # Check install works
+    - start_test "install test";
+      python setup.py --quiet install;
+      check_output "install test";
+    
+    ## Check double-install fails
+    ## Note the bash -c is because travis strips off the ! otherwise.
+    #- start_test "double install test";
+    #  bash -c "! python setup.py --quiet install";
+    #  check_output "double install test";
+      
+    # Check we can import
+    - start_test "import test";
+      echo "import sys; print(sys.path)" | python &&
+      cd /; echo "import pyacq" | python;
+      check_output "import test";
+
+after_success:
+  - cd /home/travis/build/pyacq/pyacq
+  - pip install codecov --upgrade  # add coverage integration service
+  - codecov

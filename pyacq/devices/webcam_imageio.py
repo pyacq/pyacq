@@ -42,6 +42,7 @@ class WebCamImageIO(Node):
         reader.close()
     
     def initialize(self):
+        print(self.metadata['fps'])
         assert self.metadata['fps'] == self.out_streams[0].params['sampling_rate']
         
     def start(self):
