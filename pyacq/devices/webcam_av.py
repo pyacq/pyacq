@@ -17,10 +17,11 @@ except ImportError:
 
 import time
 
+
 class AVThread(QtCore.QThread):
-    def __init__(self, out_stream, container, parent = None):
+    def __init__(self, out_stream, container, parent=None):
         QtCore.QThread.__init__(self)
-        self.out_stream= out_stream
+        self.out_stream = out_stream
         self.container = container
         
     def run(self):
@@ -36,12 +37,14 @@ class AVThread(QtCore.QThread):
                     n += 1
                     self.out_stream.send(n, arr)
 
+
 class WebCamAV(Node):
     def __init__(self, **kargs):
         Node.__init__(self, **kargs)
+        assert HAVE_AV, "WebCamAV node depends on the `av` package, but it could not be imported."
     
 
-    def configure(self, camera_num = 0, **options):
+    def configure(self, camera_num=0, **options):
         self.camera_num = camera_num
         self.options = options
         #~ container = cv2.VideoCapture(camera_num)
@@ -50,17 +53,12 @@ class WebCamAV(Node):
     
     def initialize(self):
         #~ assert self.metadata['fps'] == self.out_streams[0].params['sampling_rate']
-        pass
         container = av.open('/dev/video{}'.format(self.camera_num), 'r','video4linux2', self.options)
         stream = next(s for s in container.streams if s.type == 'video')
         
         #~ stream.format.width 640
         #~ stream.format.height 480
         #~ stream.format.name 'yuyv422'
-
-        
-        
-        del(container)
         
     def start(self):
         print('/dev/video{}'.format(self.camera_num))
@@ -78,6 +76,6 @@ class WebCamAV(Node):
     
     def close(self):
         self.container.close()
+
         
-if HAVE_AV:
-    register_node(WebCamAV)
+register_node(WebCamAV)
