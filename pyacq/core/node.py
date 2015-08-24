@@ -42,8 +42,12 @@ class Node(QtCore.QObject):
         assert len(self.out_streams)==0, 'Output Stream are already there'
         # TODO check the compatibility are of the request and the Node possiobility
         # todo check the len(self.out_streams) is the number of outputs
+        streamdef_list2 = []
         for streamdef in streamdef_list:
-            self.out_streams.append(StreamSender(**streamdef))
+            streamsender = StreamSender(**streamdef)
+            self.out_streams.append(streamsender)
+            streamdef_list2.append(streamsender.params)
+        return streamdef_list2
     
     def set_inputs(self, streamdef_list):
         assert not self.running(), 'Cannot change source while running'

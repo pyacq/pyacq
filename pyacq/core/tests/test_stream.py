@@ -1,10 +1,16 @@
 import time
 import timeit
 import pytest
+import sys
 
 from pyacq.core.stream  import StreamSender, StreamReceiver
 import numpy as np
 
+
+protocols = ['tcp', 'inproc', 'ipc']#'udp' is not working
+if sys.platform.startswith('win'):
+    protocols.remove('ipc')
+compressions = ['', 'blosc-blosclz', 'blosc-lz4']
 
 def test_stream_plaindata():
     nb_channel = 16
@@ -14,8 +20,8 @@ def test_stream_plaindata():
                        dtype = 'float32', shape = (-1, nb_channel), compression ='',
                        scale = None, offset = None, units = '')
     
-    for protocol in ['tcp',  'inproc', 'ipc']: #'udp' is not working
-        for compression in ['', 'blosc-blosclz', 'blosc-lz4']:
+    for protocol in protocols:
+        for compression in compressions:
             print(protocol, compression)
             stream_dict['protocol'] = protocol
             stream_dict['compression'] = compression
@@ -39,49 +45,6 @@ def test_stream_plaindata():
             sender.close()
             receiver.close()
 
-    
-def benchmark_stream():
-    setup = """
-from pyacq.core.stream  import StreamSender, StreamReceiver
-import numpy as np
-import time
-
-nb_channel = 16
-chunksize = {chunksize}
-nloop = {nloop}
-stream_dict = dict(protocol = {protocol}, interface = '127.0.0.1', port = {port},
-                    transfertmode = 'plaindata', streamtype = 'analogsignal',
-                    dtype = 'float32', shape = (-1, nb_channel), compression ={compression},
-                    scale = None, offset = None, units = '' )
-sender = StreamSender(**stream_dict)
-time.sleep(.5)
-receiver = StreamReceiver(**stream_dict)
-
-arr = np.random.rand(1024, nb_channel).astype(stream_dict['dtype'])
-def start_loop(sender, receiver):
-    index = 0
-    for i in range(nloop):
-        index += chunksize
-        sender.send(index, arr)
-        index2, arr2 = receiver.recv()
-    """
-    
-    stmt = """
-start_loop(sender, receiver)
-    """
-    
-    port = 9500
-    for chunksize, nloop in [(2**10, 100),  (2**14, 10), (2**16, 10)]:
-        for protocol in ['tcp', 'inproc', 'ipc']: # 'udp',
-            print()
-            for compression in ['', 'blosc-blosclz', 'blosc-lz4']:
-                port = port+1
-                setup2 = setup.format(compression = repr(compression), protocol = repr(protocol), port = port,
-                            chunksize = chunksize, nloop = nloop)
-                t = timeit.timeit(stmt, setup = setup2,  number = 1)
-                print(chunksize, nloop,  protocol, compression, 'time =', t, 's.', 'speed', nloop*chunksize*16*4/t/1e6, 'Mo/s')
-                time.sleep(1.)
-    
 
 def test_stream_sharedarray():
     #~ nb_channel = 16
@@ -141,11 +104,65 @@ def test_stream_sharedarray():
             
             sender.close()
             receiver.close()
-    
 
+
+def benchmark_stream():
+    setup = """
+from pyacq.core.stream  import StreamSender, StreamReceiver
+import numpy as np
+import time
+
+nb_channel = 16
+chunksize = {chunksize}
+ring_size = chunksize*20
+nloop = {nloop}
+stream_dict = dict(protocol = {protocol}, interface = '127.0.0.1', port = '*',
+                    transfertmode = {transfertmode}, streamtype = 'analogsignal',
+                    dtype = 'float32', shape = (-1, nb_channel), compression ={compression},
+                    scale = None, offset = None, units = '',
+                    # for sharedarray
+                    shared_array_shape = ( ring_size, nb_channel), time_axis = 0,
+                    ring_buffer_method = 'double',
+                        )
+sender = StreamSender(**stream_dict)
+time.sleep(.5)
+receiver = StreamReceiver(**sender.params)
+
+arr = np.random.rand(chunksize, nb_channel).astype(stream_dict['dtype'])
+def start_loop(sender, receiver):
+    index = 0
+    for i in range(nloop):
+        index += chunksize
+        sender.send(index, arr)
+        index2, arr2 = receiver.recv()
+    """
+    
+    stmt = """
+start_loop(sender, receiver)
+sender.close()
+receiver.close()
+    """
+    
+    for chunksize, nloop in [(2**10, 10),  (2**14, 1), (2**16, 10)]:
+        print('#'*5)
+        for protocol in protocols:            
+            for compression in compressions:
+                setup2 = setup.format(compression = repr(compression), protocol = repr(protocol), transfertmode = "'plaindata'",
+                            chunksize = chunksize, nloop = nloop)
+                t = timeit.timeit(stmt, setup = setup2,  number = 1)
+                print(chunksize, nloop, 'plaindata', protocol, compression, 'time =', t, 's.', 'speed', nloop*chunksize*16*4/t/1e6, 'Mo/s')
+        
+        setup2 = setup.format(compression = "''", protocol = "'tcp'", transfertmode = "'shared_array'",
+                    chunksize = chunksize, nloop = nloop)
+        t = timeit.timeit(stmt, setup = setup2,  number = 1)
+        print(chunksize, nloop,  'shared_array', 'time =', t, 's.', 'speed', nloop*chunksize*16*4/t/1e6, 'Mo/s')
+        
+        
+        
+        
 
 if __name__ == '__main__':
     test_stream_plaindata()
-    #benchmark_stream()
     test_stream_sharedarray()
+    #benchmark_stream()
 

@@ -98,9 +98,9 @@ def test_register_node_with_pickle():
 
 
 if __name__ == '__main__':
-    #~ test_nodegroup0()
-    #~ test_cannot_delete_node_while_running()
-    #~ test_remotly_show_qwidget_node()
+    test_nodegroup0()
+    test_cannot_delete_node_while_running()
+    test_remotly_show_qwidget_node()
     test_register_node_from_module()
     #test_register_node_with_pickle()  ### not working at the moment
 

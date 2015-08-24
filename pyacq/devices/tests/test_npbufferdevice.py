@@ -12,11 +12,11 @@ def test_npbufferdevice():
     
     dev = nodegroup.create_node('NumpyDeviceBuffer', name = 'dev')
     dev.configure( nb_channel = 16, sample_interval = 0.001)
-    stream_dict = dict(protocol = 'tcp', interface = '127.0.0.1', port = '9000',
+    stream_dict = dict(protocol = 'tcp', interface = '127.0.0.1', port = '*',
                         transfertmode = 'plaindata', streamtype = 'analogsignal',
                         dtype = 'float32', shape = (-1, 16), compression ='',
                         scale = None, offset = None, units = '' )
-    dev.create_outputs([ stream_dict ])    
+    streamdef1 = dev.create_outputs([ stream_dict ])    
     dev.initialize()
     
     # create stream
@@ -24,13 +24,14 @@ def test_npbufferdevice():
     receivers = [ nodegroup.create_node('FakeReceiver', name = 'receiver{}'.format(i)) for i in range(3) ]
     for receiver in receivers:
         receiver.configure()
-        receiver.set_inputs([ stream_dict ])
+        receiver.set_inputs(streamdef1)
         receiver.initialize()
+    
     
     nodegroup.start_all_nodes()
     
     print(nodegroup.any_node_running())
-    time.sleep(5.)
+    time.sleep(3.)
     
     nodegroup.stop_all_nodes()
     print(nodegroup.any_node_running())

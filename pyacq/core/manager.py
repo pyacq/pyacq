@@ -219,7 +219,7 @@ class Manager(RPCServer):
     def create_node_outputs(self, nodename, streamdef):
         ng = self.nodes[nodename].nodegroup
         self.nodes[nodename].streamdef = ng.client.control_node(nodename, 'create_outputs', streamdef)
-    
+        return self.nodes[nodename].streamdef
     
         
     

@@ -39,9 +39,6 @@ class NumpyDeviceBuffer(Node):
         self.buffer = self.buffer.astype('float32')
     
     def send_data(self):
-        print('send_data', self.head)
-        import sys
-        sys.stdout.flush()
         i1 = self.head%self.length
         self.head += self.chunksize
         i2 = self.head%self.length

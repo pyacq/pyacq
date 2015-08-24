@@ -63,7 +63,7 @@ class NodeGroup(RPCServer):
         self.nodes.pop(name)
     
     def control_node(self, name, method, *args, **kargs):
-        getattr(self.nodes[name], method)(*args, **kargs)
+        return getattr(self.nodes[name], method)(*args, **kargs)
     
     def register_node_from_module(self, module, classname):
         mod = importlib.import_module(module)

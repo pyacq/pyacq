@@ -35,19 +35,18 @@ class SharedArray:
         self.dtype = np.dtype(dtype)
         self.nbytes = np.prod(shape)*self.dtype.itemsize
         self.length = (self.nbytes//mmap.PAGESIZE+1) * mmap.PAGESIZE
+        self.shm_id = shm_id
         
         if sys.platform.startswith('win'):
             if shm_id is None:
-                self.shm_id = b'pyacq_SharedMem_'+''.join(random.SystemRandom().choice(string.ascii_uppercase + string.digits) for _ in range(128)).encode()
-            self.mmap = mmap.mmap(-1, self.nbytes, self.shm_id)
+                self.shm_id = u'pyacq_SharedMem_'+''.join(random.SystemRandom().choice(string.ascii_uppercase + string.digits) for _ in range(128))
+            self.mmap = mmap.mmap(-1, self.nbytes, self.shm_id, access = mmap.ACCESS_WRITE)
         else:
             if shm_id is None:
                 self._tmpFile = tempfile.NamedTemporaryFile(prefix='pyacq_SharedMem_')
                 self._tmpFile.write(b'\x00' * self.length)
                 self._tmpFile.flush() # I do not anderstand but this is needed....
                 self.shm_id = self._tmpFile.fileno()
-            else:
-                self.shm_id = shm_id
             self.mmap = mmap.mmap(self.shm_id, self.nbytes, mmap.MAP_SHARED)#, mmap.PROT_WRITE)
         atexit.register(self.close)
     
