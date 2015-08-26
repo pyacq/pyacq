@@ -25,25 +25,26 @@ try:
 except ImportError:
     HAVE_MSGPACK = False
 
-class Serializer:
-    def __init__(self, mode = 'json'):
-        self. mode = mode
-        if self.mode=='msgpack':
-            assert HAVE_MSGPACK
-        
+
+class JsonSerializer:
     def dumps(self, obj):
-        if self.mode=='json':
-            return json.dumps(obj).encode()
-        elif self.mode=='msgpack':
-            return msgpack.dumps(obj)
-        
+        return json.dumps(obj).encode()
+    
     def loads(self, msg):
-        if self.mode=='json':
-            return json.loads(msg.decode())
-        elif self.mode=='msgpack':
-            return msgpack.loads(msg, encoding = 'utf8')
-serializer = Serializer('json')
-#serializer = Serializer('msgpack')
+        return json.loads(msg.decode())
+
+class MsgpackSerializer:
+    def __init__(self):
+        assert HAVE_MSGPACK
+    
+    def dumps(self, obj):
+        return msgpack.dumps(obj, use_bin_type=True)
+
+    def loads(self, msg):
+        return msgpack.loads(msg, encoding = 'utf8')
+    
+serializer = JsonSerializer()
+#serializer = MsgpackSerializer()
 
 
 
