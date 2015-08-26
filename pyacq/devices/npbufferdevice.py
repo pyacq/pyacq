@@ -5,11 +5,15 @@ from pyqtgraph.Qt import QtCore, QtGui
 
 
 class NumpyDeviceBuffer(Node):
+    """
+    This is a fake analogsignal device
+    It send data chunk of a predifined buffer inloop at the approximated speed.
+    Done with QTimer.
+    """
     _output_specs = {'signals' : dict(streamtype = 'analogsignal',dtype = 'float32',
                                                 shape = (-1, 16), compression ='', time_axis=0,
                                                 sampling_rate =30.
-                                                ),
-                                }
+                                                )}
 
     def __init__(self, **kargs):
         Node.__init__(self, **kargs)
