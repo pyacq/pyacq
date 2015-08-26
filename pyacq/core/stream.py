@@ -84,7 +84,7 @@ class OutputStream:
     """
     def __init__(self, spec = {}):
         self.configured = False
-        self.spec = spec
+        self.spec = spec # this is a priori stream params, and must be change when Node.configure
     
     def configure(self, **kargs):
         self.params = dict(default_stream)

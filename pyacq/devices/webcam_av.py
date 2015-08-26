@@ -6,7 +6,7 @@ http://mikeboers.github.io/PyAV/index.html
 
 import numpy as np
 
-from ..core import Node, register_node
+from ..core import Node, register_node_type
 from pyqtgraph.Qt import QtCore, QtGui
 
 try:
@@ -83,4 +83,4 @@ class WebCamAV(Node):
         self.container.close()
 
         
-register_node(WebCamAV)
+register_node_type(WebCamAV)

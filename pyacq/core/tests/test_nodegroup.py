@@ -6,7 +6,7 @@ from pyacq.core.rpc import RPCClient, RemoteCallException
 from pyacq.core.processspawner import ProcessSpawner
 from pyacq.core.nodegroup import NodeGroup
 from pyacq.core.node import Node
-from pyacq.core.nodelist import register_node
+from pyacq.core.nodelist import register_node_type
 
 from pyacq import create_manager
 

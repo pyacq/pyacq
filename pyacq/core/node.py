@@ -1,6 +1,6 @@
 from pyqtgraph.Qt import QtCore, QtGui
 
-from .nodelist import register_node
+from .nodelist import register_node_type
 from .stream import StreamDef, OutputStream, InputStream
 from logging import info
 
@@ -109,8 +109,8 @@ class _MyTest:
 
 class _MyTestNode(_MyTest, Node):
     pass
-register_node(_MyTestNode)
+register_node_type(_MyTestNode)
 
 class _MyTestNodeQWidget(_MyTest, WidgetNode):
     pass
-register_node(_MyTestNodeQWidget)
+register_node_type(_MyTestNodeQWidget)

@@ -58,7 +58,6 @@ class FakeReceiver(Node):
         event = self.inputs['signals'].socket.poll(0)
         if event!=0:
             index, data = self.inputs['signals'].recv()
-            print(self.name, 'recv', index, data.shape)
 
 
 class ReceiverWidget(WidgetNode):

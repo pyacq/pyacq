@@ -1,6 +1,6 @@
 import numpy as np
 
-from ..core import Node, register_node
+from ..core import Node, register_node_type
 from pyqtgraph.Qt import QtCore, QtGui
 
 try:
@@ -37,6 +37,8 @@ class WebCamImageIO(Node):
                                 }
     def __init__(self, **kargs):
         Node.__init__(self, **kargs)
+        assert HAVE_IMAGEIO, "WebCamAV node depends on the `imageio` package, but it could not be imported."
+
     
 
     def configure(self, camera_num = 0):
@@ -67,6 +69,6 @@ class WebCamImageIO(Node):
     def close(self):
         self.reader.close()
         
-if HAVE_IMAGEIO:
-    register_node(WebCamImageIO)
+
+register_node_type(WebCamImageIO)
 

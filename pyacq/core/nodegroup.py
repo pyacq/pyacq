@@ -1,7 +1,7 @@
 from pyqtgraph.Qt import QtCore, QtGui
 
 from .rpc import RPCServer
-from .node import Node, WidgetNode, register_node
+from .node import Node, WidgetNode, register_node_type
 from .nodelist import all_nodes
 
 import time
@@ -71,15 +71,15 @@ class NodeGroup(RPCServer):
     def get_node_attr(self, nodename, attr):
         return getattr(self.nodes[nodename], attr)
     
-    def register_node_from_module(self, module, classname):
+    def register_node_type_from_module(self, module, classname):
         mod = importlib.import_module(module)
         class_= getattr(mod, classname)
-        register_node(class_,classname = classname)
+        register_node_type(class_,classname = classname)
     
-    def register_node_with_pickle(self, picklizedclass, classname):
+    def register_node_type_with_pickle(self, picklizedclass, classname):
         # this is not working at the moment, so bad....
         class_ = pickle.loads(picklizedclass)
-        register_node(class_,classname = classname)
+        register_node_type(class_,classname = classname)
 
     def start_all_nodes(self):
         for node in self.nodes.values():

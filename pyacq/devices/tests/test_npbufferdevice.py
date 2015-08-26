@@ -16,15 +16,15 @@ def test_npbufferdevice():
                         transfertmode = 'plaindata', streamtype = 'analogsignal',
                         dtype = 'float32', shape = (-1, 16), compression ='',
                         scale = None, offset = None, units = '' )
-    streamdef1 = dev.create_outputs([ stream_dict ])    
+    dev.output.configure(protocol = 'tcp', interface = '127.0.0.1', transfertmode = 'plaindata')
     dev.initialize()
     
     # create stream
-    nodegroup.register_node_from_module('pyacq.core.tests.fakenodes', 'FakeReceiver' )
+    nodegroup.register_node_type_from_module('pyacq.core.tests.fakenodes', 'FakeReceiver' )
     receivers = [ nodegroup.create_node('FakeReceiver', name = 'receiver{}'.format(i)) for i in range(3) ]
     for receiver in receivers:
         receiver.configure()
-        receiver.set_inputs(streamdef1)
+        receiver.input.connect(dev.output)
         receiver.initialize()
     
     

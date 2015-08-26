@@ -42,8 +42,8 @@ def test_stream_between_remote_nodes():
     man = create_manager()
     nodegroup = man.create_nodegroup()
     
-    nodegroup.register_node_from_module('pyacq.core.tests.fakenodes', 'FakeSender' )
-    nodegroup.register_node_from_module('pyacq.core.tests.fakenodes', 'FakeReceiver' )
+    nodegroup.register_node_type_from_module('pyacq.core.tests.fakenodes', 'FakeSender' )
+    nodegroup.register_node_type_from_module('pyacq.core.tests.fakenodes', 'FakeReceiver' )
     
     # create ndoes
     sender = nodegroup.create_node('FakeSender', name = 'sender')
@@ -76,7 +76,7 @@ def test_stream_between_local_and_remote_nodes():
     man = create_manager()
     nodegroup = man.create_nodegroup()
     
-    nodegroup.register_node_from_module('pyacq.core.tests.fakenodes', 'FakeSender' )
+    nodegroup.register_node_type_from_module('pyacq.core.tests.fakenodes', 'FakeSender' )
     
     # create ndoes
     sender = nodegroup.create_node('FakeSender', name = 'sender')
@@ -115,8 +115,8 @@ def test_visual_node_both_in_main_qapp_and_remote_qapp():
     man = create_manager()
     nodegroup = man.create_nodegroup()
     
-    nodegroup.register_node_from_module('pyacq.core.tests.fakenodes', 'FakeSender' )
-    nodegroup.register_node_from_module('pyacq.core.tests.fakenodes', 'ReceiverWidget' )
+    nodegroup.register_node_type_from_module('pyacq.core.tests.fakenodes', 'FakeSender' )
+    nodegroup.register_node_type_from_module('pyacq.core.tests.fakenodes', 'ReceiverWidget' )
 
 
     # create ndoes
