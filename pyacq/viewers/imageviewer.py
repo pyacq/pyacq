@@ -10,6 +10,10 @@ class ImageViewer(WidgetNode):
     This simple Viewer is here for debug purpose my knowledge in vispy are too small...
     
     """
+    _input_specs = {'video' : dict(streamtype = 'video',dtype = 'uint8',
+                                                shape = (-1, -1, 3), compression ='',
+                                                ),
+                                }
     def __init__(self, **kargs):
         WidgetNode.__init__(self, **kargs)
         
@@ -35,26 +39,23 @@ class ImageViewer(WidgetNode):
         pass
     
     def initialize(self):
-        assert len(self.in_streams) > 0, 'create_outputs must be call first'
-        self.stream = self.in_streams[0]
-        
-        shape = self.stream.params['shape']
-        img_data = np.zeros(shape).astype(self.stream.params['dtype'])
+        in_params = self.input.params
+        img_data = np.zeros(in_params['shape']).astype(in_params['dtype'])
         self.image = vispy.scene.visuals.Image(img_data, parent=self.view.scene)
         # please luke hepl me here I do not known how to range the image in the full canvas
-        self.view.camera.rect = (0,0) + tuple(shape[:2])
+        self.view.camera.rect = (0,0) + tuple(in_params['shape'][:2])
         
         self.timer = QtCore.QTimer(singleShot=False)
-        self.timer.setInterval(int(1./self.stream.params['sampling_rate']*1000))
+        self.timer.setInterval(int(1./in_params['sampling_rate']*1000))
         self.timer.timeout.connect(self.poll_socket)
 
     def configure(self, **kargs):
         pass
     
     def poll_socket(self):
-        event = self.stream.socket.poll(0)
+        event =  self.input.socket.poll(0)
         if event != 0:
-            index, data = self.stream.recv()
+            index, data = self.input.recv()
             # this is a vertical flip
             # this should be done in GPU 
             # please help

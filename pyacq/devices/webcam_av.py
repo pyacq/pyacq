@@ -39,6 +39,11 @@ class AVThread(QtCore.QThread):
 
 
 class WebCamAV(Node):
+    _output_specs = {'video' : dict(streamtype = 'video',dtype = 'uint8',
+                                                shape = (480, 640, 3), compression ='',
+                                                sampling_rate =30.
+                                                ),
+                                }
     def __init__(self, **kargs):
         Node.__init__(self, **kargs)
         assert HAVE_AV, "WebCamAV node depends on the `av` package, but it could not be imported."
@@ -64,7 +69,7 @@ class WebCamAV(Node):
         print('/dev/video{}'.format(self.camera_num))
         self.container = av.open('/dev/video{}'.format(self.camera_num), 'r','video4linux2')
 
-        self._thread = AVThread(self.out_streams[0], self.container)
+        self._thread = AVThread(self.outputs['video'], self.container)
         self._thread.start()
         self._running = True
 

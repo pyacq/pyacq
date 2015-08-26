@@ -7,11 +7,13 @@ except ImportError:
     HAVE_BLOSC = False
 
 from .sharedarray import SharedArray
+from .client import OutputStreamProxy
 
-default_stream = dict( protocol = 'tcp', interface = '127.0.0.1', port = '8000',
+default_stream = dict( protocol = 'tcp', interface = '127.0.0.1', port = '*',
                         transfermode = 'plaindata', streamtype = 'analogsignal',
-                        dtype = 'float32', shape = (-1, 16), time_axis = 0, 
-                        compression ='', scale = None, offset = None, units = '')
+                        dtype = 'float32', shape = (-1, 1), time_axis = 0, 
+                        compression ='', scale = None, offset = None, units = '',
+                        sampling_rate = 1.,)
 
 
 common_doc = """
@@ -77,11 +79,16 @@ class StreamDef(dict):
     
     
 
-class StreamSender:
-    """A StreamSender is a helper class to send data.
+class OutputStream:
+    """A OutputStream is a helper class to send data.
     """
-    def __init__(self, **kargs):
+    def __init__(self, spec = {}):
+        self.configured = False
+        self.spec = spec
+    
+    def configure(self, **kargs):
         self.params = dict(default_stream)
+        self.params.update(self.spec)
         self.params.update(kargs)
         
         self.url = '{protocol}://{interface}:{port}'.format(**self.params)
@@ -139,6 +146,8 @@ class StreamSender:
         
         #TODO check if this is needed
         self.copy = self.params['protocol'] == 'inproc'
+        
+        self.configured = True
 
     def send(self, index, data):
         """
@@ -243,14 +252,22 @@ class StreamSender:
         self.socket.close()
         if self.params['transfermode'] == 'shared_array':
             self._sharedarray.close()
+        del self.socket
+        #~ self.socket = None
 
 
-class StreamReceiver:
-    """StreamSender is a helper class to receive data.
+class InputStream:
+    """InputStream is a helper class to receive data.
     """
-    def __init__(self, **kargs):
-        self.params = dict(default_stream)
-        self.params.update(kargs)
+    def __init__(self, spec = {}):
+        self.configured = False
+        self.spec = spec
+    
+    def connect(self, output):
+        if isinstance(output, dict):
+            self.params = output
+        elif isinstance(output, OutputStream) or isinstance(output, OutputStreamProxy):
+            self.params = output.params
 
         self.url = '{protocol}://{interface}:{port}'.format(**self.params)
         context = zmq.Context.instance()
@@ -279,6 +296,8 @@ class StreamReceiver:
                 shared_array_shape[self._time_axis] = self._ring_size*2
             self._sharedarray = SharedArray(shape = shared_array_shape, dtype = self.params['dtype'], shm_id = self.params['shm_id'])
             self._numpyarr = self._sharedarray.to_numpy()
+        
+        self.configured = True
     
     def recv(self):
         """
@@ -322,3 +341,5 @@ class StreamReceiver:
     
     def close(self):
         self.socket.close()
+        del self.socket
+        #~ self.socket = None

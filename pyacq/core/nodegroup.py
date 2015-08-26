@@ -62,8 +62,14 @@ class NodeGroup(RPCServer):
         assert not node.running(), 'The node {} is running'.format(name)
         self.nodes.pop(name)
     
-    def control_node(self, name, method, *args, **kargs):
-        return getattr(self.nodes[name], method)(*args, **kargs)
+    def control_node(self, nodename, method, *args, **kargs):
+        return getattr(self.nodes[nodename], method)(*args, **kargs)
+    
+    def set_node_attr(self, nodename, attr, value):
+        return setattr(self.nodes[nodename], attr, value)
+    
+    def get_node_attr(self, nodename, attr):
+        return getattr(self.nodes[nodename], attr)
     
     def register_node_from_module(self, module, classname):
         mod = importlib.import_module(module)

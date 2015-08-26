@@ -208,20 +208,10 @@ class Manager(RPCServer):
         return name
     
     def start_all_nodes(self):
-        #~ print
         for ng in self.nodegroups.values():
             ng.client.start_all_nodes()
     
     def stop_all_nodes(self):
         for ng in self.nodegroups.values():
             ng.client.stop_all_nodes()
-
-    def create_node_outputs(self, nodename, streamdef):
-        ng = self.nodes[nodename].nodegroup
-        self.nodes[nodename].streamdef = ng.client.control_node(nodename, 'create_outputs', streamdef)
-        return self.nodes[nodename].streamdef
-    
-        
-    
-
 

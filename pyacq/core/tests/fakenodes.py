@@ -6,11 +6,9 @@ class NoneRegisteredClass(Node):
     pass
 
 class FakeSender(Node):
-    def __init__(self, **kargs):
-        Node.__init__(self, **kargs)
+    _output_specs = { 'signals' : {}}
     
     def start(self):
-        
         self.timer.start()
         self._running = True
 
@@ -18,12 +16,13 @@ class FakeSender(Node):
         self.timer.stop()
         self._running = False
     
-    def close(self):
-        pass
+    def check_output_specs(self):
+        spec = self.outputs['signals'].params
+        assert len(spec['shape']) ==2, 'shape error'
+        assert spec['shape'][1] ==16, 'shape error'
+        assert spec['time_axis']==0, 'time_axis error'
     
-    def initialize(self):
-        assert len(self.out_streams)!=0, 'create_outputs must be call first'
-        self.stream =self.out_streams[0]
+    def _initialize(self):
         self.n = 0
         self.timer = QtCore.QTimer(singleShot = False, interval = int(256*self.sample_interval*1000))
         self.timer.timeout.connect(self.send_data)
@@ -33,11 +32,10 @@ class FakeSender(Node):
     
     def send_data(self):
         self.n += 256
-        self.out_streams[0].send(self.n, np.random.rand(256, 16).astype('float32'))
+        self.outputs['signals'].send(self.n, np.random.rand(256, 16).astype('float32'))
 
 class FakeReceiver(Node):
-    def __init__(self, **kargs):
-        Node.__init__(self, **kargs)
+    _input_specs = { 'signals' : {}}
     
     def start(self):
         self.timer.start()
@@ -47,13 +45,7 @@ class FakeReceiver(Node):
         self.timer.stop()
         self._running = False
     
-    def close(self):
-        pass
-    
-    def initialize(self):
-        assert len(self.in_streams)!=0, 'create_outputs must be call first'
-        self.stream =self.in_streams[0]
-        
+    def _initialize(self):
         self.timer = QtCore.QTimer(singleShot = False)
         self.timer.setInterval(50)
         self.timer.timeout.connect(self.poll_socket)
@@ -63,15 +55,17 @@ class FakeReceiver(Node):
     
     def poll_socket(self):
         #~ print(self.name, 'poll_socket')
-        event = self.stream.socket.poll(0)
+        event = self.inputs['signals'].socket.poll(0)
         if event!=0:
-            index, data = self.stream.recv()
+            index, data = self.inputs['signals'].recv()
             print(self.name, 'recv', index, data.shape)
 
 
 class ReceiverWidget(WidgetNode):
+    _input_specs = { 'signals' : {}}
+    
     def __init__(self, tag = 'label', **kargs):
-        Node.__init__(self, **kargs)
+        WidgetNode.__init__(self, **kargs)
         self.tag = tag
         self.label = QtGui.QLabel()
         self.layout = QtGui.QHBoxLayout()
@@ -85,14 +79,8 @@ class ReceiverWidget(WidgetNode):
     def stop(self):
         self.timer.stop()
         self._running = False
-    
-    def close(self):
-        pass
-    
-    def initialize(self):
-        assert len(self.in_streams)!=0, 'create_outputs must be call first'
-        self.stream =self.in_streams[0]
-        
+
+    def _initialize(self):
         self.timer = QtCore.QTimer(singleShot = False)
         self.timer.setInterval(50)
         self.timer.timeout.connect(self.poll_socket)
@@ -102,10 +90,10 @@ class ReceiverWidget(WidgetNode):
     
     def poll_socket(self):
         #~ print(self.name, 'poll_socket')
-        event = self.stream.socket.poll(0)
+        event = self.inputs['signals'].socket.poll(0)
         if event!=0:
-            index, data = self.stream.recv()
+            index, data = self.inputs['signals'].recv()
             #~ print(self.name, 'recv', index, data.shape)
             self.label.setText('{}  {}   Recv: {} {}'.format(self.name,self.tag,  index, data.shape))
-            
-            
+
+

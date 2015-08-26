@@ -30,6 +30,11 @@ class ImageIOThread(QtCore.QThread):
 
 
 class WebCamImageIO(Node):
+    _output_specs = {'video' : dict(streamtype = 'video',dtype = 'uint8',
+                                                shape = (480, 640, 3), compression ='',
+                                                sampling_rate =30.
+                                                ),
+                                }
     def __init__(self, **kargs):
         Node.__init__(self, **kargs)
     
@@ -43,11 +48,11 @@ class WebCamImageIO(Node):
     
     def initialize(self):
         print(self.metadata['fps'])
-        assert self.metadata['fps'] == self.out_streams[0].params['sampling_rate']
+        #~ assert self.metadata['fps'] == self.out_streams[0].params['sampling_rate']
         
     def start(self):
         self.reader = imageio.get_reader('<video{}>'.format(self.camera_num))
-        self._thread = ImageIOThread(self.out_streams[0], self.reader)
+        self._thread = ImageIOThread(self.output, self.reader)
         self._thread.start()
         self._running = True
         print('started')
