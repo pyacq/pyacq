@@ -1,5 +1,5 @@
 """
-av is python binding to libav or ffmpeg and this is so great (except the poor doc)
+av is python binding to libav or ffmpeg and this is so great (except the poor doc for the moment)
 http://mikeboers.github.io/PyAV/index.html
 """
 
@@ -31,18 +31,20 @@ class AVThread(QtCore.QThread):
         while (self.running):
             for packet in self.container.demux(stream):
                 for frame in packet.decode():
-                    #~ print(frame.time, time.time(), frame.index)
-                    #~ print(len(frame.planes), len(frame.planes[0].to_bytes()))
                     arr = frame.to_rgb().to_nd_array()
                     n += 1
                     self.out_stream.send(n, arr)
 
 
 class WebCamAV(Node):
+    """
+    Simple device that use the av python module.
+    See http://mikeboers.github.io/PyAV/index.html.
+    It is a wrapper on top ffmpeg or libav.
+    """
     _output_specs = {'video' : dict(streamtype = 'video',dtype = 'uint8',
-                                                shape = (480, 640, 3), compression ='',
-                                                sampling_rate =30.
-                                                ),
+                                                shape = (4800, 6400, 3), compression ='',
+                                                sampling_rate = 1.)
                                 }
     def __init__(self, **kargs):
         Node.__init__(self, **kargs)
@@ -52,24 +54,19 @@ class WebCamAV(Node):
     def configure(self, camera_num=0, **options):
         self.camera_num = camera_num
         self.options = options
-        #~ container = cv2.VideoCapture(camera_num)
-        #TODO deal with metadata
-        #~ del container
-    
-    def initialize(self):
-        #~ assert self.metadata['fps'] == self.out_streams[0].params['sampling_rate']
+
         container = av.open('/dev/video{}'.format(self.camera_num), 'r','video4linux2', self.options)
         stream = next(s for s in container.streams if s.type == 'video')
-        
-        #~ stream.format.width 640
-        #~ stream.format.height 480
-        #~ stream.format.name 'yuyv422'
-        
+        self.output.spec['shape'] = (stream.format.height, stream.format.width, 3)
+        self.output.spec['sampling_rate'] = float(stream.average_rate)
+    
+    def _initialize(self):
+        pass
+    
     def start(self):
-        print('/dev/video{}'.format(self.camera_num))
-        self.container = av.open('/dev/video{}'.format(self.camera_num), 'r','video4linux2')
+        self.container = av.open('/dev/video{}'.format(self.camera_num), 'r','video4linux2', self.options)
 
-        self._thread = AVThread(self.outputs['video'], self.container)
+        self._thread = AVThread(self.output, self.container)
         self._thread.start()
         self._running = True
 

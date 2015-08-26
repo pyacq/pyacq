@@ -14,9 +14,9 @@ from pyacq import create_manager
 #~ logging.getLogger().level=logging.INFO
 
 def test_nodegroup0():
-    name, addr = 'nodegroup', 'tcp://127.0.0.1:6000'
+    name, addr = 'nodegroup', 'tcp://127.0.0.1:*'
     process_nodegroup0  = ProcessSpawner(NodeGroup,  name, addr)
-    client0 = RPCClient(name, addr)
+    client0 = RPCClient(name, process_nodegroup0.addr)
     
     n = 5
     
@@ -36,9 +36,9 @@ def test_nodegroup0():
 
 
 def test_cannot_delete_node_while_running():
-    name, addr = 'nodegroup', 'tcp://127.0.0.1:6000'
+    name, addr = 'nodegroup', 'tcp://127.0.0.1:*'
     process_nodegroup0  = ProcessSpawner(NodeGroup,  name, addr)
-    client0 = RPCClient(name, addr)
+    client0 = RPCClient(name, process_nodegroup0.addr)
     
     client0.create_node('mynode', '_MyTestNode')
     client0.control_node('mynode', 'start')
@@ -53,15 +53,15 @@ def test_cannot_delete_node_while_running():
     process_nodegroup0.stop()
 
 def test_remotly_show_qwidget_node():
-    name, addr = 'nodegroup0', 'tcp://127.0.0.1:6000'
+    name, addr = 'nodegroup0', 'tcp://127.0.0.1:*'
     process_nodegroup0  = ProcessSpawner(NodeGroup,  name, addr)
-    client0 = RPCClient(name, addr)
+    client0 = RPCClient(name, process_nodegroup0.addr)
     client0.create_node('mynode', '_MyTestNodeQWidget')
     client0.control_node('mynode', 'show')
     
-    name, addr = 'nodegroup1', 'tcp://127.0.0.1:6001'
+    name, addr = 'nodegroup1', 'tcp://127.0.0.1:*'
     process_nodegroup1  = ProcessSpawner(NodeGroup,  name, addr)
-    client1 = RPCClient(name, addr)
+    client1 = RPCClient(name, process_nodegroup1.addr)
     client1.create_node('mynode', '_MyTestNodeQWidget')
     client1.control_node('mynode', 'show')
     
@@ -71,15 +71,13 @@ def test_remotly_show_qwidget_node():
     process_nodegroup1.stop()
 
 
-def test_register_node_from_module():
+def test_register_node_type_from_module():
     man = create_manager()
     nodegroup = man.create_nodegroup()
     
-    nodegroup.register_node_from_module('pyacq.core.tests.fakenodes', 'NoneRegisteredClass' )
+    nodegroup.register_node_type_from_module('pyacq.core.tests.fakenodes', 'NoneRegisteredClass' )
     nodegroup.create_node( 'NoneRegisteredClass')
     
-
-
 
 class MyNewNode(Node):
     pass
@@ -94,13 +92,10 @@ def test_register_node_with_pickle():
     nodegroup.create_node( 'MyNewNode')
     
 
-
-
-
 if __name__ == '__main__':
     test_nodegroup0()
     test_cannot_delete_node_while_running()
     test_remotly_show_qwidget_node()
-    test_register_node_from_module()
+    test_register_node_type_from_module()
     #test_register_node_with_pickle()  ### not working at the moment
 

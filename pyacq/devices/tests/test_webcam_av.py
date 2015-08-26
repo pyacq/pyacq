@@ -17,6 +17,7 @@ def test_webcam_opencv():
     dev.configure(camera_num = 0)
     dev.output.configure(protocol = 'tcp', interface = '127.0.0.1',transfertmode = 'plaindata',)
     dev.initialize()
+    print(dev.output.params)
     
     viewer = ImageViewer()
     viewer.configure()
@@ -35,5 +36,3 @@ def test_webcam_opencv():
 
 if __name__ == '__main__':
     test_webcam_opencv()
-
- 

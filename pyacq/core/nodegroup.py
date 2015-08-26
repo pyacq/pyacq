@@ -13,10 +13,16 @@ class ThreadReadSocket( QtCore.QThread):
     def __init__(self, rpc_server, parent = None):
         QtCore.QThread.__init__(self, parent)
         self.rpc_server = rpc_server
+        
     
     def run(self):
-        name, msg = self.rpc_server._read_socket()
-        self.new_message.emit(name, msg)
+        self.go = True
+        while self.go:
+            # we need to poll in case of RPCServer.close()
+            event = self.rpc_server._socket.poll(500)
+            if event!=0:
+                name, msg = self.rpc_server._read_socket()
+                self.new_message.emit(name, msg)
 
 
 class NodeGroup(RPCServer):
@@ -41,13 +47,11 @@ class NodeGroup(RPCServer):
         self.app.exec_()
     
     def _mainthread_process_one(self, name, msg):
-        self._readsocket_thread.wait()
         self._process_one(bytes(name), bytes(msg))
-        if self.running():
-            self._readsocket_thread.start()
-        else:
+        if not self.running():
+            self._readsocket_thread.go = False
+            self._readsocket_thread.wait()
             self.app.quit()
-        
     
     def create_node(self, name, classname, **kargs):
         #~ print(self._name, 'create_node', name, classname)

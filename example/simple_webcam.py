@@ -2,7 +2,6 @@ from pyacq import create_manager, ImageViewer
 from pyqtgraph.Qt import QtCore, QtGui
 
 
-# create a device in a new pocess
 man = create_manager()
 
 # this create the dev in a separate process (NodeGroup)
