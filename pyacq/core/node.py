@@ -1,7 +1,7 @@
 from pyqtgraph.Qt import QtCore, QtGui
 
 from .nodelist import register_node_type
-from .stream import StreamDef, OutputStream, InputStream
+from .stream import OutputStream, InputStream
 from logging import info
 
 
