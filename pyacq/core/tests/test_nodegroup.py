@@ -78,7 +78,7 @@ def test_register_node_type_from_module():
     nodegroup.register_node_type_from_module('pyacq.core.tests.fakenodes', 'NoneRegisteredClass' )
     nodegroup.create_node( 'NoneRegisteredClass')
     
-
+"""
 class MyNewNode(Node):
     pass
 
@@ -90,7 +90,7 @@ def test_register_node_with_pickle():
     print(picklizedclass)
     nodegroup.register_node_with_pickle(picklizedclass, 'MyNewNode')
     nodegroup.create_node( 'MyNewNode')
-    
+"""
 
 if __name__ == '__main__':
     test_nodegroup0()
