@@ -1,7 +1,7 @@
 import time
 
 from pyacq import create_manager
-from pyacq.devices.webcam_imageio import WebCamImageIO
+from pyacq.devices.webcam_imageio import WebCamImageIO, HAVE_IMAGEIO
 from pyacq.viewers.imageviewer import ImageViewer
 
 from pyqtgraph.Qt import QtCore, QtGui
@@ -32,7 +32,7 @@ def test_webcam_imageio():
     
     
 
-if __name__ == '__main__':
+if __name__ == '__main__' and HAVE_IMAGEIO:
     test_webcam_imageio()
 
  

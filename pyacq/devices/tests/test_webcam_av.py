@@ -1,7 +1,7 @@
 import time
 
 from pyacq import create_manager
-from pyacq.devices.webcam_av import WebCamAV
+from pyacq.devices.webcam_av import WebCamAV, HAVE_AV
 from pyacq.viewers.imageviewer import ImageViewer
 
 from pyqtgraph.Qt import QtCore, QtGui
@@ -34,5 +34,5 @@ def test_webcam_opencv():
     timer.start()
     app.exec_()
 
-if __name__ == '__main__':
+if __name__ == '__main__' and HAVE_AV:
     test_webcam_opencv()
