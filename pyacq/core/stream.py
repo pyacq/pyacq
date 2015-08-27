@@ -1,5 +1,7 @@
 import zmq
 import numpy as np
+import random
+import string
 try:
     import blosc
     HAVE_BLOSC = True
@@ -90,8 +92,12 @@ class OutputStream:
         self.params = dict(default_stream)
         self.params.update(self.spec)
         self.params.update(kargs)
-        
-        self.url = '{protocol}://{interface}:{port}'.format(**self.params)
+        if self.params['protocol'] in ('inproc', 'ipc'):
+            pipename = u'pyacq_pipe_'+''.join(random.SystemRandom().choice(string.ascii_uppercase + string.digits) for _ in range(24))
+            self.params['interface'] = pipename
+            self.url = '{protocol}://{interface}'.format(**self.params)
+        else:
+            self.url = '{protocol}://{interface}:{port}'.format(**self.params)
         context = zmq.Context.instance()
         self.socket = context.socket(zmq.PUB)
         self.socket.bind(self.url)
@@ -142,10 +148,15 @@ class InputStream:
         elif isinstance(output, OutputStream) or isinstance(output, OutputStreamProxy):
             self.params = output.params
 
-        self.url = '{protocol}://{interface}:{port}'.format(**self.params)
+        if self.params['protocol'] in ('inproc', 'ipc'):
+            self.url = '{protocol}://{interface}'.format(**self.params)
+        else:
+            self.url = '{protocol}://{interface}:{port}'.format(**self.params)
+
         context = zmq.Context.instance()
         self.socket = context.socket(zmq.SUB)
         self.socket.setsockopt(zmq.SUBSCRIBE,b'')
+        #~ self.socket.setsockopt(zmq.DELAY_ATTACH_ON_CONNECT,1)
         self.socket.connect(self.url)
         
         if self.params['transfermode'] == 'plaindata':
@@ -154,7 +165,13 @@ class InputStream:
             self.receiver = SharedArrayReceiver(self.socket, self.params)
         
         self.configured = True
-
+    
+    def poll(self, timeout=None):
+        """
+        Poll the socket of input stream
+        """
+        return self.socket.poll(timeout = timeout)
+    
     def recv(self):
         """
         Receiv chunk of data
@@ -278,7 +295,8 @@ class SharedArraySender:
     def __init__(self, socket, params):
         self.socket = socket
         self.params = params
-        self.copy = self.params['protocol'] == 'inproc'
+        #~ self.copy = self.params['protocol'] == 'inproc'
+        self.copy = False
         
         if self.params['ring_buffer_method'] == 'single':
             #~ self.funcs.append(self._copy_to_sharray_single)

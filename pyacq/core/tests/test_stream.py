@@ -27,7 +27,7 @@ def test_stream_plaindata():
             stream_spec['compression'] = compression
             outstream = OutputStream()
             outstream.configure(**stream_spec)
-            time.sleep(.5)
+            #~ time.sleep(.5)
             instream = InputStream()
             instream.connect(outstream)
             
@@ -46,6 +46,7 @@ def test_stream_plaindata():
         
             outstream.close()
             instream.close()
+            #~ print()
 
 
 def test_stream_sharedarray():
@@ -63,7 +64,7 @@ def test_stream_sharedarray():
     protocol = 'tcp'
     for ring_buffer_method in['single', 'double',]:
         for time_axis in [0, 1]:
-            print(ring_buffer_method, 'time_axis', time_axis)
+            print('shared_array', ring_buffer_method, 'time_axis', time_axis)
             stream_spec['ring_buffer_method'] = ring_buffer_method
             stream_spec['time_axis'] = time_axis
             if time_axis == 0:
@@ -74,11 +75,10 @@ def test_stream_sharedarray():
                 stream_spec['shared_array_shape'] =  (nb_channel,  ring_size)
             outstream = OutputStream()
             outstream.configure(**stream_spec)
-            time.sleep(.5)
-            print('shm_id', outstream.params['shm_id'])
             instream = InputStream()
             instream.connect(outstream)
             time.sleep(.5)
+            
             index = 0
             for i in range(30):
                 #~ print(i)
@@ -86,15 +86,13 @@ def test_stream_sharedarray():
                 #send
                 if time_axis==0:
                     arr = np.tile(np.arange(index, index+chunksize)[:, None], (1,nb_channel)).astype(stream_spec['dtype'])
-                    #~ arr = np.random.rand(chunksize, nb_channel).astype(stream_spec['dtype'])
                 elif time_axis==1:
                     arr = np.tile(np.arange(index, index+chunksize)[None ,:], (nb_channel, 1)).astype(stream_spec['dtype'])
-                    #~ arr = np.random.rand(nb_channel, chunksize).astype(stream_spec['dtype'])
                 index += chunksize
                 outstream.send(index, arr)
-            
-                #recv
+                
                 index2, arr2 = instream.recv()
+                
                 assert index2==index
                 assert arr2 is None
                 
@@ -108,6 +106,7 @@ def test_stream_sharedarray():
             
             outstream.close()
             instream.close()
+            #~ print()
 
 
 def benchmark_stream():

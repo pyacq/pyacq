@@ -39,11 +39,11 @@ class SharedArray:
         
         if sys.platform.startswith('win'):
             if shm_id is None:
-                self.shm_id = u'pyacq_SharedMem_'+''.join(random.SystemRandom().choice(string.ascii_uppercase + string.digits) for _ in range(128))
+                self.shm_id = u'pyacq_SharedArray_'+''.join(random.SystemRandom().choice(string.ascii_uppercase + string.digits) for _ in range(128))
             self.mmap = mmap.mmap(-1, self.nbytes, self.shm_id, access = mmap.ACCESS_WRITE)
         else:
             if shm_id is None:
-                self._tmpFile = tempfile.NamedTemporaryFile(prefix='pyacq_SharedMem_')
+                self._tmpFile = tempfile.NamedTemporaryFile(prefix=u'pyacq_SharedArray_')
                 self._tmpFile.write(b'\x00' * self.length)
                 self._tmpFile.flush() # I do not anderstand but this is needed....
                 self.shm_id = self._tmpFile.fileno()
