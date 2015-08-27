@@ -8,6 +8,7 @@ import numpy as np
 
 from ..core import Node, register_node_type
 from pyqtgraph.Qt import QtCore, QtGui
+from pyqtgraph.util.mutex import Mutex
 
 try:
     import av
@@ -23,12 +24,19 @@ class AVThread(QtCore.QThread):
         QtCore.QThread.__init__(self)
         self.out_stream = out_stream
         self.container = container
+
+        self.lock = Mutex()
+        self.running = False
         
     def run(self):
-        self.running = True
+        with self.lock:
+            self.running = True
         n = 0
         stream = self.container.streams[0]
-        while (self.running):
+        while True:
+            with self.lock:
+                if not self.running:
+                    break
             for packet in self.container.demux(stream):
                 for frame in packet.decode():
                     arr = frame.to_rgb().to_nd_array()

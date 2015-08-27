@@ -2,6 +2,7 @@ import numpy as np
 
 from ..core import Node, register_node_type
 from pyqtgraph.Qt import QtCore, QtGui
+from pyqtgraph.util.mutex import Mutex
 
 try:
     import imageio
@@ -16,17 +17,28 @@ class ImageIOThread(QtCore.QThread):
         QtCore.QThread.__init__(self)
         self.out_stream= out_stream
         self.reader = reader
+
+        self.lock = Mutex()
+        self.running = False
         
     def run(self):
-        self.running = True
+        with self.lock:
+            self.running = True
         n = 0
-        while (self.running):
+        while True:
+            with self.lock:
+                if not self.running:
+                    break
             for im in self.reader:
                 n += 1
                 self.out_stream.send(n, im)
                 # this is bad 
                 # TODO : find a way to do trhis loop in blocking mode
                 time.sleep(1./self.out_stream.params['sampling_rate'])
+    
+    def stop(self):
+        with self.lock:
+            self.running = False
 
 
 class WebCamImageIO(Node):
@@ -64,7 +76,7 @@ class WebCamImageIO(Node):
         self._running = True
 
     def stop(self):
-        self._thread.running = False
+        self._thread.stop()
         self._thread.wait()
         self._running = False
     
