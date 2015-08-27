@@ -3,12 +3,13 @@ import time
 from pyacq import create_manager
 
 from pyqtgraph.Qt import QtCore, QtGui
+import pyqtgraph as pg
 from pyacq.core.tests.fakenodes import FakeSender, FakeReceiver, ReceiverWidget
 
 
 def test_stream_between_local_nodes():
     # create local nodes in QApplication
-    app = QtGui.QApplication([])
+    app = pg.mkQApp()
 
     sender = FakeSender()
     stream_spec = dict(protocol = 'tcp', interface = '127.0.0.1', port = '*',
@@ -89,7 +90,7 @@ def test_stream_between_local_and_remote_nodes():
     sender.initialize()
     
     # create local nodes in QApplication
-    app = QtGui.QApplication([])
+    app = pg.mkQApp()
     
     receiver = FakeReceiver()
     receiver.configure()
@@ -138,7 +139,7 @@ def test_visual_node_both_in_main_qapp_and_remote_qapp():
     
     
     #receiver1 is in local QApp
-    app = QtGui.QApplication([])
+    app = pg.mkQApp()
     receiver1 = ReceiverWidget(name = 'receiver1', tag ='<b>I am in local QApp</b>')
     receiver1.configure()
     receiver1.input.connect(sender.output)
