@@ -27,9 +27,10 @@ def test_stream_plaindata():
             stream_spec['compression'] = compression
             outstream = OutputStream()
             outstream.configure(**stream_spec)
-            #~ time.sleep(.5)
+            
             instream = InputStream()
             instream.connect(outstream)
+            time.sleep(.5)
             
             index = 0
             for i in range(5):
