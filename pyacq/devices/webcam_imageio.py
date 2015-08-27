@@ -30,9 +30,12 @@ class ImageIOThread(QtCore.QThread):
 
 
 class WebCamImageIO(Node):
+    """
+    Simple webcam device that use the imageiopython module.
+    """
     _output_specs = {'video' : dict(streamtype = 'video',dtype = 'uint8',
-                                                shape = (480, 640, 3), compression ='',
-                                                sampling_rate =30.
+                                                shape = (4800, 6400, 3), compression ='',
+                                                sampling_rate =1.
                                                 ),
                                 }
     def __init__(self, **kargs):
@@ -45,30 +48,28 @@ class WebCamImageIO(Node):
         self.camera_num = camera_num
         reader = imageio.get_reader('<video{}>'.format(self.camera_num))
         self.metadata = reader.get_meta_data()
-        print(self.metadata)
         reader.close()
+        
+        s = self.metadata['size']
+        self.output.spec['shape'] = (s[1], s[0], 3,)
+        self.output.spec['sampling_rate'] = float(self.metadata['fps'])
     
-    def initialize(self):
-        print(self.metadata['fps'])
-        #~ assert self.metadata['fps'] == self.out_streams[0].params['sampling_rate']
+    def _initialize(self):
+        pass
         
     def start(self):
         self.reader = imageio.get_reader('<video{}>'.format(self.camera_num))
         self._thread = ImageIOThread(self.output, self.reader)
         self._thread.start()
         self._running = True
-        print('started')
 
     def stop(self):
-        print('stop')
         self._thread.running = False
         self._thread.wait()
-        
         self._running = False
     
     def close(self):
         self.reader.close()
-        
 
 register_node_type(WebCamImageIO)
 

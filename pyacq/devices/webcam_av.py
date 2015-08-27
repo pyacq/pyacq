@@ -38,7 +38,7 @@ class AVThread(QtCore.QThread):
 
 class WebCamAV(Node):
     """
-    Simple device that use the av python module.
+    Simple webcam device that use the av python module.
     See http://mikeboers.github.io/PyAV/index.html.
     It is a wrapper on top ffmpeg or libav.
     """
