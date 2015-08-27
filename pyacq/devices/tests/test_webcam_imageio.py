@@ -8,7 +8,7 @@ from pyqtgraph.Qt import QtCore, QtGui
 
 import pytest
 
-@pytest.mark.skipif(not HAVE_IMAGEIO)
+@pytest.mark.skipif(not HAVE_IMAGEIO, , reason = 'no have imageio')
 def test_webcam_imageio():
     # in main App
     app = QtGui.QApplication([])
