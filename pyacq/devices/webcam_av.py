@@ -43,6 +43,9 @@ class AVThread(QtCore.QThread):
                     n += 1
                     self.out_stream.send(n, arr)
 
+    def stop(self):
+        with self.lock:
+            self.running = False
 
 class WebCamAV(Node):
     """
@@ -79,7 +82,7 @@ class WebCamAV(Node):
         self._running = True
 
     def stop(self):
-        self._thread.running = False
+        self._thread.stop()
         self._thread.wait()
         self._running = False
         del(self.container)

@@ -1,4 +1,5 @@
 from pyqtgraph.Qt import QtCore, QtGui
+from pyqtgraph.util.mutex import Mutex
 
 from .rpc import RPCServer
 from .node import Node, WidgetNode, register_node_type
@@ -14,16 +15,25 @@ class ThreadReadSocket( QtCore.QThread):
         QtCore.QThread.__init__(self, parent)
         self.rpc_server = rpc_server
         
+        self.lock = Mutex()
+        self.running = False
     
     def run(self):
-        self.go = True
-        while self.go:
+        with self.lock:
+            self.running = True
+        while True:
+            with self.lock:
+                if not self.running:
+                    break
             # we need to poll in case of RPCServer.close()
             event = self.rpc_server._socket.poll(500)
             if event!=0:
                 name, msg = self.rpc_server._read_socket()
                 self.new_message.emit(name, msg)
 
+    def stop(self):
+        with self.lock:
+            self.running = False
 
 class NodeGroup(RPCServer):
     """
@@ -49,7 +59,7 @@ class NodeGroup(RPCServer):
     def _mainthread_process_one(self, name, msg):
         self._process_one(bytes(name), bytes(msg))
         if not self.running():
-            self._readsocket_thread.go = False
+            self._readsocket_thread.stop()
             self._readsocket_thread.wait()
             self.app.quit()
     
