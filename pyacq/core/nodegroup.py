@@ -8,15 +8,16 @@ from .nodelist import all_nodes
 import time
 import importlib
 import pickle
+import weakref
 
 class ThreadReadSocket( QtCore.QThread):
     new_message = QtCore.Signal(QtCore.QByteArray, QtCore.QByteArray)
     def __init__(self, rpc_server, parent = None):
         QtCore.QThread.__init__(self, parent)
-        self.rpc_server = rpc_server
+        self.rpc_server = weakref.ref(rpc_server)
     
     def run(self):
-        name, msg = self.rpc_server._read_socket()
+        name, msg = self.rpc_server()._read_socket()
         self.new_message.emit(name, msg)
 
 class NodeGroup(RPCServer):
