@@ -37,7 +37,7 @@ def test_nodegroup0():
 
 def bench_ping_pong_nodegroup():
     # compare Qt4 mainloop of NodeGroup vs Host main loop which is infinite loop (fastest possible)
-    for name, class_ in [ ('host', Host), ('nodegroup', NodeGroup)]:
+    for name, class_ in [ ('Host', Host), ('NodeGroup', NodeGroup)]:
         addr = 'tcp://127.0.0.1:*'
         process  = ProcessSpawner(class_,  name, addr)
         client = RPCClient(name, process.addr)
@@ -48,7 +48,7 @@ def bench_ping_pong_nodegroup():
         for i in range(N):
             client.ping()
         t2 = time.time()
-        print(name, 'sync ping per second', N/(t2-t1))
+        print(name, ' : sync ping per second', N/(t2-t1))
 
         t1 = time.time()
         rets = []
@@ -57,7 +57,7 @@ def bench_ping_pong_nodegroup():
         for ret in rets:
             ret.result()
         t2 = time.time()
-        print(name, 'async ping per second', N/(t2-t1))
+        print(name, ' : async ping per second', N/(t2-t1))
         
         client.close()
     
@@ -122,10 +122,10 @@ def test_register_node_with_pickle():
 """
 
 if __name__ == '__main__':
-    test_nodegroup0()
-    #bench_ping_pong_nodegroup()
-    test_cannot_delete_node_while_running()
-    test_remotly_show_qwidget_node()
-    test_register_node_type_from_module()
+    #~ test_nodegroup0()
+    bench_ping_pong_nodegroup()
+    #~ test_cannot_delete_node_while_running()
+    #~ test_remotly_show_qwidget_node()
+    #~ test_register_node_type_from_module()
     #test_register_node_with_pickle()  ### not working at the moment
 

@@ -41,7 +41,7 @@ class NodeGroup(RPCServer):
     
     def _mainthread_process_one(self, name, msg):
         self._readsocket_thread.wait()
-        self._process_one(bytes(name), bytes(msg), close_socket = True)
+        self._process_one(bytes(name), bytes(msg))
         if self.running():
             self._readsocket_thread.start()
         else:
