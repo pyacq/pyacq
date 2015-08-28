@@ -92,7 +92,7 @@ class RPCClientSocket(object):
         self.clients = {}
         self.next_call_id = 0
         self.futures = weakref.WeakValueDictionary()
-        atexit.register(self.close)
+        #atexit.register(self.close)
         
     def connect(self, addr):
         """Conncet the socket to an RPCServer address.
@@ -292,7 +292,7 @@ class RPCServer(object):
         self._addr = self._socket.getsockopt(zmq.LAST_ENDPOINT)
         self._closed = False
         info("RPC start server: %s@%s", self._name.decode(), self._addr.decode())
-        atexit.register(self.close)
+        #atexit.register(self.close)
 
     def __del__(self):
         self.close()
