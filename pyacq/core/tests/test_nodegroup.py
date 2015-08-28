@@ -122,10 +122,10 @@ def test_register_node_with_pickle():
 """
 
 if __name__ == '__main__':
-    #~ test_nodegroup0()
+    test_nodegroup0()
     bench_ping_pong_nodegroup()
-    #~ test_cannot_delete_node_while_running()
-    #~ test_remotly_show_qwidget_node()
-    #~ test_register_node_type_from_module()
+    test_cannot_delete_node_while_running()
+    test_remotly_show_qwidget_node()
+    test_register_node_type_from_module()
     #test_register_node_with_pickle()  ### not working at the moment
 
