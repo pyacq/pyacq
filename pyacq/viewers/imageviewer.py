@@ -1,4 +1,4 @@
-from ..core import WidgetNode
+from ..core import WidgetNode, register_node_type
 from pyqtgraph.Qt import QtCore, QtGui
 
 import numpy as np
@@ -60,6 +60,7 @@ class ImageViewer(WidgetNode):
             data = data.swapaxes(0,1)
             self.image.setImage(data)
 
+register_node_type(ImageViewer)
 
 """
 import vispy
