@@ -4,6 +4,7 @@ import logging
 
 from pyacq.core.rpc import RPCClient, RemoteCallException
 from pyacq.core.processspawner import ProcessSpawner
+from pyacq.core.host import Host
 from pyacq.core.nodegroup import NodeGroup
 from pyacq.core.node import Node
 from pyacq.core.nodelist import register_node_type
@@ -33,6 +34,34 @@ def test_nodegroup0():
         client0.delete_node('mynode{}'.format(i))
     
     process_nodegroup0.stop()
+
+def bench_ping_pong_nodegroup():
+    # compare Qt4 mainloop of NodeGroup vs Host main loop which is infinite loop (fastest possible)
+    for name, class_ in [ ('host', Host), ('nodegroup', NodeGroup)]:
+        addr = 'tcp://127.0.0.1:*'
+        process  = ProcessSpawner(class_,  name, addr)
+        client = RPCClient(name, process.addr)
+        
+        N =1000
+        
+        t1 = time.time()
+        for i in range(N):
+            client.ping()
+        t2 = time.time()
+        print(name, 'sync ping per second', N/(t2-t1))
+
+        t1 = time.time()
+        rets = []
+        for i in range(N):
+            rets.append(client.ping(_sync=False))
+        for ret in rets:
+            ret.result()
+        t2 = time.time()
+        print(name, 'async ping per second', N/(t2-t1))
+        
+        client.close()
+    
+    
 
 
 def test_cannot_delete_node_while_running():
@@ -94,6 +123,7 @@ def test_register_node_with_pickle():
 
 if __name__ == '__main__':
     test_nodegroup0()
+    #bench_ping_pong_nodegroup()
     test_cannot_delete_node_while_running()
     test_remotly_show_qwidget_node()
     test_register_node_type_from_module()
