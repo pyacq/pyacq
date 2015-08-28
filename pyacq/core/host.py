@@ -2,6 +2,7 @@ from .processspawner import ProcessSpawner
 from .rpc import RPCServer, RPCClient
 from .nodegroup import NodeGroup
 
+from logging import info
 
 class Host(RPCServer):
     """
@@ -44,11 +45,7 @@ class Host(RPCServer):
         """
         Close a NodeGroup and stop its process.
         """
-        #print(self._name, 'stop_nodegroup')
-        
-        # TODO Ensure that all Node in NodeGroup are not running.
-        
-        client = RPCClient(name, self.nodegroup_process[name].addr)
+        client = self.nodegroup_process[name].client
         if not force:
             assert not client.any_node_running(), u'Try to close Host but Node are running'
         self.nodegroup_process[name].stop()
@@ -57,8 +54,7 @@ class Host(RPCServer):
     def close_all_nodegroups(self):
         """Close all NodeGroups belonging to this host.
         """
-        for name, spawner in self.nodegroup_process.items():
-            spawner.kill()
-        self.nodegroup_process = {}
+        for name in list(self.nodegroup_process.keys()):
+            self.close_nodegroup(name, force = True)
         
     

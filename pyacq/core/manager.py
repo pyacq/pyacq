@@ -5,6 +5,7 @@ from .client import ManagerProxy
 from .processspawner import ProcessSpawner
 from .host import Host
 
+import logging
 
 def create_manager(mode='rpc', auto_close_at_exit = True):
     """Create a new Manager either in this process or in a new process.
@@ -20,7 +21,7 @@ def create_manager(mode='rpc', auto_close_at_exit = True):
         proc = ProcessSpawner(Manager, name='manager', addr='tcp://127.0.0.1:*')
         man = ManagerProxy(proc.name, proc.addr)
         if auto_close_at_exit:
-            atexit.register(man.close)
+            atexit.register(proc.stop)
         return man
         
 
@@ -114,8 +115,10 @@ class Manager(RPCServer):
     def disconnect_host(self, name):
         """Disconnect the Manager from the Host identified by *name*.
         """
-        self.hosts[name].client.close()
-        
+        for ng in self.hosts[name]:
+            self.nodegroups.pop(ng.name)
+        self.hosts.pop(name)
+    
     def default_host(self):
         """Return the RPC name and address of a default Host created by the
         Manager.
@@ -127,13 +130,18 @@ class Manager(RPCServer):
             self.connect_host(proc.name, proc.addr)
         return self._default_host.name, self._default_host.addr
     
+    def close_host(self, name):
+        """Close the Host identified by *name*.
+        """
+        self.hosts[name].client.close()
+    
     def close(self):
         """
         Close the manager
         And close the default Host too.
         """
         if self._default_host is not None:
-            self.disconnect_host('default-host')
+            self._default_host.stop()
         RPCServer.close(self)
 
     def list_hosts(self):

@@ -30,12 +30,11 @@ def test_npbufferdevice():
     nodegroup.start_all_nodes()
     
     print(nodegroup.any_node_running())
-    time.sleep(3.)
+    time.sleep(1.)
     
     nodegroup.stop_all_nodes()
     print(nodegroup.any_node_running())
-
-
+    
 if __name__ == '__main__':
     test_npbufferdevice()
 

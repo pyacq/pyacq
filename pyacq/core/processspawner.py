@@ -81,10 +81,6 @@ class ProcessSpawner:
         self.proc.wait()
 
     def kill(self):
-        try:
-            self.stop()
-        except:
-            pass
         if self.proc.poll() is not None:
             return
         logging.info("Kill process: %d", self.proc.pid)
@@ -95,6 +91,6 @@ class ProcessSpawner:
         if self.proc.poll() is not None:
             return
         logging.info("Close process: %d", self.proc.pid)
-        self.client.close(_timeout = 1.)
+        self.client.close()
         self.proc.wait()
 
