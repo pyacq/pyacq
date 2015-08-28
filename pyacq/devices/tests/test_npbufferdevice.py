@@ -7,7 +7,7 @@ from pyacq import create_manager
 
 
 def test_npbufferdevice():
-    man = create_manager()
+    man = create_manager(auto_close_at_exit = False)
     nodegroup = man.create_nodegroup()
     
     dev = nodegroup.create_node('NumpyDeviceBuffer', name = 'dev')
@@ -34,6 +34,8 @@ def test_npbufferdevice():
     
     nodegroup.stop_all_nodes()
     print(nodegroup.any_node_running())
+    
+    man.close()
     
 if __name__ == '__main__':
     test_npbufferdevice()
