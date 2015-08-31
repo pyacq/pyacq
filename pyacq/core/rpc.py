@@ -337,7 +337,7 @@ class RPCServer(object):
                 else:
                     rval = fn(*args, **kwds)
                 if ret:
-                    self._send_result(name, call_id, rval=rval)
+                    self._send_result(*self._format_result(name, call_id, rval=rval))
             except:
                 exc_str = ["Error while processing request %s.%s(%s, %s)" % (str(self), method, args, kwds)]
                 exc_str += traceback.format_stack()
@@ -345,16 +345,19 @@ class RPCServer(object):
                 exc = sys.exc_info()
                 exc_str += traceback.format_exception(*exc)
                 if ret:
-                    self._send_result(name, call_id, error=(exc[0].__name__, exc_str))
+                    self._send_result(*self._format_result(name, call_id, error=(exc[0].__name__, exc_str)))
         if not self.running:
             self._socket.close()
    
     
-    def _send_result(self, name, call_id, rval=None, error=None):
+    def _format_result(self, name, call_id, rval=None, error=None):
         result = {'action': 'return', 'call_id': call_id,
                   'rval': rval, 'error': error}
         info("RPC send res: %s %s", name, result)
-        self._socket.send_multipart([name, serializer.dumps(result)])
+        return name, serializer.dumps(result)
+    
+    def _send_result(self, name, data):
+        self._socket.send_multipart([name, data])
 
     def close(self):
         """Close this RPC server.
