@@ -70,7 +70,7 @@ class NodeGroup(RPCServer):
         self.nodes = {}
 
     def run_forever(self):
-        # create a sroxy socket between RpcThreadSocket and main
+        # create a proxy socket between RpcThreadSocket and main
         addr = 'inproc://'+''.join(random.SystemRandom().choice(string.ascii_uppercase + string.digits) for _ in range(16))
         context = zmq.Context.instance()
         self._local_socket = context.socket(zmq.PAIR)
@@ -88,6 +88,7 @@ class NodeGroup(RPCServer):
         if  not self.running():
             self._rpcsocket_thread.stop()
             self._rpcsocket_thread.wait()
+            self._socket.close()
             self.app.quit()
 
     def _send_result(self, name, data):

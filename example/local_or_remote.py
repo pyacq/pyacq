@@ -18,6 +18,7 @@ def dev_remote_viewer_local():
 
     # this create the dev in a separate process (NodeGroup)
     nodegroup = man.create_nodegroup()
+    
     dev = nodegroup.create_node('WebCamAV', name = 'cam0')
     dev.configure(camera_num = 0)
     dev.output.configure(protocol = 'tcp', interface = '127.0.0.1', transfertmode = 'plaindata')
@@ -40,7 +41,8 @@ def dev_remote_viewer_local():
 
 def dev_local_viewer_local():
     # no manager
-    #device + view is a Node in local QApp
+    # device + view is a Node in local QApp
+    # Nodes are controled directly
     
     app = pg.mkQApp()
     
@@ -63,11 +65,11 @@ def dev_local_viewer_local():
  
  
 def dev_remote_viewer_remote():
-    # no QApp every thin is remote
+    # no QApp all Nodes are remoted even the viewer.
+    # note that dev and viewer are in the same NodeGroup
+    # so they are in the same process
     
     man = create_manager()
-
-    
     nodegroup = man.create_nodegroup()
     
     dev = nodegroup.create_node('WebCamAV', name = 'cam0')
@@ -88,7 +90,7 @@ def dev_remote_viewer_remote():
     time.sleep(10.)
 
 
-
-#~ dev_remote_viewer_local()
-#~ dev_local_viewer_local()
-dev_remote_viewer_remote()
+# uncomment one if this 3 lines and compare the process number
+dev_remote_viewer_local()
+#dev_local_viewer_local()
+#dev_remote_viewer_remote()

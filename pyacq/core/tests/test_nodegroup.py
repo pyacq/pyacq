@@ -60,8 +60,6 @@ def bench_ping_pong_nodegroup():
         print(name, ' : async ping per second', N/(t2-t1))
         
         client.close()
-    
-    
 
 
 def test_cannot_delete_node_while_running():
@@ -80,6 +78,7 @@ def test_cannot_delete_node_while_running():
     client0.delete_node('mynode')
 
     process_nodegroup0.stop()
+
 
 def test_remotly_show_qwidget_node():
     name, addr = 'nodegroup0', 'tcp://127.0.0.1:*'
@@ -101,11 +100,13 @@ def test_remotly_show_qwidget_node():
 
 
 def test_register_node_type_from_module():
-    man = create_manager()
+    man = create_manager(auto_close_at_exit = False)
     nodegroup = man.create_nodegroup()
     
     nodegroup.register_node_type_from_module('pyacq.core.tests.fakenodes', 'NoneRegisteredClass' )
     nodegroup.create_node( 'NoneRegisteredClass')
+    
+    man.close()
     
 """
 class MyNewNode(Node):

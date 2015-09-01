@@ -19,9 +19,9 @@ def create_manager(mode='rpc', auto_close_at_exit = True):
         return Manager(name='manager', addr='tcp://*:*')
     else:
         proc = ProcessSpawner(Manager, name='manager', addr='tcp://127.0.0.1:*')
-        man = ManagerProxy(proc.name, proc.addr)
+        man = ManagerProxy(proc.name, proc.addr, manager_process = proc)
         if auto_close_at_exit:
-            atexit.register(proc.stop)
+            atexit.register(man.close)
         return man
         
 
@@ -86,8 +86,9 @@ class Manager(RPCServer):
             self.outputs = [ ]# list of StreamDef
     
     
-    def __init__(self, name, addr):
+    def __init__(self, name, addr, manager_process = None):
         RPCServer.__init__(self, name, addr)
+        
         self.hosts = {}  # name:HostProxy
         self.nodegroups = {}  # name:NodegroupProxy
         self.nodes = {}  # name:NodeProxy

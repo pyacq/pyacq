@@ -26,7 +26,7 @@ class Host(RPCServer):
         Close the Host
         And close all its NodeGroup.
         """
-        self.close_all_nodegroups()
+        self.close_all_nodegroups(force = True)
         RPCServer.close(self)
 
     
@@ -51,10 +51,10 @@ class Host(RPCServer):
         self.nodegroup_process[name].stop()
         del self.nodegroup_process[name]
 
-    def close_all_nodegroups(self):
+    def close_all_nodegroups(self, force = False):
         """Close all NodeGroups belonging to this host.
         """
         for name in list(self.nodegroup_process.keys()):
-            self.close_nodegroup(name, force = True)
+            self.close_nodegroup(name, force = force)
         
     

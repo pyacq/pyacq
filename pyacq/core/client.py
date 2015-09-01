@@ -3,9 +3,11 @@ from .rpc import RPCClient
 
 
 class ManagerProxy(RPCClient):
-    def __init__(self, name, addr):
+    def __init__(self, name, addr, manager_process = None):
         RPCClient.__init__(self, name, addr)
         self._host_proxy = {}
+        
+        self.manager_process = manager_process # needed for properlly close and wait the process
 
     def connect_host(self, name, addr):
         self._call_method('connect_host', name, addr)
@@ -25,6 +27,11 @@ class ManagerProxy(RPCClient):
         host = self.default_host()
         return host.create_nodegroup(name)
     
+    def close(self):
+        self._call_method('close')
+        if self.manager_process is not None:
+            self.manager_process.proc.wait()
+
 
 class HostProxy(RPCClient):
     def __init__(self, mgr, name, addr):

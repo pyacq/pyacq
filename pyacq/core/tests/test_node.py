@@ -40,7 +40,7 @@ def test_stream_between_local_nodes():
 
 def test_stream_between_remote_nodes():
     # this is done at Manager level the manager do known the connection
-    man = create_manager()
+    man = create_manager(auto_close_at_exit = False)
     nodegroup = man.create_nodegroup()
     
     nodegroup.register_node_type_from_module('pyacq.core.tests.fakenodes', 'FakeSender' )
@@ -71,10 +71,12 @@ def test_stream_between_remote_nodes():
     sender.stop()
     receiver.stop()
     print(nodegroup.any_node_running())
+    
+    man.close()
 
 def test_stream_between_local_and_remote_nodes():
     # this is done at Manager level the manager do known the connection
-    man = create_manager()
+    man = create_manager(auto_close_at_exit = False)
     nodegroup = man.create_nodegroup()
     
     nodegroup.register_node_type_from_module('pyacq.core.tests.fakenodes', 'FakeSender' )
@@ -109,11 +111,13 @@ def test_stream_between_local_and_remote_nodes():
     
     sender.stop()
     receiver.stop()
+    
+    man.close()
 
 
 
 def test_visual_node_both_in_main_qapp_and_remote_qapp():
-    man = create_manager()
+    man = create_manager(auto_close_at_exit = False)
     nodegroup = man.create_nodegroup()
     
     nodegroup.register_node_type_from_module('pyacq.core.tests.fakenodes', 'FakeSender' )
@@ -162,6 +166,8 @@ def test_visual_node_both_in_main_qapp_and_remote_qapp():
     receiver0.stop()
     receiver1.stop()
     print(nodegroup.any_node_running())
+    
+    man.close()
     
     
 

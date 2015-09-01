@@ -5,7 +5,7 @@ from pyacq.core.host import Host
 from pyacq.core.processspawner import ProcessSpawner
 from pyacq.core.rpc import RPCClient
 
-logging.getLogger().level=logging.INFO
+#~ logging.getLogger().level=logging.INFO
 
 
 def test_host1():
