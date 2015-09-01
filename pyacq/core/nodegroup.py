@@ -38,7 +38,10 @@ class RpcThreadSocket( QtCore.QThread):
         while True:
             with self.lock:
                 if not self.running:
-                    break
+                    # do a last poll
+                    socks = dict(self.poller.poll(timeout = 500))
+                    if len(socks)==0:
+                        break
             
             socks = dict(self.poller.poll(timeout = 100))
             
