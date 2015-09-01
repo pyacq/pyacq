@@ -17,17 +17,17 @@ class RpcThreadSocket( QtCore.QThread):
     new_message = QtCore.Signal(QtCore.QByteArray, QtCore.QByteArray)
     def __init__(self, rpc_server, local_addr, parent = None):
         QtCore.QThread.__init__(self, parent)
-        self.rpc_server = rpc_server
-        self.rpc_socket = rpc_server._socket
+        self.rpc_socket = weakref.ref(rpc_server._socket)
         
         context = zmq.Context.instance()
         self.local_socket = context.socket(zmq.PAIR)
         self.local_socket.connect(local_addr)
         
         self.poller = zmq.Poller()
-        self.poller.register(self.rpc_socket, zmq.POLLIN)
+        self.poller.register(self.rpc_socket(), zmq.POLLIN)
         self.poller.register(self.local_socket, zmq.POLLIN)
-    
+        
+        
         self.running = False
         self.lock = Mutex()
     
@@ -36,22 +36,24 @@ class RpcThreadSocket( QtCore.QThread):
             self.running = True
         
         while True:
+            
             with self.lock:
                 if not self.running:
                     # do a last poll
                     socks = dict(self.poller.poll(timeout = 500))
                     if len(socks)==0:
+                        self.local_socket.close()
                         break
             
             socks = dict(self.poller.poll(timeout = 100))
             
-            if self.rpc_socket in socks:
-                name, msg = self.rpc_server._read_socket()
+            if self.rpc_socket() in socks:
+                name, msg = self.rpc_socket().recv_multipart()
                 self.new_message.emit(name, msg)
             
             if self.local_socket in socks:
                 name, data = self.local_socket.recv_multipart()
-                self.rpc_socket.send_multipart([name, data])
+                self.rpc_socket().send_multipart([name, data])
 
     def stop(self):
         with self.lock:
@@ -79,7 +81,7 @@ class NodeGroup(RPCServer):
         self._local_socket = context.socket(zmq.PAIR)
         self._local_socket.bind(addr)
         
-        self._rpcsocket_thread = RpcThreadSocket(self, addr,  parent = None)
+        self._rpcsocket_thread = RpcThreadSocket(self, addr,  parent = self.app)
         self._rpcsocket_thread.new_message.connect(self._mainthread_process_one)
         self._rpcsocket_thread.start()
         
