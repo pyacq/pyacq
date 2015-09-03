@@ -25,16 +25,16 @@ class ImageIOThread(QtCore.QThread):
         with self.lock:
             self.running = True
         n = 0
-        while True:
+        for im in self.reader:
             with self.lock:
                 if not self.running:
                     break
-            for im in self.reader:
-                n += 1
-                self.out_stream.send(n, im)
-                # this is bad 
-                # TODO : find a way to do trhis loop in blocking mode
-                time.sleep(1./self.out_stream.params['sampling_rate'])
+            
+            n += 1
+            self.out_stream.send(n, im)
+            # this is bad 
+            # TODO : find a way to do trhis loop in blocking mode
+            time.sleep(1./self.out_stream.params['sampling_rate'])
     
     def stop(self):
         with self.lock:

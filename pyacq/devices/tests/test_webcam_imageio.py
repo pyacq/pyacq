@@ -27,9 +27,16 @@ def test_webcam_imageio():
     dev.start()
     viewer.start()
     
+    def terminate():
+        dev.stop()
+        dev.close()
+        viewer.stop()
+        viewer.close()
+        app.quit()
+    
     # start for a while
     timer = QtCore.QTimer(singleShot = True, interval = 3000)
-    timer.timeout.connect(viewer.close)
+    timer.timeout.connect(terminate)
     timer.start()
     app.exec_()
     

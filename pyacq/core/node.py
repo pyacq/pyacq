@@ -191,7 +191,10 @@ class WidgetNode(QtGui.QWidget, Node, ):
     def __init__(self, parent = None, **kargs):
         QtGui.QWidget.__init__(self, parent = parent)
         Node.__init__(self, **kargs)
-
+    
+    def close(self):
+        QtGui.QWidget.close(self)
+        Node.close(self)
 
 
 # For test purpos only

@@ -85,17 +85,34 @@ class NodeGroup(RPCServer):
         self._rpcsocket_thread.new_message.connect(self._mainthread_process_one)
         self._rpcsocket_thread.start()
         
+        self.app.setQuitOnLastWindowClosed(False)
         self.app.exec_()
     
     def _mainthread_process_one(self, name, msg):
         self._process_one(bytes(name), bytes(msg))
-        
+
         if  not self.running():
+            # stop the RPC
             self._rpcsocket_thread.stop()
             self._rpcsocket_thread.wait()
-            self._socket.close()
-            self.app.quit()
 
+            # stop/close all Nodes
+            for node in self.nodes.values():
+                if node.running():
+                    try:
+                        node.stop()
+                    except:
+                        logging.info("Error Node.stop: %s ", node.name)
+            for node in self.nodes.values():
+                try:
+                    node.close()
+                except:
+                    logging.info("Error Node.close: %s", node.name)
+            
+            # Quit QApp
+            self.app.quit()
+            del self.app
+   
     def _send_result(self, name, data):
         # over writte RPCServer._send_result to avoid send back the result in main thread
         self._local_socket.send_multipart([name, data])
@@ -110,6 +127,7 @@ class NodeGroup(RPCServer):
     def delete_node(self, name):
         node = self.nodes[name]
         assert not node.running(), 'The node {} is running'.format(name)
+        node.close()
         self.nodes.pop(name)
     
     def control_node(self, nodename, method, *args, **kargs):

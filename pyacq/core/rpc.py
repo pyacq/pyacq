@@ -295,7 +295,7 @@ class RPCServer(object):
         #atexit.register(self.close)
 
     def __del__(self):
-        self.close()
+        self._socket.close()
 
     def _read_and_process_one(self):
         """Read one message from the remote client and invoke the requested
@@ -346,9 +346,6 @@ class RPCServer(object):
                 exc_str += traceback.format_exception(*exc)
                 if ret:
                     self._send_result(*self._format_result(name, call_id, error=(exc[0].__name__, exc_str)))
-        if not self.running:
-            self._socket.close()
-   
     
     def _format_result(self, name, call_id, rval=None, error=None):
         result = {'action': 'return', 'call_id': call_id,

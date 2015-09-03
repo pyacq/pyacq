@@ -28,7 +28,6 @@ class Host(RPCServer):
         """
         self.close_all_nodegroups(force = True)
         RPCServer.close(self)
-
     
     def create_nodegroup(self, name, addr):
         """Create a new NodeGroup in a new process.

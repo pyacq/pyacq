@@ -112,7 +112,7 @@ def test_register_node_type_from_module():
     nodegroup = man.create_nodegroup()
     
     nodegroup.register_node_type_from_module('pyacq.core.tests.fakenodes', 'NoneRegisteredClass' )
-    nodegroup.create_node( 'NoneRegisteredClass')
+    node = nodegroup.create_node( 'NoneRegisteredClass')
     
     man.close()
     

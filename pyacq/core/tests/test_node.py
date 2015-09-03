@@ -1,11 +1,13 @@
 import time
-
+import sys
 from pyacq import create_manager
 
 from pyqtgraph.Qt import QtCore, QtGui
 import pyqtgraph as pg
 from pyacq.core.tests.fakenodes import FakeSender, FakeReceiver, ReceiverWidget
 
+import logging
+#~ logging.getLogger().level=logging.INFO
 
 def test_stream_between_local_nodes():
     # create local nodes in QApplication
@@ -30,9 +32,14 @@ def test_stream_between_local_nodes():
     # start them for a while
     sender.start()
     receiver.start()
-
-    timer = QtCore.QTimer(singleShot = True, interval = 2000)
-    timer.timeout.connect(app.quit)
+    
+    def terminate():
+        sender.stop()
+        receiver.stop()
+        app.quit()
+        
+    timer = QtCore.QTimer(singleShot = True, interval = 3000)
+    timer.timeout.connect(terminate)
     timer.start()
     
     app.exec_()
@@ -103,16 +110,19 @@ def test_stream_between_local_and_remote_nodes():
     sender.start()
     receiver.start()
 
+    def terminate():
+        sender.stop()
+        receiver.stop()
+        app.quit()
+        
     timer = QtCore.QTimer(singleShot = True, interval = 2000)
-    timer.timeout.connect(app.quit)
+    timer.timeout.connect(terminate)
     timer.start()
     
     app.exec_()
     
-    sender.stop()
-    receiver.stop()
-    
     man.close()
+    
 
 
 
@@ -155,18 +165,21 @@ def test_visual_node_both_in_main_qapp_and_remote_qapp():
     receiver0.start()
     receiver1.start()
     print(nodegroup.any_node_running())
-    
-    timer = QtCore.QTimer(singleShot = True, interval = 7000)
-    timer.timeout.connect(app.quit)
+
+    def terminate():
+        sender.stop()
+        receiver0.stop()
+        receiver1.stop()
+        receiver1.close()
+        app.quit()
+        
+    timer = QtCore.QTimer(singleShot = True, interval = 1000)
+    timer.timeout.connect(terminate)
     timer.start()
+    
     app.exec_()
     
-    
-    sender.stop()
-    receiver0.stop()
-    receiver1.stop()
-    print(nodegroup.any_node_running())
-    
+    receiver0.close()
     man.close()
     
     

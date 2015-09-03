@@ -33,15 +33,15 @@ class AVThread(QtCore.QThread):
             self.running = True
         n = 0
         stream = self.container.streams[0]
-        while True:
+
+        for packet in self.container.demux(stream):
             with self.lock:
                 if not self.running:
                     break
-            for packet in self.container.demux(stream):
-                for frame in packet.decode():
-                    arr = frame.to_rgb().to_nd_array()
-                    n += 1
-                    self.out_stream.send(n, arr)
+            for frame in packet.decode():
+                arr = frame.to_rgb().to_nd_array()
+                n += 1
+                self.out_stream.send(n, arr)
 
     def stop(self):
         with self.lock:

@@ -1,8 +1,9 @@
 from pyacq import Node,WidgetNode
+from pyacq.core.node import _MyTest
 from pyqtgraph.Qt import QtCore, QtGui
 import numpy as np
 
-class NoneRegisteredClass(Node):
+class NoneRegisteredClass(_MyTest, Node):
     pass
 
 class FakeSender(Node):
@@ -86,6 +87,9 @@ class ReceiverWidget(WidgetNode):
 
     def _stop(self):
         self.timer.stop()
+
+    def _close(self):
+        pass
 
     def poll_socket(self):
         event = self.inputs['signals'].socket.poll(0)

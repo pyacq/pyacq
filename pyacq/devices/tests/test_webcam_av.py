@@ -28,9 +28,16 @@ def test_webcam_opencv():
     dev.start()
     viewer.start()
     
+    def terminate():
+        viewer.stop()
+        dev.stop()
+        viewer.close()
+        dev.close()
+        app.quit()
+    
     # start for a while
     timer = QtCore.QTimer(singleShot = True, interval = 3000)
-    timer.timeout.connect(viewer.close)
+    timer.timeout.connect(terminate)
     timer.start()
     app.exec_()
 
