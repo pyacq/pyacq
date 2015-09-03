@@ -25,6 +25,12 @@ def test_nodegroup0():
         client0.create_node('mynode{}'.format(i), '_MyTestNode')
 
     for i in range(n):
+        client0.control_node('mynode{}'.format(i), 'configure')
+
+    for i in range(n):
+        client0.control_node('mynode{}'.format(i), 'initialize')
+
+    for i in range(n):
         client0.control_node('mynode{}'.format(i), 'start')
 
     for i in range(n):
@@ -68,6 +74,8 @@ def test_cannot_delete_node_while_running():
     client0 = RPCClient(name, process_nodegroup0.addr)
     
     client0.create_node('mynode', '_MyTestNode')
+    client0.control_node('mynode', 'configure')
+    client0.control_node('mynode', 'initialize')
     client0.control_node('mynode', 'start')
     
     with pytest.raises(RemoteCallException):

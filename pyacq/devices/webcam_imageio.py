@@ -56,7 +56,7 @@ class WebCamImageIO(Node):
 
     
 
-    def configure(self, camera_num = 0):
+    def _configure(self, camera_num = 0):
         self.camera_num = camera_num
         reader = imageio.get_reader('<video{}>'.format(self.camera_num))
         self.metadata = reader.get_meta_data()
@@ -69,19 +69,16 @@ class WebCamImageIO(Node):
     def _initialize(self):
         pass
         
-    def start(self):
+    def _start(self):
         self.reader = imageio.get_reader('<video{}>'.format(self.camera_num))
         self._thread = ImageIOThread(self.output, self.reader)
         self._thread.start()
-        self._running = True
 
-    def stop(self):
+    def _stop(self):
         self._thread.stop()
         self._thread.wait()
-        self._running = False
     
-    def close(self):
+    def _close(self):
         self.reader.close()
 
 register_node_type(WebCamImageIO)
-

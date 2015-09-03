@@ -17,24 +17,8 @@ class NumpyDeviceBuffer(Node):
 
     def __init__(self, **kargs):
         Node.__init__(self, **kargs)
-    
-    def start(self):
-        self.timer.start()
-        self._running = True
 
-    def stop(self):
-        self.timer.stop()
-        self._running = False
-    
-    def close(self):
-        pass
-    
-    def initialize(self):
-        self.head = 0
-        self.timer = QtCore.QTimer(singleShot = False, interval = int(self.chunksize*self.sample_interval*1000))
-        self.timer.timeout.connect(self.send_data)
-
-    def configure(self, nb_channel = 16, sample_interval = 0.001):
+    def _configure(self, nb_channel = 16, sample_interval = 0.001):
         self.nb_channel = nb_channel
         self.sample_interval = sample_interval
         
@@ -48,6 +32,20 @@ class NumpyDeviceBuffer(Node):
         self.buffer = np.random.rand(self.length, nb_channel)*.2
         self.buffer += np.sin(2*np.pi*10.*t)[:,None]
         self.buffer = self.buffer.astype('float32')
+
+    def _initialize(self):
+        self.head = 0
+        self.timer = QtCore.QTimer(singleShot = False, interval = int(self.chunksize*self.sample_interval*1000))
+        self.timer.timeout.connect(self.send_data)
+    
+    def _start(self):
+        self.timer.start()
+
+    def _stop(self):
+        self.timer.stop()
+    
+    def _close(self):
+        del self.buffer
     
     def send_data(self):
         i1 = self.head%self.length

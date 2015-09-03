@@ -62,7 +62,7 @@ class WebCamAV(Node):
         assert HAVE_AV, "WebCamAV node depends on the `av` package, but it could not be imported."
     
 
-    def configure(self, camera_num=0, **options):
+    def _configure(self, camera_num=0, **options):
         self.camera_num = camera_num
         self.options = options
 
@@ -74,21 +74,19 @@ class WebCamAV(Node):
     def _initialize(self):
         pass
     
-    def start(self):
+    def _start(self):
         self.container = av.open('/dev/video{}'.format(self.camera_num), 'r','video4linux2', self.options)
 
         self._thread = AVThread(self.output, self.container)
         self._thread.start()
-        self._running = True
 
-    def stop(self):
+    def _stop(self):
         self._thread.stop()
         self._thread.wait()
         self._running = False
         del(self.container)
     
-    def close(self):
-        self.container.close()
+    def _close(self):
+        pass
 
-        
 register_node_type(WebCamAV)

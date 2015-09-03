@@ -13,8 +13,10 @@ setup(
     install_requires=[
                     'numpy',
                     'pyzmq',
-                    'msgpack-python',
+                    'pyqtgraph',
                     'blosc',
+                    
+                    #'msgpack-python',
                     ],
     author = "S.Garcia",
     author_email = "sam.garcia.die@gmail.com",
