@@ -1,4 +1,6 @@
 import numpy as np
+import collections
+import logging
 
 from ..core import Node, register_node_type, ThreadPollInput
 from pyqtgraph.Qt import QtCore, QtGui
@@ -105,8 +107,8 @@ class PyAudio(Node):
         
         # outbuffer
         size = self.nb_channel * self.chunksize * np.dtype(self.format).itemsize
-        self.outputbuffer = b'\x00' *  size
-        self.nb_out = 0
+        self.enmpty_outputbuffer = b'\x00' *  size
+        self.out_queue = collections.deque()
         self.lock = Mutex()
         
         if self.output_device_index is not None:
@@ -122,25 +124,31 @@ class PyAudio(Node):
         self.audiostream.stop_stream()
         if self.output_device_index is not None:
             self.thread.stop()
+            self.thread.wait()
 
     def _close(self):
         self.audiostream.close()
+        self.pa.terminate()
         del self.thread
 
     def _audiocallback(self, in_data, frame_count, time_info, status):
-        print('audiocallback', self.nb_out)
+        #~ print('audiocallback', len(self.out_queue))
         if in_data is not None:
             self.head += self.chunksize
             self.output.send(self.head, in_data)
         with self.lock:
-            out = self.outputbuffer
-            self.nb_out -= 1
+            if len(self.out_queue)>0:
+                out = self.out_queue.popleft()
+            else:
+                logging.info('Node PyAudio', self.name, 'lost output buffer')
+                #~ print('lost output buffer')
+                out = self.enmpty_outputbuffer
         return (out, pyaudio.paContinue)    
     
     def _new_output_buffer(self, pos, data):
-        print('_new_output_buffer', pos, data.shape, data.dtype)
+        #~ print('_new_output_buffer', pos, data.shape, data.dtype)
         with self.lock:
-            self.outputbuffer = bytes(data)
-            self.nb_out += 1
+            self.out_queue.append(bytes(data))
+            
     
 register_node_type(PyAudio)
