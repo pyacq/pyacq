@@ -5,7 +5,7 @@ from pyacq.core.host import Host
 from pyacq.core.processspawner import ProcessSpawner
 from pyacq.core.rpc import RPCClient
 
-logging.getLogger().level=logging.INFO
+#~ logging.getLogger().level=logging.INFO
 
 
 def test_host1():
@@ -28,8 +28,8 @@ def test_host2():
     
     client0 = RPCClient('host0', process_host0.addr)
     
-    client0.new_nodegroup('nodegroup 0.1', 'tcp://127.0.0.1:*')
-    client0.new_nodegroup('nodegroup 0.2', 'tcp://127.0.0.1:*')
+    client0.create_nodegroup('nodegroup 0.1', 'tcp://127.0.0.1:*')
+    client0.create_nodegroup('nodegroup 0.2', 'tcp://127.0.0.1:*')
     
     time.sleep(2.)
     

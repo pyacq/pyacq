@@ -18,7 +18,7 @@ def test_rpc():
     serve_thread.start()
     
     client = RPCClient('some_server', 'tcp://localhost:5152')
-    atexit.register(client.close)
+    #atexit.register(client.close)
     
     # test call / sync return
     assert client.add(7, 5) == 12
@@ -81,6 +81,13 @@ def test_rpc():
     b = client3.add(3, 4, _sync=False)
     assert b.result() == 7
     assert a.result() == 3
+    
+    client.close()
+    serve_thread.join()
+    
+    client3.close()
+    serve_thread2.join()
+    
 
 
 if __name__ == '__main__':

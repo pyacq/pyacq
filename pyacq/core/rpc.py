@@ -12,12 +12,40 @@ import os
 import sys
 import time
 import weakref
-import json
 import concurrent.futures
 import traceback
 import zmq
 import atexit
 from logging import info
+
+import json
+try:
+    import msgpack
+    HAVE_MSGPACK = True
+except ImportError:
+    HAVE_MSGPACK = False
+
+
+class JsonSerializer:
+    def dumps(self, obj):
+        return json.dumps(obj).encode()
+    
+    def loads(self, msg):
+        return json.loads(msg.decode())
+
+class MsgpackSerializer:
+    def __init__(self):
+        assert HAVE_MSGPACK
+    
+    def dumps(self, obj):
+        return msgpack.dumps(obj, use_bin_type=True)
+
+    def loads(self, msg):
+        return msgpack.loads(msg, encoding = 'utf8')
+    
+serializer = JsonSerializer()
+#serializer = MsgpackSerializer()
+
 
 
 class RemoteCallException(Exception):
@@ -64,7 +92,7 @@ class RPCClientSocket(object):
         self.clients = {}
         self.next_call_id = 0
         self.futures = weakref.WeakValueDictionary()
-        atexit.register(self.close)
+        #atexit.register(self.close)
         
     def connect(self, addr):
         """Conncet the socket to an RPCServer address.
@@ -88,7 +116,7 @@ class RPCClientSocket(object):
         self.next_call_id += 1
         cmd = {'action': action, 'call_id': call_id,
                'args': args, 'kwds': kwds}
-        cmd = json.dumps(cmd).encode()
+        cmd = serializer.dumps(cmd)
         info("RPC send req: %s => %s, %s", self.socket.getsockopt(zmq.IDENTITY), name, cmd)
         self.socket.send_multipart([name, cmd])
         fut = Future(self, call_id)
@@ -103,7 +131,8 @@ class RPCClientSocket(object):
         while True:
             try:
                 name = self.socket.recv(zmq.NOBLOCK)
-                msg = self.socket.recv_json()
+                msg = self.socket.recv()
+                msg = serializer.loads(msg)
                 self._process_msg(name, msg)
             except zmq.error.Again:
                 break  # no messages left
@@ -127,7 +156,7 @@ class RPCClientSocket(object):
             try:
                 self.socket.setsockopt(zmq.RCVTIMEO, itimeout)
                 name, msg = self.socket.recv_multipart()
-                msg = json.loads(msg.decode())
+                msg = serializer.loads(msg)
             except zmq.error.Again:
                 raise TimeoutError("Timeout waiting for Future result.")
             
@@ -263,23 +292,37 @@ class RPCServer(object):
         self._addr = self._socket.getsockopt(zmq.LAST_ENDPOINT)
         self._closed = False
         info("RPC start server: %s@%s", self._name.decode(), self._addr.decode())
-        atexit.register(self.close)
+        #atexit.register(self.close)
 
     def __del__(self):
-        self.close()
+        self._socket.close()
 
-    def _process_one(self):
+    def _read_and_process_one(self):
         """Read one message from the remote client and invoke the requested
         action.
         
         This method sends back to the client either the return value or an
         error message.
         """
+        
+        name, msg = self._read_socket()
+        self._process_one(name, msg)
+        
+    def _read_socket(self):
+        """Read one message from the remote client
+        """
         if not self.running:
             raise RuntimeError("RPC server socket is already closed.")
-        name = self._socket.recv()
-        msg = self._socket.recv_json()
+            
+        name, msg = self._socket.recv_multipart()
         info("RPC recv req: %s %s", name, msg)
+        return name, msg
+        
+    def _process_one(self, name, msg):
+        """
+        Invoke the requested action.
+        """
+        msg = serializer.loads(msg)
         if msg['action'] == 'call':
             method, args = msg['args'][0], msg['args'][1:]
             kwds = msg['kwds']
@@ -294,7 +337,7 @@ class RPCServer(object):
                 else:
                     rval = fn(*args, **kwds)
                 if ret:
-                    self._send_result(name, call_id, rval=rval)
+                    self._send_result(*self._format_result(name, call_id, rval=rval))
             except:
                 exc_str = ["Error while processing request %s.%s(%s, %s)" % (str(self), method, args, kwds)]
                 exc_str += traceback.format_stack()
@@ -302,15 +345,16 @@ class RPCServer(object):
                 exc = sys.exc_info()
                 exc_str += traceback.format_exception(*exc)
                 if ret:
-                    self._send_result(name, call_id, error=(exc[0].__name__, exc_str))
-        if not self.running:
-            self._socket.close()
-        
-    def _send_result(self, name, call_id, rval=None, error=None):
+                    self._send_result(*self._format_result(name, call_id, error=(exc[0].__name__, exc_str)))
+    
+    def _format_result(self, name, call_id, rval=None, error=None):
         result = {'action': 'return', 'call_id': call_id,
                   'rval': rval, 'error': error}
         info("RPC send res: %s %s", name, result)
-        self._socket.send_multipart([name, json.dumps(result).encode()])
+        return name, serializer.dumps(result)
+    
+    def _send_result(self, name, data):
+        self._socket.send_multipart([name, data])
 
     def close(self):
         """Close this RPC server.
@@ -326,7 +370,7 @@ class RPCServer(object):
     
     def run_forever(self):
         while self.running():
-            self._process_one()
+            self._read_and_process_one()
 
     def ping(self):
         return 'pong'

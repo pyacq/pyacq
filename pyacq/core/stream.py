@@ -1,16 +1,21 @@
 import zmq
 import numpy as np
+import random
+import string
 try:
     import blosc
     HAVE_BLOSC = True
 except ImportError:
     HAVE_BLOSC = False
 
+from .sharedarray import SharedArray
+from .client import OutputStreamProxy
 
-default_stream = dict( protocol = 'tcp', interface = '127.0.0.1', port = '8000',
+default_stream = dict( protocol = 'tcp', interface = '127.0.0.1', port = '*',
                         transfermode = 'plaindata', streamtype = 'analogsignal',
-                        dtype = 'float32', shape = (-1, 16), time_axis = 0, 
-                        compression ='', scale = None, offset = None, units = '')
+                        dtype = 'float32', shape = (-1, 1), time_axis = 0, 
+                        compression ='', scale = None, offset = None, units = '',
+                        sampling_rate = 1.,)
 
 
 common_doc = """
@@ -22,10 +27,10 @@ common_doc = """
         The bind adress for the zmq.PUB socket
     port : str
         The port for the zmq.PUB socket
-    transfermode: 'plain_data', 'shared_mem', (not done 'shared_cuda_buffer' or 'share_opencl_buffer')
+    transfermode: 'plain_data', 'shared_array', (not done 'shared_cuda_buffer' or 'share_opencl_buffer')
         The method used for data transfer:
             * 'plain_data': data are sent over a plain socket in two parts: (frame index, data).
-            * 'shared_mem': data are stored in shared memory in a ring buffer and the current frame index is sent over the socket.
+            * 'shared_array': data are stored in shared memory in a ring buffer and the current frame index is sent over the socket.
             * 'shared_cuda_buffer': data are stored in shared Cuda buffer and the current frame index is sent over the socket.
             * 'share_opencl_buffer': data are stored in shared OpenCL buffer and the current frame index is sent over the socket.
     streamtype: 'analogsignal', 'digitalsignal', 'event' or 'image/video'
@@ -49,57 +54,63 @@ common_doc = """
         See scale.
     units: str
         Units of the stream. Mainly used for 'analogsignal'.
+    sampling_rate: float or None
+        Sampling rate of the stream in Hz.
+    sampling_interval: float or None
+        
+    
+    Parameters when using `transfermode` = 'shared_array'
+    -----
+    shared_array_shape: tuple
+        Shape of the SharedArray
+    ring_buffer_method: 'double' or 'single'
+        Method for the ring buffer:
+            *  'double' : there 2 ring buffer concatenated. This ensure continuous chunk whenever the sample position.
+            * 'single': standart ring buffer
+        Note that, The ring buffer is along `time_axis` for each case. And in case, of 'double', concatenated axis is also `time_axis`.
+    shm_id : str or int (depending on platform)
+        id of the SharedArray
+        
+    
+    
 """
 
-class StreamDef:
-    """StreamDef defines a connection between 2 nodes.
-    """+common_doc
-    def __init__(self,**karg):
-        self.params = dict(default_stream)
-        self.params.update(kargs)
     
 
-class StreamSender:
-    """A StreamSender is a helper class to send data.
+class OutputStream:
+    """A OutputStream is a helper class to send data.
     """
-    def __init__(self, **kargs):
-        self.params = dict(default_stream)
-        self.params.update(kargs)
+    def __init__(self, spec = {}):
+        self.configured = False
+        self.spec = spec # this is a priori stream params, and must be change when Node.configure
+    
+    def configure(self, **kargs):
+        """
+        Configure the output stream.
+        """+common_doc
         
-        self.url = '{protocol}://{interface}:{port}'.format(**self.params)
+        self.params = dict(default_stream)
+        self.params.update(self.spec)
+        self.params.update(kargs)
+        if self.params['protocol'] in ('inproc', 'ipc'):
+            pipename = u'pyacq_pipe_'+''.join(random.SystemRandom().choice(string.ascii_uppercase + string.digits) for _ in range(24))
+            self.params['interface'] = pipename
+            self.url = '{protocol}://{interface}'.format(**self.params)
+        else:
+            self.url = '{protocol}://{interface}:{port}'.format(**self.params)
         context = zmq.Context.instance()
         self.socket = context.socket(zmq.PUB)
         self.socket.bind(self.url)
         self.addr = self.socket.getsockopt(zmq.LAST_ENDPOINT).decode()
         self.port = self.addr.rpartition(':')[2]
+        self.params['port'] = self.port
         
-        self.funcs = []
-        
-        if self.params['compression'] != '':
-            assert self.params['transfermode'] == 'plaindata', 'Compression only for transfermode=plaindata'
-        
-        #compression
-        if self.params['compression'] == '':
-            pass
-        elif self.params['compression'] == 'blosc-blosclz':
-            #cname for ['blosclz', 'lz4', 'lz4hc', 'snappy', 'zlib']
-            self.funcs.append(self._compress_blosclz)
-        elif self.params['compression'] == 'blosc-lz4':
-            self.funcs.append(self._compress_blosclz4)
-            
-        
-        #send or cpy to buffer
         if self.params['transfermode'] == 'plaindata':
-            self.funcs.append(self._send_plain)
-        elif self.params['transfermode'] == 'shared_mem':
-            self.funcs.append(self._copy_to_shmem)
-        #elif self.params['transfermode'] == 'shared_cuda_buffer':
-        #    pass
-        #elif self.params['transfermode'] == 'share_opencl_buffer':
-        #   pass
-        
-        #TODO check if this is needed
-        self.copy = self.params['protocol'] == 'inproc'
+            self.sender = PlainDataSender(self.socket, self.params)
+        elif self.params['transfermode'] == 'shared_array':
+            self.sender = SharedArraySender(self.socket, self.params)
+
+        self.configured = True
 
     def send(self, index, data):
         """
@@ -112,76 +123,154 @@ class StreamSender:
         data: np.ndarray or bytes
             The chunk of data to be send
         """
-        for f in self.funcs:
-            index, data = f(index, data)
+        self.sender.send(index, data)
+
+    def close(self):
+        """
+        Close the output.
+        This close the socket and release the shared_array if necessary.
+        """
+        self.sender.close()
+        self.socket.close()
+        del self.socket
+        del self.sender
+
+class InputStream:
+    """InputStream is a helper class to receive data.
+    """
+    def __init__(self, spec = {}):
+        self.configured = False
+        self.spec = spec
     
-    def _send_plain(self, index, data):
+    def connect(self, output):
+        if isinstance(output, dict):
+            self.params = output
+        elif isinstance(output, OutputStream) or isinstance(output, OutputStreamProxy):
+            self.params = output.params
+
+        if self.params['protocol'] in ('inproc', 'ipc'):
+            self.url = '{protocol}://{interface}'.format(**self.params)
+        else:
+            self.url = '{protocol}://{interface}:{port}'.format(**self.params)
+
+        context = zmq.Context.instance()
+        self.socket = context.socket(zmq.SUB)
+        self.socket.setsockopt(zmq.SUBSCRIBE,b'')
+        #~ self.socket.setsockopt(zmq.DELAY_ATTACH_ON_CONNECT,1)
+        self.socket.connect(self.url)
         
-        self.socket.send_multipart([np.int64(index), data], copy = self.copy)
-        return None, None
+        if self.params['transfermode'] == 'plaindata':
+            self.receiver = PlainDataReceiver(self.socket, self.params)
+        elif self.params['transfermode'] == 'shared_array':
+            self.receiver = SharedArrayReceiver(self.socket, self.params)
+        
+        self.configured = True
     
-    def _copy_to_shmem(self, index, data):
-        raise(NotImplemented)
+    def poll(self, timeout=None):
+        """
+        Poll the socket of input stream
+        """
+        return self.socket.poll(timeout = timeout)
     
-    def _compress_blosclz(self, index, data):
+    def recv(self):
+        """
+        Receiv chunk of data
+        
+        Returns:
+        ----
+        index: int
+            The absolut sample index. If the chunk is multiple sample then index is the last one (head).
+        data: np.ndarray or bytes
+            The chunk of data.
+            For 'shared_array' transfert_mode data is None.
+            So the you must use InputStream.get_array_slice(index, length) that give you a chunk a desired size.
+
+        """
+        return self.receiver.recv()
+
+    def close(self):
+        """
+        Close the Input.
+        This close the socket.
+        The SharedArray (if transfert_mode 'shared_array')) is not close. This is the responsobility of OuputStream
+        """
+        self.receiver.close()
+        self.socket.close()
+        del self.socket
+    
+    def get_array_slice(self, index, length):
+        """
+        For shared_array transfert, you can a any chunk size (no more than the ring size)
+        """
+        #assert self.params['transfermode'] == 'shared_array', 'For shared_array only'
+        
+        return self.receiver.get_array_slice( index, length)
+
+
+class PlainDataSender:
+    """
+    Helper class to send data in 2 parts with a zmq socket:
+       * index
+       * data
+    The data parts can be compressed.
+    """
+    def __init__(self, socket, params):
+        self.socket = socket
+        self.params = params
+        self.copy = self.params['protocol'] == 'inproc'
+        
+        self.funcs = []
+        #compression
+        if self.params['compression'] == '':
+            pass
+        elif self.params['compression'] == 'blosc-blosclz':
+            #cname for ['blosclz', 'lz4', 'lz4hc', 'snappy', 'zlib']
+            self.funcs.append(self.compress_blosclz)
+        elif self.params['compression'] == 'blosc-lz4':
+            self.funcs.append(self.compress_blosclz4)        
+    
+    def compress_blosclz(self, index, data):
         assert HAVE_BLOSC, "Cannot use blosclz compression; blosc package is not importable."
         data = blosc.pack_array(data, cname = 'blosclz')
         return index, data
     
-    def _compress_blosclz4(self, index, data):
+    def compress_blosclz4(self, index, data):
         assert HAVE_BLOSC, "Cannot use blosclz4 compression; blosc package is not importable."
         data = blosc.pack_array(data, cname = 'lz4')
         return index, data
     
-    def close(self):
-        self.socket.close()
-
-
-class StreamReceiver:
-    """StreamSender is a helper class to receive data.
-    """
-    def __init__(self, **kargs):
-        self.params = dict(default_stream)
-        self.params.update(kargs)
-
-        self.url = '{protocol}://{interface}:{port}'.format(**self.params)
-        context = zmq.Context.instance()
-        self.socket = context.socket(zmq.SUB)
-        self.socket.setsockopt(zmq.SUBSCRIBE,b'')
-        self.socket.connect(self.url)
-        
-        self.funcs = []
-        #send or cpy to buffer
-        if self.params['transfermode'] == 'plaindata':
-            self.funcs.append(self._recv_plain)
-        elif self.params['transfermode'] == 'shared_mem':
-            self.funcs.append(self._recv_from_shmem)
-        
-        #compression
-        if self.params['compression'] == '':
-            self.funcs.append(self._numpy_fromstring)
-        elif self.params['compression'] in ['blosc-blosclz', 'blosc-lz4']:
-            self.funcs.append(self._uncompress_blosc)
-
-    def recv(self):
-        """
-        Receive the data chunk
-        """
-        index, data = self.funcs[0]()
-        for f in self.funcs[1:]:
+    def send(self, index, data):
+        for f in self.funcs:
             index, data = f(index, data)
-        return index, data
+        self.socket.send_multipart([np.int64(index), data], copy = self.copy)
     
-    def _recv_plain(self):
+    def close(self):
+        pass
+
+
+class PlainDataReceiver:
+    """
+    Helper class to receiv data in 2 parts.
+    
+    See PlainDataSender.
+    """
+    def __init__(self, socket, params):
+        self.socket = socket
+        self.params = params
+        
+        if self.params['compression'] == '':
+            self.func = self._numpy_fromstring
+        elif self.params['compression'] in ['blosc-blosclz', 'blosc-lz4']:
+            self.func = self._uncompress_blosc
+    
+    def recv(self):
         m0,m1 = self.socket.recv_multipart()
         index = np.fromstring(m0, dtype = 'int64')[0]
-        return index, m1
+        return self.func(index, m1)
+        
+    def close(self):
+        pass
 
-    def _recv_from_shmem(self):
-        #~ m0 = self.socket.recv()
-        #~ index = np.fromstring(m0, dtype = 'int64')[0]
-        raise(NotImplemented)
-    
     def _numpy_fromstring(self, index, data):
         data  = np.frombuffer(data, dtype = self.params['dtype']).reshape(self.params['shape'])
         return index, data
@@ -189,6 +278,154 @@ class StreamReceiver:
     def _uncompress_blosc(self, index, data):
         data = blosc.unpack_array(data)
         return index, data
+
+
+class SharedArraySender:
+    """
+    Helper class to share data in a SharedArray and send in the socket only the index.
+    The SharedArray can have any size larger than one chunk.
+    
+    This is usefull for a Node that need to access older chunk.
+    
+    Be carfull to set correctly the time_axis (concatenation axis).
+    
+    Note that on Unix that plaindata+inproc can be faster.
+    
+    """
+    def __init__(self, socket, params):
+        self.socket = socket
+        self.params = params
+        #~ self.copy = self.params['protocol'] == 'inproc'
+        self.copy = False
+        
+        if self.params['ring_buffer_method'] == 'single':
+            #~ self.funcs.append(self._copy_to_sharray_single)
+            self.func = self._copy_to_sharray_single
+        elif self.params['ring_buffer_method'] == 'double':
+            #~ self.funcs.append(self._copy_to_sharray_double)
+            self.func = self._copy_to_sharray_double
+        self._index = 0
+        
+        # prepare SharedArray
+        self._time_axis = self.params['time_axis']
+        self._ring_size = self.params['shared_array_shape'][self._time_axis]
+        shared_array_shape = list(self.params['shared_array_shape'])
+        self._ndim = len(shared_array_shape)
+        assert self._ndim==len(self.params['shape']), 'shared_array_shape and shape must coherent!'
+        if self.params['ring_buffer_method'] == 'double':
+            shared_array_shape[self._time_axis] = self._ring_size*2
+        self._sharedarray = SharedArray(shape = shared_array_shape, dtype = self.params['dtype'])
+        self.params['shm_id'] = self._sharedarray.shm_id
+        self._numpyarr = self._sharedarray.to_numpy()
+
+    def send(self, index, data):
+        self.func(index, data)
+
+    def close(self):
+        self._sharedarray.close()
+
+    def _copy_to_sharray_single(self, index, data):
+        assert data.shape[self._time_axis]<self._ring_size, 'The chunk is too big for the buffer {} {}'.format(data.shape, self._numpyarr.shape)
+        head = index % self._ring_size
+        tail =  self._index%self._ring_size
+        if head>tail:
+            # 1 chunks
+            sl = [slice(None)] * self._ndim
+            sl[self._time_axis] = slice(tail, head)
+            self._numpyarr[sl] = data
+        else:
+            # 2 chunks : because end of the ring
+            size1 = self._ring_size-tail
+            size2 = data.shape[self._time_axis] - size1
+            
+            #part1
+            sl1 = [slice(None)] * self._ndim 
+            sl1[self._time_axis] = slice(tail, None)
+            sl2 = [slice(None)] * self._ndim 
+            sl2[self._time_axis] = slice(None, size1)
+            self._numpyarr[sl1] = data[sl2]
+            
+            #part2
+            sl3 = [slice(None)] * self._ndim
+            sl3[self._time_axis] = slice(None, size2)
+            sl4 = [slice(None)] * self._ndim
+            sl4[self._time_axis] = slice(-size2, None)
+            self._numpyarr[sl3] = data[sl4]
+        
+        self.socket.send(np.int64(index), copy = self.copy)
+        self._index += data.shape[self._time_axis]
+
+
+    def _copy_to_sharray_double(self, index, data):
+        head = index % self._ring_size
+        tail =  self._index%self._ring_size
+        if head>tail:
+            sl = [slice(None)] * self._ndim
+            sl[self._time_axis] = slice(tail, head)
+            # 1 chunk
+            self._numpyarr[sl] = data
+            # 1 same chunk
+            sl[self._time_axis] = slice(tail+self._ring_size, head+self._ring_size)
+            self._numpyarr[sl] = data
+            
+        else:
+            size1 = self._ring_size-tail
+            size2 = data.shape[self._time_axis] - size1
+            
+            # 1 full chunks continuous
+            sl = [slice(None)] * self._ndim 
+            sl[self._time_axis] = slice(tail, head+self._ring_size)
+            self._numpyarr[sl] = data
+            
+            #part1 : in the second ring
+            sl1 = [slice(None)] * self._ndim 
+            sl1[self._time_axis] = slice(tail+self._ring_size, None)
+            sl2 = [slice(None)] * self._ndim 
+            sl2[self._time_axis] = slice(None, size1)
+            self._numpyarr[sl1] = data[sl2]
+            
+            # part2 : in the first ring
+            sl3 = [slice(None)] * self._ndim
+            sl3[self._time_axis] = slice(None, size2)
+            sl4 = [slice(None)] * self._ndim
+            sl4[self._time_axis] = slice(-size2, None)
+            self._numpyarr[sl3] = data[sl4]
+            
+        self.socket.send(np.int64(index), copy = self.copy)
+        self._index += data.shape[self._time_axis]
+ 
+
+
+class SharedArrayReceiver:
+    def __init__(self, socket, params):
+        self.socket = socket
+        self.params = params
+
+        self._time_axis = self.params['time_axis']
+        self._ring_size = self.params['shared_array_shape'][self._time_axis]
+        shared_array_shape = list(self.params['shared_array_shape'])
+        self._ndim = len(shared_array_shape)
+        assert self._ndim==len(self.params['shape']), 'shared_array_shape and shape must coherent!'
+        if self.params['ring_buffer_method'] == 'double':
+            shared_array_shape[self._time_axis] = self._ring_size*2
+        self._sharedarray = SharedArray(shape = shared_array_shape, dtype = self.params['dtype'], shm_id = self.params['shm_id'])
+        self._numpyarr = self._sharedarray.to_numpy()
+
+    def recv(self):
+        m0 = self.socket.recv()
+        index = np.fromstring(m0, dtype = 'int64')[0]
+        return index, None
+
+    def get_array_slice(self, index, length):
+        assert length<self._ring_size, 'The ring size is too small {} {}'.format(self._ring_size, length)
+        if self.params['ring_buffer_method'] == 'double':
+            i2 = index%self._ring_size + self._ring_size
+            i1 = i2 - length
+            sl = [slice(None)] * self._ndim 
+            sl[self._time_axis] = slice(i1,i2)
+            return self._numpyarr[sl]
+        elif self.params['ring_buffer_method'] == 'single':
+            raise(NotImplementedError)
     
     def close(self):
-        self.socket.close()
+        pass

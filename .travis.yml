@@ -116,7 +116,7 @@ script:
     - if [ "${TEST}" == "extra" ]; then
         start_test "repo size check";
         echo -e "Estimated content size difference = ${SIZE_DIFF} kB" &&
-        test ${SIZE_DIFF} -lt 100;
+        test ${SIZE_DIFF} -lt 200;
         check_output "repo size check";
       fi;
 

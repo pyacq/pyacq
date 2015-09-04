@@ -1,17 +1,28 @@
+import atexit
+
 from .rpc import RPCServer, RPCClientSocket, RPCClient
 from .client import ManagerProxy
 from .processspawner import ProcessSpawner
 from .host import Host
 
+import logging
 
-def create_manager(mode='rpc'):
+def create_manager(mode='rpc', auto_close_at_exit = True):
     """Create a new Manager either in this process or in a new process.
+    
+    Parameters
+    ----------
+    auto_close_at_exit : bool
+        call close automatiqcally if the programme exit.
     """
     if mode == 'local':
         return Manager(name='manager', addr='tcp://*:*')
     else:
         proc = ProcessSpawner(Manager, name='manager', addr='tcp://127.0.0.1:*')
-        return ManagerProxy(proc.name, proc.addr)
+        man = ManagerProxy(proc.name, proc.addr, manager_process = proc)
+        if auto_close_at_exit:
+            atexit.register(man.close)
+        return man
         
 
 class Manager(RPCServer):
@@ -72,10 +83,12 @@ class Manager(RPCServer):
             self.nodegroup = nodegroup
             self.name = name
             self.classname = classname
+            self.outputs = [ ]# list of StreamDef
     
     
-    def __init__(self, name, addr):
+    def __init__(self, name, addr, manager_process = None):
         RPCServer.__init__(self, name, addr)
+        
         self.hosts = {}  # name:HostProxy
         self.nodegroups = {}  # name:NodegroupProxy
         self.nodes = {}  # name:NodeProxy
@@ -89,7 +102,7 @@ class Manager(RPCServer):
         
         # shared socket for all RPC client connections
         self._rpc_socket = RPCClientSocket()
-
+    
     def connect_host(self, name, addr):
         """Connect the manager to a Host.
         
@@ -103,8 +116,10 @@ class Manager(RPCServer):
     def disconnect_host(self, name):
         """Disconnect the Manager from the Host identified by *name*.
         """
-        self.hosts[name].close()
-        
+        for ng in self.hosts[name]:
+            self.nodegroups.pop(ng.name)
+        self.hosts.pop(name)
+    
     def default_host(self):
         """Return the RPC name and address of a default Host created by the
         Manager.
@@ -115,6 +130,20 @@ class Manager(RPCServer):
             self._default_host = proc
             self.connect_host(proc.name, proc.addr)
         return self._default_host.name, self._default_host.addr
+    
+    def close_host(self, name):
+        """Close the Host identified by *name*.
+        """
+        self.hosts[name].client.close()
+    
+    def close(self):
+        """
+        Close the manager
+        And close the default Host too.
+        """
+        if self._default_host is not None:
+            self._default_host.stop()
+        RPCServer.close(self)
 
     def list_hosts(self):
         """Return a list of the identifiers for Hosts that the Manager is
@@ -137,11 +166,14 @@ class Manager(RPCServer):
             raise KeyError("Nodegroup named %s already exists" % name)
         host = self.hosts[host]
         addr = 'tcp://%s:*' % (host.rpc_hostname)
-        _, addr = host.client.new_nodegroup(name, addr)
+        _, addr = host.client.create_nodegroup(name, addr)
         ng = Manager._NodeGroup(host, name, addr)
         host.add_nodegroup(ng)
         self.nodegroups[name] = ng
         return name, addr
+    
+    #~ def close_nodegroup(self, name):
+        #~ self.nodegroups[name].host.client.close_nodegroup(name)
 
     def list_nodegroups(self, host=None):
         if host is None:
@@ -184,4 +216,11 @@ class Manager(RPCServer):
         self._next_node_name += 1
         return name
     
+    def start_all_nodes(self):
+        for ng in self.nodegroups.values():
+            ng.client.start_all_nodes()
     
+    def stop_all_nodes(self):
+        for ng in self.nodegroups.values():
+            ng.client.stop_all_nodes()
+
