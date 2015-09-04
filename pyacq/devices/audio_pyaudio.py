@@ -12,8 +12,9 @@ try:
 except ImportError:
     HAVE_PYAUDIO = False
 
-format_conv = { 'int16' : pyaudio.paInt16, 'int32' : pyaudio.paInt32, 'float32' : pyaudio.paFloat32, }
-# TODO add support for 'int24' (possible in pyaudio but not in numpy)
+if HAVE_PYAUDIO:
+    format_conv = { 'int16' : pyaudio.paInt16, 'int32' : pyaudio.paInt32, 'float32' : pyaudio.paFloat32, }
+    # TODO add support for 'int24' (possible in pyaudio but not in numpy)
 
 class PyAudio(Node):
     """
@@ -80,6 +81,7 @@ class PyAudio(Node):
                     u'Output not supported {} {} device {}'.format(self.nchannel, samplerate, self.input_device_index)
 
         self.output.spec['shape'] = (self.chunksize, self.nb_channel)
+        self.output.spec['dtype = '] = format
         self.output.spec['sampling_rate'] = float(int(self.sampling_rate))
         gains = { 'int16' : 1./2**15, 'int32' : 1./2**31, 'float32':1. }
         self.output.spec['gain'] = gains[self.format]
