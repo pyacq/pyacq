@@ -33,11 +33,11 @@ class PyAudio(Node):
     output_device_index: in or None
         Output device index (like in pyaudio)
         If None, no playing to audio device output so the Node have no input.
-    format : str in ({})
+    format : str in ('int16', 'int32' or 'float32')
         internal format for pyaudio.
     chunksize : int (1024 by default)
         Size of each chun. This impact latency. Too small lead to cracks.    
-    """.format(' '.join(k for k in format_conv))
+    """
 
     _input_specs = {'signals' : dict(streamtype = 'analogsignal',dtype = 'int16',
                                                 shape = (-1, 2), compression ='', time_axis=0,
@@ -72,13 +72,13 @@ class PyAudio(Node):
         # check if supported
         if self.input_device_index is not None:
             assert self.pa.is_format_supported(input_format=format_conv[format], input_channels=self.nb_channel, 
-                    rate=int(self.sampling_rate), input_device=self.input_device_index), \
-                    u'Input not supported {} {} device {}'.format(self.nchannel, samplerate, self.input_device_index)
+                    rate=int(self.sampling_rate), input_device=self.input_device_index),\
+                    'Input not supported {} {} device {}'.format(self.nchannel, samplerate, self.input_device_index)
         
         if self.output_device_index is not None:
             assert self.pa.is_format_supported(output_format=format_conv[format], output_channels=self.nb_channel, 
-                    rate=int(self.sampling_rate), output_device=self.output_device_index), \
-                    u'Output not supported {} {} device {}'.format(self.nchannel, samplerate, self.input_device_index)
+                    rate=int(self.sampling_rate), output_device=self.output_device_index),\
+                    'Output not supported {} {} device {}'.format(self.nchannel, samplerate, self.input_device_index)
 
         self.output.spec['shape'] = (self.chunksize, self.nb_channel)
         self.output.spec['dtype = '] = format
