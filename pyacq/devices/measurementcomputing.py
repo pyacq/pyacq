@@ -2,12 +2,16 @@ import numpy as np
 import time
 import logging
 
-from ..core import Node, register_node_type
-from pyqtgraph.Qt import QtCore, QtGui
-
-
 import ctypes
 from ctypes import byref
+
+from pyqtgraph.Qt import QtCore, QtGui
+
+from ..core import Node, register_node_type
+from  . import ULconstants as UL
+
+
+
 
 
 try:
@@ -51,10 +55,10 @@ class MeasurementComputing(Node):
     """
     """
     _output_specs = {'signals' : dict(streamtype = 'analogsignal',
-                    dtype = 'int16', shape = (-1, 16), compression ='',
+                    dtype = 'uint16', shape = (-1, 16), compression ='',
                     time_axis=0, sampling_rate =30.),
                     'digital' : dict(streamtype = 'digitalsignal',
-                    dtype = 'int16', shape = (-1, 8), compression ='',
+                    dtype = 'uint16', shape = (-1, 8), compression ='',
                     time_axis=0, sampling_rate =30.),
                     }
 
@@ -62,62 +66,57 @@ class MeasurementComputing(Node):
         Node.__init__(self, **kargs)
         assert HAVE_MC, "MeasurementComputing depend on MeasurementComputing DLL"
 
-    def _configure(self, board_num = 0, sampling_rate = 1000.,
-                        subdevices_params = None):
+    def _configure(self, board_num = 0, sampling_rate = 1000., 
+            timer_interval = 100, subdevices_params = None):
         self.board_num = int(board_num)
         self.sampling_rate = sampling_rate
+        self.timer_interval = timer_interval
         if subdevices_params is None:
             # scan_device_info give the default params
-            subdevices_params = self.scan_device_info(device_path)['subdevices']
+            subdevices_params = self.scan_device_info(board_num)['subdevices']
         self.subdevices_params = subdevices_params
         
-        
-        
-        self.prepare_device(board_num)
+        self.prepare_device()
         
         self.outputs['signals'].spec['shape'] = (-1, self.nb_ai_channel)
-        self.outputs['signals'].spec['dtype = '] = self.ai_dtype
+        self.outputs['signals'].spec['dtype = '] = 'uint16'
         self.outputs['signals'].spec['sampling_rate'] = self.real_sampling_rate
-        self.outputs['signals'].spec['gain'] = self.ai_gain
-        self.outputs['signals'].spec['offset'] = self.ai_offset
+        
+        #TODO gain by channels
+        self.outputs['signals'].spec['gain'] = 1.
+        self.outputs['signals'].spec['offset'] = 0.
 
-        self.outputs['digital'].spec['shape'] = (-1, self.nb_di_channel//8)
-        self.outputs['digital'].spec['dtype = '] = self.ai_dtype
+        self.outputs['digital'].spec['shape'] = (-1, self.info['nb_di_port'])
+        self.outputs['digital'].spec['dtype = '] = 'uint16'
         self.outputs['digital'].spec['sampling_rate'] = self.real_sampling_rate
         self.outputs['digital'].spec['gain'] = 1
         self.outputs['digital'].spec['offset'] = 0
-    
 
     def _initialize(self):
         
-        self.timer = QtCore.QTimer(singleShot = False, interval = 100)
+        self.timer = QtCore.QTimer(singleShot = False, interval = self.timer_interval)
         self.timer.timeout.connect(self.periodic_poll)
 
-        self.status = ctypes.c_int(0)
-        self.cur_count = ctypes.c_long(0)
-        self.cur_index = ctypes.c_long(0)
-        
         self.head = 0
         self.last_index = 0
 
         self.ai_mask = np.zeros(self.nb_total_channel, dtype = bool)
-        self.ai_mask[:nb_ai_channel] = True
+        self.ai_mask[:self.nb_ai_channel] = True
         self.di_mask = ~self.ai_mask
         
     
     def _start(self):
-        
-        try:
-            self._start_daq_scan()
-        except ULError as e:
-            if e.errno == 35:
-                #do not known why sometimes just a second try and it is OK
-                time.sleep(1.)
-                self._start_daq_scan()
-            elif e.errno == UL.BADBOARDTYPE :
-                logging.info(self.info['board_name'], 'do not support cbDaqInScan')
-                raise()
-        
+        self._start_daq_scan()
+        #~ try:
+            #~ self._start_daq_scan()
+        #~ except ULError as e:
+            #~ if e.errno == 35:
+                #~ #do not known why sometimes just a second try and it is OK
+                #~ time.sleep(1.)
+                #~ self._start_daq_scan()
+            #~ elif e.errno == UL.BADBOARDTYPE :
+                #~ logging.info(self.info['board_name'], 'do not support cbDaqInScan')
+                #~ raise()
         self.timer.start()
 
     def _start_daq_scan(self):
@@ -148,6 +147,7 @@ class MeasurementComputing(Node):
     def scan_device_info(self, board_num):
         info = { }
         
+        config_val = ctypes.c_int(0)
         board_name = ctypes.create_string_buffer(UL.BOARDNAMELEN)
         cbw.cbGetBoardName(board_num, byref(board_name))
         info['board_name'] = board_name.value
@@ -157,7 +157,7 @@ class MeasurementComputing(Node):
                 ('nb_di_port', UL.BOARDINFO, UL.BIDINUMDEVS),
                 ('serial_num', UL.BOARDINFO, UL.BISERIALNUM),
                 ('factory_id', UL.BOARDINFO, UL.BIFACTORYID),
-                ]        
+                ]
         for key, info_type, config_item in l:
             cbw.cbGetConfig(info_type, board_num, 0, config_item,
                     byref(config_val))
@@ -202,8 +202,8 @@ class MeasurementComputing(Node):
         
         return info
     
-    def prepare_device(self, board_num):
-        self.info = scan_device_info(bord_num)
+    def prepare_device(self):
+        self.info = self.scan_device_info(self.board_num)
         
         #analog input
         ai_info = self.subdevices_params[0]
@@ -212,71 +212,137 @@ class MeasurementComputing(Node):
         self.nb_ai_channel = len(self.ai_channel_index)
         
         #digital input
-        di_info = self.subdevices_params[1]
-        self.nb_di_port = info['nb_di_port']
-        self.nb_di_channel = di_info['nb_channel']
+        if self.info['nb_di_port']>0:
+            di_info = self.subdevices_params[1]
+            self.nb_di_port = self.info['nb_di_port']
+            self.nb_di_channel = di_info['nb_channel']
         
-        self.nb_total_channel = streamAD['nb_channel'] + nb_port_dig
+        self.nb_total_channel = self.nb_ai_channel + self.info['nb_di_port']
 
-
-        self.chan_array = np.array(self.ai_channel_index+self.info['list_di_port'],
-                                                                dtype = 'int16')
+        self.chan_array = np.array(self.ai_channel_index +\
+                    self.info['list_di_port'], dtype = 'int16')
         self.chan_array_type = np.array( [UL.ANALOG] * self.nb_ai_channel +\
-                        [ UL.DIGITAL8] * self.nb_port_dig  , dtype = np.int16)
+                    [ UL.DIGITAL8] * self.info['nb_di_port'], dtype = np.int16)
         self.gain_array = np.array( [UL.BIP10VOLTS] *self.nb_ai_channel +\
-                                            [0] *nb_port_dig, dtype = np.int16)
-        self.real_sr = ctypes.c_long(int(sampling_rate))
+                    [0] * self.info['nb_di_port'], dtype = np.int16)
+        self.real_sr = ctypes.c_long(int(self.sampling_rate))
 
-        self.internal_size = int(30.*sampling_rate)
+        self.internal_size = int(10.*self.sampling_rate) # buffer of 10S
         #~ internal_size = internal_size- internal_size%packet_size
-        ##TODO
-        self.internal_size = internal_size- internal_size%(device_info['device_packet_size'])
-
-        self.raw_arr = np.zeros(( internal_size, self.nb_total_channel), dtype = np.uint16)
-        self.pretrig_count = ctypes.c_long(0)
-        self.total_count = ctypes.c_long(int(raw_arr.size))
-        # FIXME try with other card
-        #~ options = UL.BACKGROUND + UL.BLOCKIO  + UL.CONTINUOUS + UL.CONVERTDATA
-        #~ options = UL.BACKGROUND + UL.DMAIO  + UL.CONTINUOUS + UL.CONVERTDATA
-        self.options = UL.BACKGROUND  + UL.CONTINUOUS + UL.CONVERTDATA
         
+        ##TODO
+        #~ self.internal_size = internal_size- internal_size%(device_info['device_packet_size'])
+
+        self.raw_arr = np.zeros(( self.internal_size, self.nb_total_channel), dtype = 'uint16')
+        self.pretrig_count = ctypes.c_long(0)
+        self.total_count = ctypes.c_long(int(self.raw_arr.size))
+        self.options = UL.BACKGROUND  + UL.CONTINUOUS + UL.CONVERTDATA
         
         # TODO get the real sampling_rate here : maybe a start/stop
         self.real_sampling_rate = self.sampling_rate
         
-        if self.info['board_name'] in ('USB-1616FS', 'USB-1208LS', 'USB-1608FS'):
+        if self.info['board_name'] in (b'USB-1616FS', b'USB-1208LS', b'USB-1608FS', b'USB-1608FS-Plus'):
             #for some old card the scanning mode is limited
             self.mode_daq_scan = 'cbAInScan'
             assert np.all(np.diff(self.ai_channel_index) == 1), 'For this card you must select continuous cannel indexes'
-            assert self.nb_port_dig ==0, 'You can not sample digital ports'
-            assert np.all(self.gain_array[0]==gain_array), 'For this card gain must be identical'
+            assert self.info['nb_di_port'] ==0, 'You can not sample digital ports'
+            assert np.all(self.gain_array[0]==self.gain_array), 'For this card gain must be identical'
         else:
             self.mode_daq_scan = 'cbDaqInScan'
     
     def periodic_poll(self):
-        cbw.cbGetIOStatus( ctypes.c_int(self.board_num), byref(self.status),
-            byref(self.cur_count), byref(self.cur_index), ctypes.c_int(self.function))
+        status = ctypes.c_int(0)
+        cur_count = ctypes.c_long(0)
+        cur_index = ctypes.c_long(0)
         
-        if cur_index.value==-1: return
+        cbw.cbGetIOStatus( ctypes.c_int(self.board_num), byref(status),
+            byref(cur_count), byref(cur_index), ctypes.c_int(self.function))
+        
+        
+        if cur_index.value==-1: 
+            return
         
         index = cur_index.value/self.nb_total_channel
         
-        if index == self.last_index : return
+        if index == self.last_index :
+            return
         
         if index<self.last_index:
             #end of internal ring
             new_samp = self.internal_size - self.last_index
             self.head += new_samp
             self.outputs['signals'].send(self.head, self.raw_arr[self.last_index:, self.ai_mask])
-            self.outputs['digital'].send(self.head, self.raw_arr[self.last_index:, self.di_mask])
+            if self.info['nb_di_port']>0:
+                self.outputs['digital'].send(self.head, self.raw_arr[self.last_index:, self.di_mask])
             self.last_index = 0
         
         new_samp = index - self.last_index
         self.head += new_samp
         self.outputs['signals'].send(self.head, self.raw_arr[ self.last_index:index, self.ai_mask])
-        self.outputs['digital'].send(self.head, self.raw_arr[ self.last_index:index, self.di_mask])
+        if self.info['nb_di_port']>0:
+            self.outputs['digital'].send(self.head, self.raw_arr[ self.last_index:index, self.di_mask])
         
         self.last_index = index%self.internal_size
         
 
 register_node_type(MeasurementComputing)
+
+
+def generate_ULconstants():
+    # very old hoem made parser, need to be rewritten
+    print('generate_ULconstants')
+    print(__file__)
+    print(os.path.dirname(__file__))
+    target = os.path.join(os.path.dirname(__file__), 'ULconstants.py')
+    source = os.path.join(os.path.dirname(__file__), 'cbw.h')
+    assert os.path.exists(source), 'Put cbw.h file in the pyacq/core/device'
+
+    import re
+
+    fid = open(target,'w')
+    fid.write('# this file is generated : do not modify\n')
+    for line in open(source,'r').readlines():
+        #~ if 'cb' in line:
+            #~ continue
+        if '#define cbGetStatus cbGetIOStatus' in line :
+            continue
+        if '#define cbStopBackground cbStopIOBackground' in line :
+            continue
+        if 'float' in line or 'int' in line or 'char' in line or 'long' in line or 'short' in line \
+                or 'HGLOBAL' in line \
+                or 'USHORT' in line or 'LONG' in line  \
+                or '#endif' in line or  '#undef' in line or  '#endif' in line \
+                or 'EXTCCONV' in line :
+            continue
+        
+        r = re.findall('#define[ \t]*(\S*)[ \t]*(\S*)[ \t]*/\* ([ \S]+) \*/',line)
+        if len(r) >0:
+            fid.write('%s    =    %s    # %s \n'%r[0])
+            continue
+
+        r = re.findall('#define[ \t]*(\S*)[ \t]*(\S*)[ \t]*',line)
+        if len(r) >0:
+            fid.write('%s    =    %s    \n'%r[0])
+            continue
+
+        r = re.findall('/\* ([ \S]+) \*/',line)
+        if len(r) >0:
+            comments = r[0]
+            fid.write('# %s \n'%comments)
+            continue
+        
+        if line == '\r\n':
+            fid.write('\n')
+            continue
+        
+        if '(' in line and ')' in line :
+            continue
+        #~ print len(line),line
+    fid.close()
+
+
+if __name__ == '__main__':
+    #generate_ULconstants()
+    pass
+
+
