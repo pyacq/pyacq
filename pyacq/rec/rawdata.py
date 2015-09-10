@@ -149,6 +149,7 @@ class RawDataRecording:
             if socket.poll(timeout = 100):
                 message = socket.recv()
                 file.write(message)
+                file.flush()
         file.close()
 
     
