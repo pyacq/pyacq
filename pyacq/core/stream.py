@@ -163,6 +163,8 @@ class InputStream:
             self.receiver = PlainDataReceiver(self.socket, self.params)
         elif self.params['transfermode'] == 'sharedarray':
             self.receiver = SharedArrayReceiver(self.socket, self.params)
+        else:
+            raise
         
         self.configured = True
     
