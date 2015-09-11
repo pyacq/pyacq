@@ -17,6 +17,9 @@ import traceback
 import zmq
 import atexit
 from logging import info
+import numpy as np
+import datetime
+import base64
 
 import json
 try:
@@ -26,22 +29,72 @@ except ImportError:
     HAVE_MSGPACK = False
 
 
+
+def enchance_encode(obj):
+    """
+    JSon/msgpack encoder that support date, datetime and numpy array, and bytes.
+    Mix of various stackoverflow solution.
+    """
+    
+    if isinstance(obj, np.ndarray):
+        if not obj.flags['C_CONTIGUOUS']:
+            obj = np.ascontiguousarray(obj)
+        assert(obj.flags['C_CONTIGUOUS'])
+        return dict(__ndarray__=base64.b64encode(obj.data).decode(),
+                            dtype=str(obj.dtype),
+                            shape=obj.shape)
+    elif isinstance(obj, datetime.datetime):
+        return dict(__datetime__  = obj.strftime('%Y-%m-%dT%H:%M:%S.%f'))
+    elif isinstance(obj, datetime.date):
+        return dict(__date__ = obj.strftime('%Y-%m-%d'))
+    elif isinstance(obj, bytes):
+        return dict(__bytes__ = base64.b64encode(obj).decode())
+    else:
+        return obj
+
+
+def enchanced_decode(dct):
+    """
+    JSon/msgpack decoder that support date, datetime and numpy array, and bytes.
+    Mix of various stackoverflow solution.
+    """
+    if isinstance(dct, dict):
+        if '__ndarray__' in dct:
+            data = base64.b64decode(dct['__ndarray__'])
+            return np.frombuffer(data, dct['dtype']).reshape(dct['shape'])
+        elif '__datetime__' in dct:
+            return datetime.datetime.strptime(dct['__datetime__'], '%Y-%m-%dT%H:%M:%S.%f')
+        elif '__date__' in dct:
+            return datetime.datetime.strptime(dct['__date__'], '%Y-%m-%d').date()
+        elif '__bytes__' in dct:
+            return base64.b64decode(dct['__bytes__'])
+    return dct
+
+class EnhancedJSONEncoder(json.JSONEncoder):
+    def default(self, obj):
+        obj2 = enchance_encode(obj)
+        if obj is obj2:
+            return json.JSONEncoder.default(self, obj)
+        else:
+            return obj2
+
+
 class JsonSerializer:
     def dumps(self, obj):
-        return json.dumps(obj).encode()
+        return json.dumps(obj, cls=EnhancedJSONEncoder).encode()
     
     def loads(self, msg):
-        return json.loads(msg.decode())
+        return json.loads(msg.decode(), object_hook=enchanced_decode)
 
 class MsgpackSerializer:
     def __init__(self):
         assert HAVE_MSGPACK
     
     def dumps(self, obj):
-        return msgpack.dumps(obj, use_bin_type=True)
+        return msgpack.dumps(obj, use_bin_type=True, default=enchance_encode)
 
     def loads(self, msg):
-        return msgpack.loads(msg, encoding = 'utf8')
+        return msgpack.loads(msg, encoding = 'utf8', object_hook=enchanced_decode)
     
 serializer = JsonSerializer()
 #serializer = MsgpackSerializer()

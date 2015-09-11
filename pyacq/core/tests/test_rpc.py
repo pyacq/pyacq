@@ -1,7 +1,9 @@
 import threading, atexit, time
 import logging
-from pyacq.core.rpc import RPCClient, RemoteCallException, RPCServer
+from pyacq.core.rpc import RPCClient, RemoteCallException, RPCServer, JsonSerializer, MsgpackSerializer
 import zmq.utils.monitor
+import numpy as np
+import datetime
 
 logging.getLogger().level=logging.INFO
 
@@ -87,8 +89,23 @@ def test_rpc():
     
     client3.close()
     serve_thread2.join()
-    
 
+
+def test_serializer():
+    d = dict(a = 1, b =1., c = 'abc', 
+                d = b'abc',
+                e = np.arange(8).reshape(2, 4).astype('float64'),
+                f = datetime.datetime(2015, 1, 1, 12, 00, 00),
+                g = datetime.date(2015, 1, 1),
+                )
+    
+    for serializer in (JsonSerializer(), MsgpackSerializer()):
+        s = serializer.dumps(d)
+        d2 = serializer.loads(s)
+        for k in d:
+            assert type(d[k]) is type(d2[k])
+    
 
 if __name__ == '__main__':
     test_rpc()
+    test_serializer()
