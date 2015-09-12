@@ -23,7 +23,7 @@ class NumpyDeviceBuffer(Node):
     
     """
     _output_specs = {'signals' : dict(streamtype = 'analogsignal',dtype = 'float32',
-                                                shape = (-1, 16), compression ='', time_axis=0,
+                                                shape = (-1, 16), compression ='', timeaxis=0,
                                                 sampling_rate =30.
                                                 )}
 
@@ -52,10 +52,12 @@ class NumpyDeviceBuffer(Node):
             assert buffer.shape[1] == self.nb_channel, 'Wrong nb_channel'
             assert buffer.shape[0]%chunksize == 0, 'Wrong buffer.shape[0] not multiple chunksize'
             self.buffer = buffer
+            self.length = buffer.shape[0]
     
     def _initialize(self):
         self.head = 0
         self.timer = QtCore.QTimer(singleShot = False, interval = int(self.chunksize*self.sample_interval*1000))
+        print('interval', int(self.chunksize*self.sample_interval*1000))
         self.timer.timeout.connect(self.send_data)
     
     def _start(self):

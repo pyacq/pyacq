@@ -44,7 +44,7 @@ class StreamConverter(Node):
     """
     A Node that can convert a stream to another stream.
     For instance:
-        * convert transfert mode 'plaindata' to 'sharedarray'. (to get a local long buffer)
+        * convert transfer mode 'plaindata' to 'sharedarray'. (to get a local long buffer)
         * convert dtype 'int32' to 'float64'
         * change timeaxis 0 to 1 (in fact a transpose)
         * ...

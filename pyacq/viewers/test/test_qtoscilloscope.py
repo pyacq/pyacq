@@ -8,17 +8,22 @@ from pyqtgraph.Qt import QtCore, QtGui
 import pyqtgraph as pg
 
 nb_channel = 7
+sampling_rate = 10000.
+chunksize = 250
 
 def test_qoscilloscope():
     app = pg.mkQApp()
+    
+    length = int(sampling_rate*20)
+    t = np.arange(length)/sampling_rate
+    buffer = np.random.rand(length, nb_channel)*.00
+    buffer += np.sin(2*np.pi*1.2*t)[:,None]*.5
+    buffer = buffer.astype('float32')
 
     dev =NumpyDeviceBuffer()
-    dev.configure( nb_channel = 7, sample_interval = 0.001)
-    stream_dict = dict(protocol = 'tcp', interface = '127.0.0.1', port = '*',
-                        transfertmode = 'plaindata', streamtype = 'analogsignal',
-                        dtype = 'float32', shape = (-1,nb_channel), compression ='',
-                        scale = None, offset = None, units = '' )
-    dev.output.configure(protocol = 'tcp', interface = '127.0.0.1', transfertmode = 'plaindata')
+    dev.configure( nb_channel = 7, sample_interval = 1./sampling_rate, chunksize = chunksize,
+                    buffer = buffer)
+    dev.output.configure(protocol = 'tcp', interface = '127.0.0.1', transfermode = 'plaindata')
     dev.initialize()
 
     

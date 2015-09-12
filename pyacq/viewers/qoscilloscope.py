@@ -85,22 +85,23 @@ class BaseOscilloscope(WidgetNode):
             # if input is not transfermode creat a proxy
             self.conv = StreamConverter()
             self.conv.configure()
-            
+            print(self.input.params)
+            self.conv.input.connect(self.input.params)
+            print(self.conv.input.params)
             if self.input.params['timeaxis']==0:
                 new_shape = (d1, d0)
             else:
                 new_shape = (d0, d1)
-            
             self.conv.output.configure(protocol = 'inproc', interface = '127.0.0.1', port='*', 
                    transfermode = 'sharedarray', streamtype = 'analogsignal',
                    dtype = 'float32', shape = new_shape, timeaxis = 1, 
                    compression ='', scale = None, offset = None, units = '',
                    sharedarray_shape = (self.nb_channel, int(sr*60.)), ring_buffer_method = 'double',
                    )
-            
-            self.conv.configure()
+            self.conv.initialize()
             self.proxy_input = InputStream()
             self.proxy_input.connect(self.conv.output)
+            
 
         # Create parameters
 
@@ -116,31 +117,32 @@ class BaseOscilloscope(WidgetNode):
         
         #timer
         self._head = 0
-        self.timer = QtCore.QTimer(singleShot=False, interval = 500)
+        self.timer = QtCore.QTimer(singleShot=False, interval = 100)
         self.timer.timeout.connect(self.refresh)
 
     def _start(self):
+        if self.conv is not None:
+            self.conv.start()
         self.timer.start()
 
     def _stop(self):
+        if self.conv is not None:
+            self.conv.stop()        
         self.timer.stop()
     
     def _close(self):
         pass
 
     def refresh(self):
-        
         #check for new head in socket
-        events =  self.input.socket.poll(0)
-        for _ in range(events):
-            self._head, _ = self.input.recv()
-        
+        while self.proxy_input.socket.poll(0):
+            self._head, _ = self.proxy_input.recv()
         self._refresh()
-        
+
 
 
 param_global = [
-    {'name': 'xsize', 'type': 'float', 'value': 1., 'step': 0.1},
+    {'name': 'xsize', 'type': 'float', 'value': 3., 'step': 0.1},
     #~ {'name': 'ylims', 'type': 'range', 'value': [-10., 10.] },
     {'name': 'background_color', 'type': 'color', 'value': 'k' },
     {'name': 'refresh_interval', 'type': 'int', 'value': 100 , 'limits':[5, 1000]},
@@ -190,7 +192,7 @@ class QOscilloscope(BaseOscilloscope):
             self.channel_labels.append(label)
         sr = self.input.params['sampling_rate']
         #~ self.paramGlobal.param('xsize').setLimits([2./sr, self.half_size/sr*.95])
-        self.paramGlobal['xsize'] = 3.# to reset curves
+        #~ self.paramGlobal['xsize'] = 3.# to reset curves
         
         self.reset_curves_data()
     
@@ -220,7 +222,7 @@ class QOscilloscope(BaseOscilloscope):
         
         
         #gain/offset
-        np_arr[visibles, :] = np_arr[visibles, :]*gains[visibles, None]+offsets[visibles, None]
+        #~ np_arr[visibles, :] = np_arr[visibles, :]*gains[visibles, None]+offsets[visibles, None]
         
         if mode=='scroll':
             for c, visible in enumerate(visibles):
@@ -230,7 +232,7 @@ class QOscilloscope(BaseOscilloscope):
             ind = (head//decimate)%np_arr.shape[1]
             for c, visible in enumerate(visibles):
                 if visible:
-                    self.curves_data[c] = np.concatenate((np_arr[c,ind:], np_arr[c,:ind]))
+                    self.curves_data[c] = np.concatenate((np_arr[c,-ind:], np_arr[c,:-ind]))
 
         for c, visible in enumerate(visibles):
             if visible:
