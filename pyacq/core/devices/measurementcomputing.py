@@ -317,6 +317,7 @@ def get_info(board_num):
                 "USB-1208LS" : 64,
                 "USB-1608FS" : 31,
                 'PCI-1602/16' : 64,
+                "USB-1608FS-Plus" : 32,
                 }
     info['device_packet_size'] = dict_packet_size.get(info['board_name'], 512)
     
