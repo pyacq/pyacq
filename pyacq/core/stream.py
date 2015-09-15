@@ -380,6 +380,7 @@ class SharedArraySender:
         else:
             size1 = self._ring_size-tail
             size2 = data.shape[self._timeaxis] - size1
+            #~ print(size1, size2)
             
             # 1 full chunks continuous
             sl = [slice(None)] * self._ndim 
@@ -387,18 +388,20 @@ class SharedArraySender:
             self._numpyarr[sl] = data
             
             #part1 : in the second ring
-            sl1 = [slice(None)] * self._ndim 
-            sl1[self._timeaxis] = slice(tail+self._ring_size, None)
-            sl2 = [slice(None)] * self._ndim 
-            sl2[self._timeaxis] = slice(None, size1)
-            self._numpyarr[sl1] = data[sl2]
+            if size1>0:
+                sl1 = [slice(None)] * self._ndim 
+                sl1[self._timeaxis] = slice(tail+self._ring_size, None)
+                sl2 = [slice(None)] * self._ndim 
+                sl2[self._timeaxis] = slice(None, size1)
+                self._numpyarr[sl1] = data[sl2]
             
             # part2 : in the first ring
-            sl3 = [slice(None)] * self._ndim
-            sl3[self._timeaxis] = slice(None, size2)
-            sl4 = [slice(None)] * self._ndim
-            sl4[self._timeaxis] = slice(-size2, None)
-            self._numpyarr[sl3] = data[sl4]
+            if size2:
+                sl3 = [slice(None)] * self._ndim
+                sl3[self._timeaxis] = slice(None, size2)
+                sl4 = [slice(None)] * self._ndim
+                sl4[self._timeaxis] = slice(-size2, None)
+                self._numpyarr[sl3] = data[sl4]
             
         self.socket.send(np.int64(index), copy = self.copy)
         self._index += data.shape[self._timeaxis]
