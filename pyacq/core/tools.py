@@ -29,12 +29,11 @@ class ThreadPollInput(QtCore.QThread):
             with self.lock:
                 if not self.running:
                     break
-            
             ev = self.input_stream().poll(timeout = self.timeout)
             if ev>0:
                 pos, data = self.input_stream().recv()
                 self.new_data.emit(pos, data)
-
+        
     def stop(self):
         with self.lock:
             self.running = False

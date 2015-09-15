@@ -1,4 +1,5 @@
-from ..core import WidgetNode, register_node_type, StreamConverter, InputStream
+from ..core import (WidgetNode, register_node_type,  InputStream,
+        ThreadPollInput, StreamConverter)
 from pyqtgraph.Qt import QtCore, QtGui
 
 import numpy as np
@@ -85,9 +86,7 @@ class BaseOscilloscope(WidgetNode):
             # if input is not transfermode creat a proxy
             self.conv = StreamConverter()
             self.conv.configure()
-            print(self.input.params)
             self.conv.input.connect(self.input.params)
-            print(self.conv.input.params)
             if self.input.params['timeaxis']==0:
                 new_shape = (d1, d0)
             else:
@@ -96,7 +95,7 @@ class BaseOscilloscope(WidgetNode):
                    transfermode = 'sharedarray', streamtype = 'analogsignal',
                    dtype = 'float32', shape = new_shape, timeaxis = 1, 
                    compression ='', scale = None, offset = None, units = '',
-                   sharedarray_shape = (self.nb_channel, int(sr*60.)), ring_buffer_method = 'double',
+                   sharedarray_shape = (self.nb_channel, int(sr*8.)), ring_buffer_method = 'double',
                    )
             self.conv.initialize()
             self.proxy_input = InputStream()
@@ -115,28 +114,34 @@ class BaseOscilloscope(WidgetNode):
         self.allParams = pg.parametertree.Parameter.create(name = 'all param', type = 'group', children = [self.paramGlobal,self.paramChannels  ])
         #~ self.allParams.sigTreeStateChanged.connect(self.on_param_change)
         
+        #poller
+        self.poller = ThreadPollInput(input_stream = self.proxy_input)
+        self.poller.new_data.connect(self._on_new_data)
         #timer
         self._head = 0
-        self.timer = QtCore.QTimer(singleShot=False, interval = 100)
+        self.timer = QtCore.QTimer(singleShot=False, interval = 80)
         self.timer.timeout.connect(self.refresh)
 
     def _start(self):
         if self.conv is not None:
             self.conv.start()
+        self.poller.start()
         self.timer.start()
+        
 
     def _stop(self):
         if self.conv is not None:
-            self.conv.stop()        
+            self.conv.stop()
+        self.poller.stop()
         self.timer.stop()
     
     def _close(self):
         pass
 
+    def _on_new_data(self, pos, data):
+        self._head = pos
+    
     def refresh(self):
-        #check for new head in socket
-        while self.proxy_input.socket.poll(0):
-            self._head, _ = self.proxy_input.recv()
         self._refresh()
 
 
@@ -146,9 +151,11 @@ param_global = [
     #~ {'name': 'ylims', 'type': 'range', 'value': [-10., 10.] },
     {'name': 'background_color', 'type': 'color', 'value': 'k' },
     {'name': 'refresh_interval', 'type': 'int', 'value': 100 , 'limits':[5, 1000]},
-    {'name': 'mode', 'type': 'list', 'value': 'scan' , 'values' : ['scan', 'scroll'] },
+    {'name': 'mode', 'type': 'list', 'value': 'scroll' , 'values' : ['scan', 'scroll'] },
     {'name': 'auto_decimate', 'type': 'bool', 'value':  True },
-    {'name': 'decimate', 'type': 'int', 'value': 1., 'limits' : [1, None], },
+    {'name': 'decimate', 'type': 'int', 'value': 100, 'limits' : [1, None], },
+    {'name': 'decimation_method', 'type': 'str', 'value': 'mean', 'values' : [ 'pure_decimate', 'min_max', 'mean'] },
+    
     {'name': 'display_labels', 'type': 'bool', 'value': False },
     ]
 
@@ -204,7 +211,7 @@ class QOscilloscope(BaseOscilloscope):
         visibles = np.array([p['visible'] for p in self.paramChannels.children()], dtype = bool)
         sr = self.input.params['sampling_rate']
         xsize = self.paramGlobal['xsize'] 
-        intsize = int(xsize*sr)#TODOs
+        intsize = int(xsize*sr)
         
         #TODO:
         #   * pos>head
@@ -212,27 +219,37 @@ class QOscilloscope(BaseOscilloscope):
         head = self._head
         if decimate>1:
             head = head - head%decimate
-        
-        
-        
-        np_arr = self.proxy_input.get_array_slice(head,intsize)
-        
-        #TODO several decimation medthos
-        np_arr = np_arr[:,::decimate]
-        
+            
+        full_arr = self.proxy_input.get_array_slice(head,intsize)
+        if decimate>1:
+            if self.paramGlobal['decimation_method'] == 'pure_decimate':
+                small_arr = full_arr[:,::decimate].copy()
+            elif self.paramGlobal['decimation_method'] == 'min_max':
+                arr = full_arr.reshape(full_arr.shape[0], -1, decimate*2)
+                small_arr = np.empty((full_arr.shape[0], arr.shape[1]*2), dtype = full_arr.dtype)
+                small_arr[:, ::2] = arr.max(axis=2)
+                small_arr[:, 1::2] = arr.min(axis=2)
+            elif self.paramGlobal['decimation_method'] == 'mean':
+                arr = full_arr.reshape(full_arr.shape[0], -1, decimate)
+                small_arr = arr.mean(axis=2)
+            else:
+                raise(NotImplementedError)
+        else:
+            small_arr = full_arr.copy()
         
         #gain/offset
-        #~ np_arr[visibles, :] = np_arr[visibles, :]*gains[visibles, None]+offsets[visibles, None]
+        small_arr[visibles, :] *= gains[visibles, None]
+        small_arr[visibles, :] += offsets[visibles, None]
         
         if mode=='scroll':
             for c, visible in enumerate(visibles):
                 if visible:
-                    self.curves_data[c] = np_arr[c,:]
+                    self.curves_data[c] = small_arr[c,:]
         elif mode =='scan':
-            ind = (head//decimate)%np_arr.shape[1]
+            ind = (head//decimate)%small_arr.shape[1]
             for c, visible in enumerate(visibles):
                 if visible:
-                    self.curves_data[c] = np.concatenate((np_arr[c,-ind:], np_arr[c,:-ind]))
+                    self.curves_data[c] = np.concatenate((small_arr[c,-ind:], small_arr[c,:-ind]))
 
         for c, visible in enumerate(visibles):
             if visible:

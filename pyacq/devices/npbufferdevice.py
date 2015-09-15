@@ -57,7 +57,6 @@ class NumpyDeviceBuffer(Node):
     def _initialize(self):
         self.head = 0
         self.timer = QtCore.QTimer(singleShot = False, interval = int(self.chunksize*self.sample_interval*1000))
-        print('interval', int(self.chunksize*self.sample_interval*1000))
         self.timer.timeout.connect(self.send_data)
     
     def _start(self):
