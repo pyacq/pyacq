@@ -92,7 +92,7 @@ class RawDataRecording:
     
     def flush_json(self):
         info_file = io.open(os.path.join(self.dirname, 'info.json'), mode = 'w', encoding = 'utf8')
-        info_file.write(json.dumps(info, sort_keys=True, indent=4, separators=(',', ': '), ensure_ascii = False, encoding =  'utf8'))
+        info_file.write(json.dumps(self.info, sort_keys=True, indent=4, separators=(',', ': '), ensure_ascii = False, encoding =  'utf8'))
         info_file.close()
     
     def rec_loop_AnalogSignalSharedMemStream(self, socket, stream, file, bounds):
