@@ -21,7 +21,7 @@ class FakeSender(Node):
         spec = self.outputs['signals'].params
         assert len(spec['shape']) ==2, 'shape error'
         assert spec['shape'][1] ==16, 'shape error'
-        assert spec['time_axis']==0, 'time_axis error'
+        assert spec['timeaxis']==0, 'timeaxis error'
 
     def _start(self):
         self.timer.start()
