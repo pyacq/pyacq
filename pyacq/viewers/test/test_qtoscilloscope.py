@@ -8,13 +8,13 @@ import numpy as np
 from pyqtgraph.Qt import QtCore, QtGui
 import pyqtgraph as pg
 
-nb_channel = 128
+nb_channel = 32
 sampling_rate = 10000.
 chunksize = 100
 
 def test_qoscilloscope():
     
-    man = create_manager(auto_close_at_exit = False)
+    man = create_manager(auto_close_at_exit = True)
     ng = man.create_nodegroup()
     
     app = pg.mkQApp()
@@ -34,10 +34,11 @@ def test_qoscilloscope():
 
     
     viewer = QOscilloscope()
-    viewer.configure()
+    viewer.configure(with_user_dialog = True)
     viewer.input.connect(dev.output)
     viewer.initialize()
     viewer.show()
+    viewer.params['decimation_method'] = 'min_max'
 
 
     def terminate():
@@ -56,9 +57,11 @@ def test_qoscilloscope():
     timer.start()    
     
     app.exec_()
-    
-    man.close()
-    
+
+    #~ man.close()
+
+
+  
 
 if __name__ == '__main__':
     test_qoscilloscope()
