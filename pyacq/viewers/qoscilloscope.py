@@ -10,7 +10,8 @@ from ..core import (WidgetNode, register_node_type,  InputStream,
 
 class MyViewBox(pg.ViewBox):
     doubleclicked = QtCore.pyqtSignal()
-    zoom = QtCore.pyqtSignal(float)
+    gain_zoom = QtCore.pyqtSignal(float)
+    xsize_zoom = QtCore.pyqtSignal(float)
     def __init__(self, *args, **kwds):
         pg.ViewBox.__init__(self, *args, **kwds)
         self.disableAutoRange()
@@ -26,8 +27,11 @@ class MyViewBox(pg.ViewBox):
             z = 10 if ev.delta()>0 else 1/10.
         else:
             z = 1.3 if ev.delta()>0 else 1/1.3
-        self.zoom.emit(z)
+        self.gain_zoom.emit(z)
         ev.accept()
+    def mouseDragEvent(self, ev):
+        ev.accept()
+        self.xsize_zoom.emit((ev.pos()-ev.lastPos()).x())
 
 
 class BaseOscilloscope(WidgetNode):
@@ -151,6 +155,8 @@ class BaseOscilloscope(WidgetNode):
         self.timer.stop()
     
     def _close(self):
+        if self.running():
+            self.stop()
         if self.with_user_dialog:
             self.params_controler.close()
 
@@ -204,6 +210,12 @@ class BaseOscilloscope(WidgetNode):
         sr = self.input.params['sampling_rate']
         self.params['decimate'] = max( int(xsize*sr)//nb_point, 1)
 
+    def xsize_zoom(self, xmove):
+        factor = xmove/100.
+        newsize = self.params['xsize']*(factor+1.)
+        limits = self.params.param('xsize').opts['limits']
+        if newsize>limits[0] and newsize<limits[1]:
+            self.params['xsize'] = newsize
 
 
 default_params = [
@@ -239,7 +251,8 @@ class QOscilloscope(BaseOscilloscope):
     def __init__(self, **kargs):
         BaseOscilloscope.__init__(self, **kargs)
         
-        self.viewBox.zoom.connect(self.gain_zoom)
+        self.viewBox.gain_zoom.connect(self.gain_zoom)
+        self.viewBox.xsize_zoom.connect(self.xsize_zoom)
         
     def _initialize(self):
         BaseOscilloscope._initialize(self)
@@ -328,7 +341,8 @@ class QOscilloscope(BaseOscilloscope):
             if self.all_mean is not None:
                 p['offset'] = p['offset'] + self.all_mean[i]*p['gain'] - self.all_mean[i]*p['gain']*factor
             p['gain'] = p['gain']*factor
-
+    
+    
     def autoestimate_scales(self):
         if self._head is None:
             return None, None
