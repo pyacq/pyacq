@@ -1,14 +1,17 @@
 import threading, atexit, time
 import logging
-from pyacq.core.rpc import RPCClient, RemoteCallException, RPCServer, JsonSerializer, MsgpackSerializer
+from pyacq.core.rpc import RPCClient, RemoteCallException, RPCServer, JsonSerializer, MsgpackSerializer, HAVE_MSGPACK
 import zmq.utils.monitor
 import numpy as np
 import datetime
 
-logging.getLogger().level=logging.INFO
+
 
 
 def test_rpc():
+    previsous_level = logging.getLogger().level
+    logging.getLogger().level=logging.INFO
+    
     class Server1(RPCServer):
         def add(self, a, b):
             return a + b
@@ -89,6 +92,8 @@ def test_rpc():
     
     client3.close()
     serve_thread2.join()
+    
+    logging.getLogger().level=previsous_level
 
 
 def test_serializer():
@@ -99,7 +104,11 @@ def test_serializer():
                 g = datetime.date(2015, 1, 1),
                 )
     
-    for serializer in (JsonSerializer(), MsgpackSerializer()):
+    serializers = [JsonSerializer()]
+    if HAVE_MSGPACK:
+        serializers.append(MsgpackSerializer())
+    
+    for serializer in serializers:
         s = serializer.dumps(d)
         d2 = serializer.loads(s)
         for k in d:
