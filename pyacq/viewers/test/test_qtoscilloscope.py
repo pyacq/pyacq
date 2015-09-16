@@ -14,7 +14,7 @@ chunksize = 100
 
 def test_qoscilloscope():
     
-    man = create_manager(auto_close_at_exit = True)
+    man = create_manager(auto_close_at_exit = False)
     ng = man.create_nodegroup()
     
     app = pg.mkQApp()
@@ -52,13 +52,13 @@ def test_qoscilloscope():
     viewer.start()
     
     # start for a while
-    timer = QtCore.QTimer(singleShot = True, interval = 100000)
+    timer = QtCore.QTimer(singleShot = True, interval = 2000)
     timer.timeout.connect(terminate)
     timer.start()    
     
     app.exec_()
 
-    #~ man.close()
+    man.close()
 
 
   
