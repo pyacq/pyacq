@@ -34,7 +34,6 @@ class ThreadSender(QtCore.QThread):
 def test_ThreadPollInput():
     app = pg.mkQApp()
     
-    
     outstream = OutputStream()
     outstream.configure(**stream_spec)
     instream = InputStream()
@@ -43,8 +42,14 @@ def test_ThreadPollInput():
     sender = ThreadSender(output_stream = outstream)
     poller = ThreadPollInput(input_stream = instream)
     
+    
+    global last_pos
+    last_pos= 0
     def on_new_data(pos, arr):
-        print(pos, arr.shape)
+        assert arr.shape==(chunksize, nb_channel)
+        global last_pos
+        last_pos += chunksize
+        assert last_pos==pos
     
     def terminate():
         sender.wait()
@@ -93,11 +98,15 @@ def test_streamconverter():
     instream = InputStream()
     instream.connect(conv.output)
 
+    global last_pos
+    last_pos= 0
     def on_new_data(pos, arr):
-        print(pos, arr.shape)
+        assert arr is None
+        global last_pos
+        last_pos += chunksize
+        assert last_pos==pos
     
     def terminate():
-        print('terminate')
         sender.wait()
         conv.stop()        
         poller.stop()
@@ -109,7 +118,7 @@ def test_streamconverter():
     poller.new_data.connect(on_new_data)
     
     
-    #~ poller.start()
+    poller.start()
     conv.start()
     sender.start()
     
@@ -117,6 +126,6 @@ def test_streamconverter():
     app.exec_()
 
 if __name__ == '__main__':
-    #~ test_ThreadPollInput()
+    test_ThreadPollInput()
     test_streamconverter()
     
