@@ -16,7 +16,7 @@ def test_ThreadPollInput():
     stream_spec = dict(protocol = 'tcp', interface = '127.0.0.1', port='*', 
                        transfermode = 'plaindata', streamtype = 'analogsignal',
                        dtype = 'float32', shape = (-1, nb_channel), compression ='',
-                       scale = None, offset = None, units = '')
+                       scale = None, offset = None, units = '', timeaxis = 0)
     
     class ThreadSender(QtCore.QThread):
         def __init__(self, output_stream, parent = None):
@@ -41,8 +41,14 @@ def test_ThreadPollInput():
     sender = ThreadSender(output_stream = outstream)
     poller = ThreadPollInput(input_stream = instream)
     
+    
+    global last_pos
+    last_pos= 0
     def on_new_data(pos, arr):
-        print(pos, arr.shape)
+        assert arr.shape==(chunksize, nb_channel)
+        global last_pos
+        last_pos += chunksize
+        assert last_pos==pos
     
     def terminate():
         sender.wait()

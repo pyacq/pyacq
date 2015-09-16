@@ -63,24 +63,25 @@ class PyAudio(Node):
         self.input_device_index = input_device_index
         self.output_device_index = output_device_index
         self.format = format
-        self.chunksize = chunksize
+        self._chunksize = chunksize
         
         assert self.format in format_conv
         
         self.pa = pyaudio.PyAudio()
         
         # check if supported
-        if self.input_device_index is not None:
-            assert self.pa.is_format_supported(input_format=format_conv[format], input_channels=self.nb_channel, 
-                    rate=int(self.sampling_rate), input_device=self.input_device_index),\
-                    'Input not supported {} {} device {}'.format(self.nchannel, samplerate, self.input_device_index)
-        
         if self.output_device_index is not None:
-            assert self.pa.is_format_supported(output_format=format_conv[format], output_channels=self.nb_channel, 
-                    rate=int(self.sampling_rate), output_device=self.output_device_index),\
-                    'Output not supported {} {} device {}'.format(self.nchannel, samplerate, self.input_device_index)
+            assert self.pa.is_format_supported(self.sampling_rate,  output_format=format_conv[format],
+                    output_channels=self.nb_channel, output_device=self.output_device_index),\
+                    'Output not supported {} {} device {}'.format(self.nb_channel, self.sampling_rate, self.output_device_index)
+        
+        if self.input_device_index is not None:
+            assert self.pa.is_format_supported(self.sampling_rate, input_format=format_conv[format],
+                    input_channels=self.nb_channel,  input_device=self.input_device_index),\
+                    'Input not supported {} {} device {}'.format(self.nb_channel, self.sampling_rate, self.input_device_index)
+        
 
-        self.output.spec['shape'] = (self.chunksize, self.nb_channel)
+        self.output.spec['shape'] = (chunksize, self.nb_channel)
         self.output.spec['dtype = '] = format
         self.output.spec['sampling_rate'] = float(int(self.sampling_rate))
         gains = { 'int16' : 1./2**15, 'int32' : 1./2**31, 'float32':1. }
@@ -102,13 +103,13 @@ class PyAudio(Node):
                     output= self.output_device_index is not None,
                     input_device_index = self.input_device_index,
                     output_device_index = self.output_device_index,
-                    frames_per_buffer = self.chunksize,
+                    frames_per_buffer = self._chunksize,
                     stream_callback = self._audiocallback,
                     start = False)
-        self.head = 0
+        self._head = 0
         
         # outbuffer
-        size = self.nb_channel * self.chunksize * np.dtype(self.format).itemsize
+        size = self.nb_channel * self._chunksize * np.dtype(self.format).itemsize
         self.enmpty_outputbuffer = b'\x00' *  size
         self.out_queue = collections.deque()
         self.lock = Mutex()
@@ -136,8 +137,8 @@ class PyAudio(Node):
     def _audiocallback(self, in_data, frame_count, time_info, status):
         #~ print('audiocallback', len(self.out_queue))
         if in_data is not None:
-            self.head += self.chunksize
-            self.output.send(self.head, in_data)
+            self._head += self._chunksize
+            self.output.send(self._head, in_data)
         with self.lock:
             if len(self.out_queue)>0:
                 out = self.out_queue.popleft()

@@ -9,10 +9,6 @@ from pyqtgraph.Qt import QtCore, QtGui
 import pyqtgraph as pg
 
 
-#~ import logging
-#~ logging.getLogger().level=logging.INFO
-
-
 @pytest.mark.skipif(not HAVE_PYAUDIO, reason = 'no have pyaudio')
 def test_local_app_in_out():
     # connect Node.output to Node.input
@@ -75,5 +71,5 @@ def test_play_sinus():
 if __name__ == '__main__':
     test_local_app_in_out()
     test_play_sinus()
-    
+
  
