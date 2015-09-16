@@ -66,7 +66,7 @@ class NumpyDeviceBuffer(Node):
         self.timer.stop()
     
     def _close(self):
-        del self.buffer
+        pass
     
     def send_data(self):
         i1 = self.head%self.length
