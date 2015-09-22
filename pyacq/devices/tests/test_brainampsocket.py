@@ -2,6 +2,7 @@ import time
 
 from pyacq import create_manager
 from pyacq.devices.brainampsocket import BrainAmpSocket
+from pyacq.viewers import QOscilloscope
 
 from pyqtgraph.Qt import QtCore, QtGui
 
@@ -15,30 +16,31 @@ def test_brainampsocket():
     dev = BrainAmpSocket()
     #~ dev.configure(brainamp_host = '194.167.217.129', brainamp_port = 51244)
     dev.configure(brainamp_host = '194.167.217.84', brainamp_port = 51244)
-    dev.outputs['signals'].configure(protocol = 'tcp', interface = '127.0.0.1',transfertmode = 'plaindata',)
-    dev.outputs['triggers'].configure(protocol = 'tcp', interface = '127.0.0.1',transfertmode = 'plaindata',)
+    dev.outputs['signals'].configure(protocol = 'tcp', interface = '127.0.0.1',transfermode = 'plaindata',)
+    dev.outputs['triggers'].configure(protocol = 'tcp', interface = '127.0.0.1',transfermode = 'plaindata',)
     dev.initialize()
     
-    #~ viewer = ImageViewer()
-    #~ viewer.configure()
-    #~ viewer.input.connect(dev.output)
-    #~ viewer.initialize()
-    #~ viewer.show()
+    viewer = QOscilloscope()
+    viewer.configure()
+    viewer.input.connect(dev.outputs['signals'])
+    viewer.initialize()
+    viewer.show()
     
     dev.start()
-    #~ viewer.start()
+    viewer.start()
     
     def terminate():
-        #~ viewer.stop()
+        viewer.stop()
         dev.stop()
-        #~ viewer.close()
+        viewer.close()
         dev.close()
         app.quit()
     
     # start for a while
-    timer = QtCore.QTimer(singleShot = True, interval = 15000)
+    timer = QtCore.QTimer(singleShot = True, interval = 5000)
     timer.timeout.connect(terminate)
-    timer.start()
+    #~ timer.start()
+    
     app.exec_()
 
 if __name__ == '__main__':

@@ -97,7 +97,7 @@ class BrainAmpSocket(Node):
     This class is a bridge between this socket and pyacq.
     """
     _output_specs = {'signals' : dict(streamtype = 'analogsignal',dtype = 'float32',
-                                                shape = (-1, 32), compression ='', time_axis=0,
+                                                shape = (-1, 32), compression ='', timeaxis=0,
                                                 sampling_rate = 512.),
                                 'triggers' : dict(streamtype = 'event', dtype = _dtype_trigger,
                                                 shape = (-1,)),
