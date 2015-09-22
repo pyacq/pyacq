@@ -8,7 +8,7 @@ from pyqtgraph.Qt import QtCore, QtGui
 
 import pytest
 
-@pytest.mark.skipif(False, reason = 'Need brainamp device to test')
+@pytest.mark.skipif(True, reason = 'Need brainamp device to test')
 def test_brainampsocket():
     # in main App
     app = QtGui.QApplication([])
