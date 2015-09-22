@@ -13,7 +13,7 @@ from .client import OutputStreamProxy
 
 default_stream = dict( protocol = 'tcp', interface = '127.0.0.1', port = '*',
                         transfermode = 'plaindata', streamtype = 'analogsignal',
-                        dtype = 'float32', shape = (-1, 1), time_axis = 0, 
+                        dtype = 'float32', shape = (-1, 1), timeaxis = 0, 
                         compression ='', scale = None, offset = None, units = '',
                         sampling_rate = 1.,)
 
@@ -27,10 +27,10 @@ common_doc = """
         The bind adress for the zmq.PUB socket
     port : str
         The port for the zmq.PUB socket
-    transfermode: 'plain_data', 'shared_array', (not done 'shared_cuda_buffer' or 'share_opencl_buffer')
+    transfermode: 'plain_data', 'sharedarray', (not done 'shared_cuda_buffer' or 'share_opencl_buffer')
         The method used for data transfer:
             * 'plain_data': data are sent over a plain socket in two parts: (frame index, data).
-            * 'shared_array': data are stored in shared memory in a ring buffer and the current frame index is sent over the socket.
+            * 'sharedarray': data are stored in shared memory in a ring buffer and the current frame index is sent over the socket.
             * 'shared_cuda_buffer': data are stored in shared Cuda buffer and the current frame index is sent over the socket.
             * 'share_opencl_buffer': data are stored in shared OpenCL buffer and the current frame index is sent over the socket.
     streamtype: 'analogsignal', 'digitalsignal', 'event' or 'image/video'
@@ -41,7 +41,7 @@ common_doc = """
         The shape of each data frame. Unknown dim are -1 in case of variable chunk.
             * for image it is (-1, H, W), (n_frames, H, W), or (H, W).
             * for analogsignal it can be (n_samples, n_channels) or (-1, n_channels)
-    time_axis: int
+    timeaxis: int
         The index of the axis that represents time within a single data chunk, or
         -1 if the chunk lacks this axis (in this case, each chunk represents exactly one
         timepoint).
@@ -59,15 +59,15 @@ common_doc = """
     sampling_interval: float or None
         
     
-    Parameters when using `transfermode` = 'shared_array'
+    Parameters when using `transfermode` = 'sharedarray'
     -----
-    shared_array_shape: tuple
+    sharedarray_shape: tuple
         Shape of the SharedArray
     ring_buffer_method: 'double' or 'single'
         Method for the ring buffer:
             *  'double' : there 2 ring buffer concatenated. This ensure continuous chunk whenever the sample position.
             * 'single': standart ring buffer
-        Note that, The ring buffer is along `time_axis` for each case. And in case, of 'double', concatenated axis is also `time_axis`.
+        Note that, The ring buffer is along `timeaxis` for each case. And in case, of 'double', concatenated axis is also `timeaxis`.
     shm_id : str or int (depending on platform)
         id of the SharedArray
         
@@ -107,7 +107,7 @@ class OutputStream:
         
         if self.params['transfermode'] == 'plaindata':
             self.sender = PlainDataSender(self.socket, self.params)
-        elif self.params['transfermode'] == 'shared_array':
+        elif self.params['transfermode'] == 'sharedarray':
             self.sender = SharedArraySender(self.socket, self.params)
 
         self.configured = True
@@ -128,7 +128,7 @@ class OutputStream:
     def close(self):
         """
         Close the output.
-        This close the socket and release the shared_array if necessary.
+        This close the socket and release the sharedarray if necessary.
         """
         self.sender.close()
         self.socket.close()
@@ -161,8 +161,10 @@ class InputStream:
         
         if self.params['transfermode'] == 'plaindata':
             self.receiver = PlainDataReceiver(self.socket, self.params)
-        elif self.params['transfermode'] == 'shared_array':
+        elif self.params['transfermode'] == 'sharedarray':
             self.receiver = SharedArrayReceiver(self.socket, self.params)
+        else:
+            raise
         
         self.configured = True
     
@@ -182,7 +184,7 @@ class InputStream:
             The absolut sample index. If the chunk is multiple sample then index is the last one (head).
         data: np.ndarray or bytes
             The chunk of data.
-            For 'shared_array' transfert_mode data is None.
+            For 'sharedarray' transfert_mode data is None.
             So the you must use InputStream.get_array_slice(index, length) that give you a chunk a desired size.
 
         """
@@ -192,7 +194,7 @@ class InputStream:
         """
         Close the Input.
         This close the socket.
-        The SharedArray (if transfert_mode 'shared_array')) is not close. This is the responsobility of OuputStream
+        The SharedArray (if transfert_mode 'sharedarray')) is not close. This is the responsobility of OuputStream
         """
         self.receiver.close()
         self.socket.close()
@@ -200,9 +202,13 @@ class InputStream:
     
     def get_array_slice(self, index, length):
         """
-        For shared_array transfert, you can a any chunk size (no more than the ring size)
+        For sharedarray transfert, you can a any chunk size (no more than the ring size)
+        If length is None so take the last chunk received.
+        
         """
-        #assert self.params['transfermode'] == 'shared_array', 'For shared_array only'
+        #assert self.params['transfermode'] == 'sharedarray', 'For sharedarray only'
+        if length is None:
+            return self.receiver.get_array_slice(index, self.receiver.last_chunk_size)
         
         return self.receiver.get_array_slice( index, length)
 
@@ -287,7 +293,7 @@ class SharedArraySender:
     
     This is usefull for a Node that need to access older chunk.
     
-    Be carfull to set correctly the time_axis (concatenation axis).
+    Be carfull to set correctly the timeaxis (concatenation axis).
     
     Note that on Unix that plaindata+inproc can be faster.
     
@@ -298,6 +304,9 @@ class SharedArraySender:
         #~ self.copy = self.params['protocol'] == 'inproc'
         self.copy = False
         
+        assert 'ring_buffer_method' in params, 'ring_buffer_method not in params for sharedarray'
+        assert 'sharedarray_shape' in params, 'sharedarray_shape not in params for sharedarray'
+        
         if self.params['ring_buffer_method'] == 'single':
             #~ self.funcs.append(self._copy_to_sharray_single)
             self.func = self._copy_to_sharray_single
@@ -307,14 +316,14 @@ class SharedArraySender:
         self._index = 0
         
         # prepare SharedArray
-        self._time_axis = self.params['time_axis']
-        self._ring_size = self.params['shared_array_shape'][self._time_axis]
-        shared_array_shape = list(self.params['shared_array_shape'])
-        self._ndim = len(shared_array_shape)
-        assert self._ndim==len(self.params['shape']), 'shared_array_shape and shape must coherent!'
+        self._timeaxis = self.params['timeaxis']
+        self._ring_size = self.params['sharedarray_shape'][self._timeaxis]
+        sharedarray_shape = list(self.params['sharedarray_shape'])
+        self._ndim = len(sharedarray_shape)
+        assert self._ndim==len(self.params['shape']), 'sharedarray_shape and shape must coherent!'
         if self.params['ring_buffer_method'] == 'double':
-            shared_array_shape[self._time_axis] = self._ring_size*2
-        self._sharedarray = SharedArray(shape = shared_array_shape, dtype = self.params['dtype'])
+            sharedarray_shape[self._timeaxis] = self._ring_size*2
+        self._sharedarray = SharedArray(shape = sharedarray_shape, dtype = self.params['dtype'])
         self.params['shm_id'] = self._sharedarray.shm_id
         self._numpyarr = self._sharedarray.to_numpy()
 
@@ -325,35 +334,35 @@ class SharedArraySender:
         self._sharedarray.close()
 
     def _copy_to_sharray_single(self, index, data):
-        assert data.shape[self._time_axis]<self._ring_size, 'The chunk is too big for the buffer {} {}'.format(data.shape, self._numpyarr.shape)
+        assert data.shape[self._timeaxis]<self._ring_size, 'The chunk is too big for the buffer {} {}'.format(data.shape, self._numpyarr.shape)
         head = index % self._ring_size
         tail =  self._index%self._ring_size
         if head>tail:
             # 1 chunks
             sl = [slice(None)] * self._ndim
-            sl[self._time_axis] = slice(tail, head)
+            sl[self._timeaxis] = slice(tail, head)
             self._numpyarr[sl] = data
         else:
             # 2 chunks : because end of the ring
             size1 = self._ring_size-tail
-            size2 = data.shape[self._time_axis] - size1
+            size2 = data.shape[self._timeaxis] - size1
             
             #part1
             sl1 = [slice(None)] * self._ndim 
-            sl1[self._time_axis] = slice(tail, None)
+            sl1[self._timeaxis] = slice(tail, None)
             sl2 = [slice(None)] * self._ndim 
-            sl2[self._time_axis] = slice(None, size1)
+            sl2[self._timeaxis] = slice(None, size1)
             self._numpyarr[sl1] = data[sl2]
             
             #part2
             sl3 = [slice(None)] * self._ndim
-            sl3[self._time_axis] = slice(None, size2)
+            sl3[self._timeaxis] = slice(None, size2)
             sl4 = [slice(None)] * self._ndim
-            sl4[self._time_axis] = slice(-size2, None)
+            sl4[self._timeaxis] = slice(-size2, None)
             self._numpyarr[sl3] = data[sl4]
         
         self.socket.send(np.int64(index), copy = self.copy)
-        self._index += data.shape[self._time_axis]
+        self._index += data.shape[self._timeaxis]
 
 
     def _copy_to_sharray_double(self, index, data):
@@ -361,38 +370,41 @@ class SharedArraySender:
         tail =  self._index%self._ring_size
         if head>tail:
             sl = [slice(None)] * self._ndim
-            sl[self._time_axis] = slice(tail, head)
+            sl[self._timeaxis] = slice(tail, head)
             # 1 chunk
             self._numpyarr[sl] = data
             # 1 same chunk
-            sl[self._time_axis] = slice(tail+self._ring_size, head+self._ring_size)
+            sl[self._timeaxis] = slice(tail+self._ring_size, head+self._ring_size)
             self._numpyarr[sl] = data
             
         else:
             size1 = self._ring_size-tail
-            size2 = data.shape[self._time_axis] - size1
+            size2 = data.shape[self._timeaxis] - size1
+            #~ print(size1, size2)
             
             # 1 full chunks continuous
             sl = [slice(None)] * self._ndim 
-            sl[self._time_axis] = slice(tail, head+self._ring_size)
+            sl[self._timeaxis] = slice(tail, head+self._ring_size)
             self._numpyarr[sl] = data
             
             #part1 : in the second ring
-            sl1 = [slice(None)] * self._ndim 
-            sl1[self._time_axis] = slice(tail+self._ring_size, None)
-            sl2 = [slice(None)] * self._ndim 
-            sl2[self._time_axis] = slice(None, size1)
-            self._numpyarr[sl1] = data[sl2]
+            if size1>0:
+                sl1 = [slice(None)] * self._ndim 
+                sl1[self._timeaxis] = slice(tail+self._ring_size, None)
+                sl2 = [slice(None)] * self._ndim 
+                sl2[self._timeaxis] = slice(None, size1)
+                self._numpyarr[sl1] = data[sl2]
             
             # part2 : in the first ring
-            sl3 = [slice(None)] * self._ndim
-            sl3[self._time_axis] = slice(None, size2)
-            sl4 = [slice(None)] * self._ndim
-            sl4[self._time_axis] = slice(-size2, None)
-            self._numpyarr[sl3] = data[sl4]
+            if size2:
+                sl3 = [slice(None)] * self._ndim
+                sl3[self._timeaxis] = slice(None, size2)
+                sl4 = [slice(None)] * self._ndim
+                sl4[self._timeaxis] = slice(-size2, None)
+                self._numpyarr[sl3] = data[sl4]
             
         self.socket.send(np.int64(index), copy = self.copy)
-        self._index += data.shape[self._time_axis]
+        self._index += data.shape[self._timeaxis]
  
 
 
@@ -401,19 +413,23 @@ class SharedArrayReceiver:
         self.socket = socket
         self.params = params
 
-        self._time_axis = self.params['time_axis']
-        self._ring_size = self.params['shared_array_shape'][self._time_axis]
-        shared_array_shape = list(self.params['shared_array_shape'])
-        self._ndim = len(shared_array_shape)
-        assert self._ndim==len(self.params['shape']), 'shared_array_shape and shape must coherent!'
+        self._timeaxis = self.params['timeaxis']
+        self._ring_size = self.params['sharedarray_shape'][self._timeaxis]
+        sharedarray_shape = list(self.params['sharedarray_shape'])
+        self._ndim = len(sharedarray_shape)
+        assert self._ndim==len(self.params['shape']), 'sharedarray_shape and shape must coherent!'
         if self.params['ring_buffer_method'] == 'double':
-            shared_array_shape[self._time_axis] = self._ring_size*2
-        self._sharedarray = SharedArray(shape = shared_array_shape, dtype = self.params['dtype'], shm_id = self.params['shm_id'])
+            sharedarray_shape[self._timeaxis] = self._ring_size*2
+        self._sharedarray = SharedArray(shape = sharedarray_shape, dtype = self.params['dtype'], shm_id = self.params['shm_id'])
         self._numpyarr = self._sharedarray.to_numpy()
+        self.last_chunk_size = None
+        self.last_index = 0
 
     def recv(self):
         m0 = self.socket.recv()
         index = np.fromstring(m0, dtype = 'int64')[0]
+        self.last_chunk_size = index - self.last_index
+        self.last_index = index
         return index, None
 
     def get_array_slice(self, index, length):
@@ -422,7 +438,7 @@ class SharedArrayReceiver:
             i2 = index%self._ring_size + self._ring_size
             i1 = i2 - length
             sl = [slice(None)] * self._ndim 
-            sl[self._time_axis] = slice(i1,i2)
+            sl[self._timeaxis] = slice(i1,i2)
             return self._numpyarr[sl]
         elif self.params['ring_buffer_method'] == 'single':
             raise(NotImplementedError)

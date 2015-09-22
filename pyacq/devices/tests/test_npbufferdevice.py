@@ -12,10 +12,6 @@ def test_npbufferdevice():
     
     dev = nodegroup.create_node('NumpyDeviceBuffer', name = 'dev')
     dev.configure( nb_channel = 7, sample_interval = 0.0001)
-    stream_dict = dict(protocol = 'tcp', interface = '127.0.0.1', port = '*',
-                        transfertmode = 'plaindata', streamtype = 'analogsignal',
-                        dtype = 'float32', shape = (-1, 16), compression ='',
-                        scale = None, offset = None, units = '' )
     dev.output.configure(protocol = 'tcp', interface = '127.0.0.1', transfertmode = 'plaindata')
     dev.initialize()
     
