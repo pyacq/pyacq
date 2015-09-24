@@ -166,11 +166,7 @@ class Emotiv(Node):
     device_info :  dict containing :
         - Path to the usb hidraw used
     """
-    
-    _input_specs = {'crypted_data'  : dict(streamtype = 'analogsignal',dtype = 'float64',
-                                                            shape = (32, 1), sampling_rate =128.,  time_axis=0)   # is it the correct shape for inputs??
-                            }
-    
+        
     _output_specs = { 'signals'    : dict(streamtype = 'analogsignal',dtype = 'float64',  # bon type ?? 
                                                         shape = (14,1), sampling_rate = 128.,  time_axis=0,
                                                         chan_names = _channel_names), 
