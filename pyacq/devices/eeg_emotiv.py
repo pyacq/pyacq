@@ -95,8 +95,18 @@ class EmotivIOThread(QtCore.QThread):
         self.outputs= outputs
         self.hidraw = hidraw
         self.cipher = cipher
-        self.values = np.zeros((len(_channel_names)))   # is it really usefull ??
-        self.imp = np.zeros((len(_channel_names)))
+        
+        self.values = np.zeros((len(_channel_names)), dtype = np.int64 ) 
+        self.imp = np.zeros((len(_channel_names)), dtype = np.float64 )
+        self.gyro = np.zeros((2), dtype = np.int64)
+        
+        self.num_to_name = { 0 : 'F3',  1:'FC5', 2 : 'AF3',  3 : 'F7', 4:'T7', 5 : 'P7', 
+                                                6 : 'O1', 7 : 'O2', 8: 'P8', 9 : 'T8', 10: 'F8', 11 : 'AF4', 
+                                                12 : 'FC6', 13: 'F4', 14 : 'F8', 15:'AF4', 
+                                                64 : 'F3', 65 : 'FC5', 66 : 'AF3', 67 : 'F7', 68 : 'T7', 69 : 'P7', 
+                                                70 : 'O1', 71 : 'O2', 72: 'P8', 73 : 'T8', 74: 'F8', 75 : 'AF4', 
+                                                76 : 'FC6', 77: 'F4', 78 : 'F8', 79:'AF4', 
+                                                80 : 'FC6'}
         
         self.lock = Mutex()
         self.running = False
@@ -106,7 +116,10 @@ class EmotivIOThread(QtCore.QThread):
             self.running = True
         n = 0
         
-        while True:
+        while True:  
+            with self.lock:
+                if not self.running:
+                    break
             crypted_data = self.hidraw.read(32)
             print ("crypted_data : ", crypted_data)
             data = self.cipher.decrypt(crypted_data[:16]) + self.cipher.decrypt(crypted_data[16:])
@@ -114,16 +127,9 @@ class EmotivIOThread(QtCore.QThread):
             
             #~ sensor_num = ord(data[0])
             sensor_num = data[0]
-            num_to_name = { 0 : 'F3',  1:'FC5', 2 : 'AF3',  3 : 'F7', 4:'T7', 5 : 'P7', 
-                                                6 : 'O1', 7 : 'O2', 8: 'P8', 9 : 'T8', 10: 'F8', 11 : 'AF4', 
-                                                12 : 'FC6', 13: 'F4', 14 : 'F8', 15:'AF4', 
-                                                64 : 'F3', 65 : 'FC5', 66 : 'AF3', 67 : 'F7', 68 : 'T7', 69 : 'P7', 
-                                                70 : 'O1', 71 : 'O2', 72: 'P8', 73 : 'T8', 74: 'F8', 75 : 'AF4', 
-                                                76 : 'FC6', 77: 'F4', 78 : 'F8', 79:'AF4', 
-                                                80 : 'FC6',
-                                                }
-            if sensor_num in num_to_name:
-                sensor_name = num_to_name[sensor_num]
+            
+            if sensor_num in self.num_to_name:
+                sensor_name = self.num_to_name[sensor_num]
                 impedance_qualities[sensor_name] = get_level(data, _quality_bits) / 540
                 print (impedance_qualities)
             
@@ -133,8 +139,8 @@ class EmotivIOThread(QtCore.QThread):
                 self.values[c] = get_level(data, bits)
                 self.imp[c] = impedance_qualities[_channel_name]
             
-            gyroX = ord(data[29]) - 106
-            gyroY = ord(data[30]) - 105
+            self.gyro[0] = ord(data[29]) - 106 #X
+            self.gyro[1] = ord(data[30]) - 105 #Y
                
             n += 1
             self.outputs['signals'].send(n, self.values)
@@ -165,15 +171,16 @@ class Emotiv(Node):
     ----
     device_info :  dict containing :
         - Path to the usb hidraw used
+        - Serial number of USB key
     """
         
-    _output_specs = { 'signals'    : dict(streamtype = 'analogsignal',dtype = 'float64',  # bon type ?? 
+    _output_specs = { 'signals'    : dict(streamtype = 'analogsignal',dtype = 'int64', 
                                                         shape = (14,1), sampling_rate = 128.,  time_axis=0,
                                                         chan_names = _channel_names), 
                                 'impedances' : dict(streamtype = 'analogsignal',dtype = 'float64',
                                                         shape = (14,1), sampling_rate = 128.,  time_axis=0,
                                                         chan_names = _channel_names), 
-                                'gyro'           : dict(streamtype = 'analogsignal',dtype = 'float64',
+                                'gyro'           : dict(streamtype = 'analogsignal',dtype = 'int64',
                                                         shape = (2,1), sampling_rate = 128.,  time_axis=0)
                                 }
         
@@ -197,7 +204,7 @@ class Emotiv(Node):
             
     def _stop(self):
         self._thread.stop()
-        self._running = False
+        #self._running = False
             
     def _close(self):
         close(self.device_path)
