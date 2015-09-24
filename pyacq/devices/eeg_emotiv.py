@@ -83,22 +83,26 @@ def get_level(data, bits):
     for i in range(13, -1, -1):
         level <<= 1
         b, o = (bits[i] / 8) + 1, bits[i] % 8
-        #~ level |= (ord(data[b]) >> o) & 1
-        int(b)
+        #~ level |= (ord(data[b]) >> o) & 1                    #Why b is a float that makes ord hungry ?
+        b = int(b)                                                         
         level |= (data[b] >> o) & 1
     return level
 
 
 class EmotivIOThread(QtCore.QThread):
-    def __init__(self, hidraw, cipher, outputs, parent = None):
+    def __init__(self, hidraw_file, cipher, outputs, parent = None):
         QtCore.QThread.__init__(self)
         self.outputs= outputs
-        self.hidraw = hidraw
+        self.hidraw_file = hidraw_file
         self.cipher = cipher
         
         self.values = np.zeros((len(_channel_names)), dtype = np.int64 ) 
         self.imp = np.zeros((len(_channel_names)), dtype = np.float64 )
         self.gyro = np.zeros((2), dtype = np.int64)
+        
+        self.impedance_qualities = { }
+        for name in _channel_names + ['X', 'Y', 'Unknown']:
+            self.impedance_qualities[name] = 0.
         
         self.num_to_name = { 0 : 'F3',  1:'FC5', 2 : 'AF3',  3 : 'F7', 4:'T7', 5 : 'P7', 
                                                 6 : 'O1', 7 : 'O2', 8: 'P8', 9 : 'T8', 10: 'F8', 11 : 'AF4', 
@@ -120,32 +124,52 @@ class EmotivIOThread(QtCore.QThread):
             with self.lock:
                 if not self.running:
                     break
-            crypted_data = self.hidraw.read(32)
-            print ("crypted_data : ", crypted_data)
-            data = self.cipher.decrypt(crypted_data[:16]) + self.cipher.decrypt(crypted_data[16:])
-            print ("data : ", data)
+            crypted_dataBuffer = bytearray(self.hidraw_file.read(32))
+            print ("crypted_data : ", crypted_dataBuffer)
+            print ("type crypted_dataBuffer : ", type(crypted_dataBuffer))
+            
+            #~ crypted_data.decode("utf-8")
+            #~ crypted_data = crypted_data.decode('latin-1').encode('utf-8')
+            #~ print ("str(crypted_data, 'utf-8') : ", str(crypted_data, 'utf-8'))
+            #~ print ("type crypted_data : ", type(crypted_data))
+            #~ print ("len : ", len(crypted_dataBuffer[:16]))
+            #~ print ("crypted_data : ", crypted_dataBuffer[:16])
+            #~ self.crypted_data = crypted_dataBuffer[:16]
+            
+            data = self.cipher.decrypt(bytes(crypted_dataBuffer[:16])) +self.cipher.decrypt(bytes(crypted_dataBuffer[16:]))
+            print ("Yes! binary decrypted data : ", data)
             
             #~ sensor_num = ord(data[0])
             sensor_num = data[0]
             
             if sensor_num in self.num_to_name:
                 sensor_name = self.num_to_name[sensor_num]
-                impedance_qualities[sensor_name] = get_level(data, _quality_bits) / 540
-                print (impedance_qualities)
+                self.impedance_qualities[sensor_name] = get_level(data, _quality_bits) / 540
+                print (self.impedance_qualities)
             
             for c, channel_name in enumerate(_channel_names):
                 bits = _sensorBits[channel_name]
                 # channel value
                 self.values[c] = get_level(data, bits)
-                self.imp[c] = impedance_qualities[_channel_name]
+                self.imp[c] = self.impedance_qualities[channel_name]
             
-            self.gyro[0] = ord(data[29]) - 106 #X
-            self.gyro[1] = ord(data[30]) - 105 #Y
-               
+            print ("final values : ", self.values)
+            print ("type values : ", type(self.values))
+            print ("size values : ", np.size(self.values))
+            print ("final imp : ", self.imp)
+            
+            #~ self.gyro[0] = ord(data[29]) - 106 #X        #Why b is a float that makes ord hungry ?
+            #~ self.gyro[1] = ord(data[30]) - 105 #Y
+            self.gyro[0] = data[29]- 106 #X
+            self.gyro[1] = data[30] - 105 #Y
+            
             n += 1
             self.outputs['signals'].send(n, self.values)
-            self.outputs['impredances'].send(n, self.imp)
-            self.outputs['gyro'].send(n, [gyroX, gyroY])
+            self.outputs['impedances'].send(n, self.imp)
+            self.outputs['gyro'].send(n,self.gyro)
+            
+            # Maybe not needed if hidraw handle it ?
+            time.sleep(1.)#/self.outputs['signals'].params['sampling_rate'])
 
 
     def stop(self):
@@ -195,16 +219,17 @@ class Emotiv(Node):
             
     def _initialize(self):
         self.cipher = setupCrypto(self.device_info['serial'])
-        #~ self.hidraw = open(self.device_info['path'],  mode = 'rb') # read as binary
-        self.hidraw = open(self.device_info['path'],  encoding="latin-1")
+        self.hidraw_file = open(self.device_info['path'],  mode = 'rb') # read as binary
+        #~ self.hidraw_file = open(self.device_info['path'],  encoding="latin-1")
+        #~ self.hidraw_file = open(self.device_info['path'],  encoding="CP-1252")
+        #~ self.hidraw_file = open(self.device_info['path'])
             
     def _start(self):
-        self._thread = EmotivIOThread(self.hidraw, self.cipher, self.outputs)
+        self._thread = EmotivIOThread(self.hidraw_file, self.cipher, self.outputs)
         self._thread.start()
             
     def _stop(self):
         self._thread.stop()
-        #self._running = False
             
     def _close(self):
         close(self.device_path)
