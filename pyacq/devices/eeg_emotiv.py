@@ -134,13 +134,13 @@ class EmotivIOThread(QtCore.QThread):
             for c, channel_name in enumerate(_channel_names):
                 bits = _sensorBits[channel_name]
                 # channel value
-                self.values[0][c] = get_level(data, bits)
-                self.imp[0][c] = self.impedance_qualities[channel_name]
+                self.values[0,c] = get_level(data, bits)
+                self.imp[0,c] = self.impedance_qualities[channel_name]
             
             #~ self.gyro[0] = ord(data[29]) - 106 #X        #Why b is a float that makes ord hungry ?
             #~ self.gyro[1] = ord(data[30]) - 105 #Y
-            self.gyro[0][0] = data[29]- 106 #X
-            self.gyro[0][1] = data[30] - 105 #Y
+            self.gyro[0,0] = data[29]- 106 #X
+            self.gyro[0,1] = data[30] - 105 #Y
             
             n += 1
             self.outputs['signals'].send(n, self.values)
