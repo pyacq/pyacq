@@ -246,6 +246,7 @@ class PlainDataSender:
         return index, data
     
     def send(self, index, data):
+        #TODO deal when data is nparray and self.copy is False and a.flags['C_CONTIGUOUS']=False
         for f in self.funcs:
             index, data = f(index, data)
         self.socket.send_multipart([np.int64(index), data], copy = self.copy)

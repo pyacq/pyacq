@@ -2,8 +2,10 @@ from pyqtgraph.Qt import QtCore, QtGui
 from pyqtgraph.util.mutex import Mutex
 import weakref
 import numpy as np
+from collections import OrderedDict
 
 from .node import Node, register_node_type
+from .stream import OutputStream
 
 
 class ThreadPollInput(QtCore.QThread):
@@ -104,5 +106,71 @@ class StreamConverter(Node):
     def _close(self):
         pass
 
-
 register_node_type(StreamConverter)
+
+
+class StreamSplitter(Node):
+    """
+    StreamSplitter take a multi signal as input and split it as N single signal output.
+    
+    Work only for  transfermode = 'plaindata'.
+    
+    usage:
+    splitter = StreamSplitter()
+    splitter.configure(nb_channel)
+    splitter.input.connect(someinput)
+    for output in splitter.outputs.values():
+        output.configure(someotherspec)
+    splitter.initialize()
+    splitter.start()
+    
+    """
+    _input_specs = {'in' : {}}
+    _output_specs = {}#done dynamically in _configure
+    
+    def __init__(self, **kargs):
+        Node.__init__(self, **kargs)
+    
+    def _configure(self, nb_channel = 1):
+        self.nb_channel = nb_channel
+        
+        #overwrite
+        self.outputs = OrderedDict(  (str(i),OutputStream(spec = {})) for i in range(self.nb_channel) )
+    
+    def check_input_specs(self):
+        assert self.input.params['transfermode'] == 'plaindata', 'StreamSplitter work only for transfermode=plaindata'
+
+    def check_output_specs(self):
+        for output in self.outputs.values():
+            if self.input.params['timeaxis']==0:
+                assert output.params['shape'][1] == 1, 'StreamSplitter: wrong shape'
+            else:
+                assert output.params['shape'][0] == 1, 'StreamSplitter: wrong shape'
+        
+    def _initialize(self):
+        self.poller = ThreadPollInput(input_stream = self.input)
+        self.poller.new_data.connect(self.on_new_data)
+        if self.input.params['timeaxis']==0:
+            self.channelaxis = 1
+        else:
+            self.channelaxis = 0
+    
+    def on_new_data(self, pos, arr):
+        if self.channelaxis == 1:
+            for i in range(self.nb_channel):
+                self.outputs[str(i)].send(pos, arr[:, i:i+1].copy())
+        else:
+            for i in range(self.nb_channel):
+                self.outputs[str(i)].send(pos, arr[i:i+1, :].copy())
+    
+    def _start(self):
+        self.poller.start()
+
+    def _stop(self):
+        self.poller.stop()
+        self.poller.wait()
+    
+    def _close(self):
+        pass
+
+register_node_type(StreamSplitter)
