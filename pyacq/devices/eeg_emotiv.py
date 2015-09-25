@@ -41,7 +41,6 @@ def setupCrypto(serial):
     type = 0 #feature[5]
     type &= 0xF
     type = 0
-    #I believe type == True is for the Dev headset, I'm not using that. That's the point of this library in the first place I thought.
     k = ['\0'] * 16
     k[0] = serial[-1]
     k[1] = '\0'
@@ -70,8 +69,6 @@ def setupCrypto(serial):
     k[13] = '\0'
     k[14] = serial[-4]
     k[15] = 'P'
-    #It doesn't make sense to have more than one greenlet handling this as data needs to be in order anyhow. I guess you could assign an ID or something
-    #to each packet but that seems like a waste also or is it? The ID might be useful if your using multiple headsets or usb sticks.
     key = ''.join(k)
     iv = Random.new().read(AES.block_size)
     cipher = AES.new(key, AES.MODE_ECB, iv)
@@ -96,9 +93,9 @@ class EmotivIOThread(QtCore.QThread):
         self.hidraw_file = hidraw_file
         self.cipher = cipher
         
-        self.values = np.zeros((len(_channel_names)), dtype = np.int64 ) 
-        self.imp = np.zeros((len(_channel_names)), dtype = np.float64 )
-        self.gyro = np.zeros((2), dtype = np.int64)
+        self.values = np.zeros((1, len(_channel_names)), dtype = np.int64 ) 
+        self.imp = np.zeros((1, len(_channel_names)), dtype = np.float64 )
+        self.gyro = np.zeros((1, 2), dtype = np.int64)
         
         self.impedance_qualities = { }
         for name in _channel_names + ['X', 'Y', 'Unknown']:
@@ -124,20 +121,8 @@ class EmotivIOThread(QtCore.QThread):
             with self.lock:
                 if not self.running:
                     break
-            crypted_dataBuffer = bytearray(self.hidraw_file.read(32))
-            print ("crypted_data : ", crypted_dataBuffer)
-            print ("type crypted_dataBuffer : ", type(crypted_dataBuffer))
-            
-            #~ crypted_data.decode("utf-8")
-            #~ crypted_data = crypted_data.decode('latin-1').encode('utf-8')
-            #~ print ("str(crypted_data, 'utf-8') : ", str(crypted_data, 'utf-8'))
-            #~ print ("type crypted_data : ", type(crypted_data))
-            #~ print ("len : ", len(crypted_dataBuffer[:16]))
-            #~ print ("crypted_data : ", crypted_dataBuffer[:16])
-            #~ self.crypted_data = crypted_dataBuffer[:16]
-            
+            crypted_dataBuffer = bytearray(self.hidraw_file.read(32))         
             data = self.cipher.decrypt(bytes(crypted_dataBuffer[:16])) +self.cipher.decrypt(bytes(crypted_dataBuffer[16:]))
-            print ("Yes! binary decrypted data : ", data)
             
             #~ sensor_num = ord(data[0])
             sensor_num = data[0]
@@ -145,23 +130,17 @@ class EmotivIOThread(QtCore.QThread):
             if sensor_num in self.num_to_name:
                 sensor_name = self.num_to_name[sensor_num]
                 self.impedance_qualities[sensor_name] = get_level(data, _quality_bits) / 540
-                print (self.impedance_qualities)
             
             for c, channel_name in enumerate(_channel_names):
                 bits = _sensorBits[channel_name]
                 # channel value
-                self.values[c] = get_level(data, bits)
-                self.imp[c] = self.impedance_qualities[channel_name]
-            
-            print ("final values : ", self.values)
-            print ("type values : ", type(self.values))
-            print ("size values : ", np.size(self.values))
-            print ("final imp : ", self.imp)
+                self.values[0][c] = get_level(data, bits)
+                self.imp[0][c] = self.impedance_qualities[channel_name]
             
             #~ self.gyro[0] = ord(data[29]) - 106 #X        #Why b is a float that makes ord hungry ?
             #~ self.gyro[1] = ord(data[30]) - 105 #Y
-            self.gyro[0] = data[29]- 106 #X
-            self.gyro[1] = data[30] - 105 #Y
+            self.gyro[0][0] = data[29]- 106 #X
+            self.gyro[0][1] = data[30] - 105 #Y
             
             n += 1
             self.outputs['signals'].send(n, self.values)
@@ -169,7 +148,7 @@ class EmotivIOThread(QtCore.QThread):
             self.outputs['gyro'].send(n,self.gyro)
             
             # Maybe not needed if hidraw handle it ?
-            time.sleep(1.)#/self.outputs['signals'].params['sampling_rate'])
+            time.sleep(1./self.outputs['signals'].params['sampling_rate'])
 
 
     def stop(self):
@@ -196,17 +175,15 @@ class Emotiv(Node):
     device_info :  dict containing :
         - Path to the usb hidraw used
         - Serial number of USB key
-    """
-        
+    """ 
+    
     _output_specs = { 'signals'    : dict(streamtype = 'analogsignal',dtype = 'int64', 
-                                                        shape = (14,1), sampling_rate = 128.,  time_axis=0,
-                                                        chan_names = _channel_names), 
+                                                        shape = (-1,14), sampling_rate = 128.,  timeaxis=0), 
                                 'impedances' : dict(streamtype = 'analogsignal',dtype = 'float64',
-                                                        shape = (14,1), sampling_rate = 128.,  time_axis=0,
-                                                        chan_names = _channel_names), 
+                                                        shape = (-1,14), sampling_rate = 128.,  time_axis=0),
                                 'gyro'           : dict(streamtype = 'analogsignal',dtype = 'int64',
-                                                        shape = (2,1), sampling_rate = 128.,  time_axis=0)
-                                }
+                                                        shape = (-1,2), sampling_rate = 128.,  time_axis=0)
+                                }  # TODO Why we don't keep channel names ??
         
     def __init__(self, **kargs):
         Node.__init__(self, **kargs)
@@ -220,9 +197,6 @@ class Emotiv(Node):
     def _initialize(self):
         self.cipher = setupCrypto(self.device_info['serial'])
         self.hidraw_file = open(self.device_info['path'],  mode = 'rb') # read as binary
-        #~ self.hidraw_file = open(self.device_info['path'],  encoding="latin-1")
-        #~ self.hidraw_file = open(self.device_info['path'],  encoding="CP-1252")
-        #~ self.hidraw_file = open(self.device_info['path'])
             
     def _start(self):
         self._thread = EmotivIOThread(self.hidraw_file, self.cipher, self.outputs)
