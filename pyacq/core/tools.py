@@ -117,7 +117,7 @@ class StreamSplitter(Node):
     
     usage:
     splitter = StreamSplitter()
-    splitter.configure(nb_channel)
+    splitter.configure()
     splitter.input.connect(someinput)
     for output in splitter.outputs.values():
         output.configure(someotherspec)
@@ -131,11 +131,8 @@ class StreamSplitter(Node):
     def __init__(self, **kargs):
         Node.__init__(self, **kargs)
     
-    def _configure(self, nb_channel = 1):
-        self.nb_channel = nb_channel
-        
-        #overwrite
-        self.outputs = OrderedDict(  (str(i),OutputStream(spec = {})) for i in range(self.nb_channel) )
+    def _configure(self):
+        pass
     
     def check_input_specs(self):
         assert self.input.params['transfermode'] == 'plaindata', 'StreamSplitter work only for transfermode=plaindata'
@@ -146,14 +143,33 @@ class StreamSplitter(Node):
                 assert output.params['shape'][1] == 1, 'StreamSplitter: wrong shape'
             else:
                 assert output.params['shape'][0] == 1, 'StreamSplitter: wrong shape'
+
+    def after_input_connect(self, inputname):
+        if self.input.params['timeaxis']==0:
+            self.channelaxis = 1
+            self.nb_channel = self.input.params['shape'][1]
+            shape = (-1, 1)
+        else:
+            self.channelaxis = 0
+            self.nb_channel = self.input.params['shape'][0]
+            shape = (1, -1)
+        
+        stream_spec = {}
+        stream_spec.update(self.input.params)
+        stream_spec['shape'] = shape
+        stream_spec['port'] = '*'
+        #overwrite
+        self.outputs = OrderedDict()
+        for i in range(self.nb_channel):
+            output = OutputStream(spec = stream_spec)
+            self.outputs[str(i)] = output
+    
+    def after_output_configure(self, outputname):
+        pass
         
     def _initialize(self):
         self.poller = ThreadPollInput(input_stream = self.input)
         self.poller.new_data.connect(self.on_new_data)
-        if self.input.params['timeaxis']==0:
-            self.channelaxis = 1
-        else:
-            self.channelaxis = 0
     
     def on_new_data(self, pos, arr):
         if self.channelaxis == 1:

@@ -146,10 +146,10 @@ def test_stream_splitter():
     all_instream = []
     all_poller = []
     splitter = StreamSplitter()
-    splitter.configure(nb_channel = nb_channel)
+    splitter.configure()
     splitter.input.connect(outstream)
     for name, output in splitter.outputs.items():
-        output.configure(shape = (-1, 1))
+        output.configure()
         instream = InputStream()
         instream.connect(output)
         poller = ThreadPollInput(input_stream = instream)
@@ -180,6 +180,6 @@ def test_stream_splitter():
     
 
 if __name__ == '__main__':
-    test_ThreadPollInput()
-    test_streamconverter()
+    #~ test_ThreadPollInput()
+    #~ test_streamconverter()
     test_stream_splitter()

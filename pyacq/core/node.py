@@ -54,9 +54,8 @@ class Node(QtCore.QObject):
         self._configured = False
         self._initialized = False
         
-        
-        self.inputs = { name:InputStream(spec = spec) for name, spec in self._input_specs.items() }
-        self.outputs = { name:OutputStream(spec = spec) for name, spec in self._output_specs.items() }
+        self.inputs = { name:InputStream(spec = spec, node = self, name = name) for name, spec in self._input_specs.items() }
+        self.outputs = { name:OutputStream(spec = spec, node = self, name = name) for name, spec in self._output_specs.items() }
     
     @property
     def input(self):
@@ -179,10 +178,22 @@ class Node(QtCore.QObject):
     
     #That method SHOULD be overwritten
     def check_input_specs(self):
+        #call at the beginning of Node.initialize()
         pass
     
     #That method SHOULD be overwritten
     def check_output_specs(self):
+        #call at the beginning of Node.initialize()
+        pass
+    
+    #That method SHOULD be overwritten
+    def after_input_connect(self, inputname):
+        #call after one input of the Node have been connected
+        pass
+    
+    #That method SHOULD be overwritten
+    def after_output_configure(self, outputname):
+        #call after one output of the Node have been configured
         pass
     
 
