@@ -18,16 +18,13 @@ except ImportError:
     HAVE_SCIPY = False
 
 
-
-
-
 default_params = [
         {'name': 'xsize', 'type': 'float', 'value': 10., 'step': 0.1, 'limits' : (.1, 60)},
         {'name': 'nb_column', 'type': 'int', 'value': 1},
         {'name': 'background_color', 'type': 'color', 'value': 'k' },
         {'name': 'colormap', 'type': 'list', 'value': 'jet', 'values' : ['jet', 'gray', 'bone', 'cool', 'hot', ] },
         {'name': 'refresh_interval', 'type': 'int', 'value': 500 , 'limits':[5, 1000]},
-        #~ {'name': 'display_labels', 'type': 'bool', 'value': False },
+        #~ {'name': 'display_labels', 'type': 'bool', 'value': False }, #TODO when title
         {'name' : 'timefreq' , 'type' : 'group', 'children' : [
                         {'name': 'f_start', 'type': 'float', 'value': 3., 'step': 1.},
                         {'name': 'f_stop', 'type': 'float', 'value': 90., 'step': 1.},
@@ -40,9 +37,6 @@ default_by_channel_params = [
                 {'name': 'visible', 'type': 'bool', 'value': True},
                 {'name': 'clim', 'type': 'float', 'value': 1.},
             ]
-
-
-
 
 
 class QTimeFreq(WidgetNode):
@@ -112,10 +106,6 @@ class QTimeFreq(WidgetNode):
             proxy_input.connect(worker.output)
             self.input_proxys.append(proxy_input)
             
-            #~ print('i',i)
-            #~ print(worker.output.params)
-            #~ print(proxy_input.params)
-            
             poller = ThreadPollInput(input_stream = proxy_input)
             poller.new_data.connect(self._on_new_map)
             poller.i = i
@@ -144,8 +134,6 @@ class QTimeFreq(WidgetNode):
         if self.with_user_dialog:
             self.params_controler = TimeFreqControler(parent = self, viewer = self)
             self.params_controler.setWindowFlags(QtCore.Qt.Window)
-            #~ self.viewBox.doubleclicked.connect(self.show_params_controler)
-            pass
         else:
             self.params_controler = None
         
@@ -159,7 +147,6 @@ class QTimeFreq(WidgetNode):
         for worker in self.workers:
             worker.start()
         for poller in self.pollers:
-            #~ print(poller.i, poller, poller.input_stream().params, poller.input_stream().socket)
             poller.start()
     
     def _stop(self):
@@ -263,25 +250,18 @@ class QTimeFreq(WidgetNode):
         tfr_params = self.params.param('timefreq')
         for i in range(self.nb_channel):
             if not self.by_channel_params.children()[i]['visible']: continue
-            #~ plot = self.plots[i]
-            #~ self.maps[i] = np.zeros(self.wavelet_fourrier.shape)
             for item in self.plots[i].items:
                 #remove old images
                 self.plots[i].removeItem(item)
-            #~ print(self.plots[i].items)
+            
             image = pg.ImageItem()
             self.plots[i].addItem(image)
             self.plots[i].setYRange(tfr_params['f_start'], tfr_params['f_stop'])
             self.images[i] =image
-            #~ clim = self.by_channel_params.children()[i]['clim']
-            #~ self.images[i].setImage(self.maps[i], lut = self.lut, levels = [0,clim])
-            
-            #~ f_start, f_stop = tfr_params['f_start'], tfr_params['f_stop']
-            #~ print(-self.wanted_size, f_start,self.wanted_size, f_stop-f_start)
-            #~ image.setRect(QtCore.QRectF(-self.wanted_size, f_start,self.wanted_size, f_stop-f_start))
-    
 
-        
+            clim = self.by_channel_params.children()[i]['clim']
+            f_start, f_stop = tfr_params['f_start'], tfr_params['f_stop']
+            self.images[i].setImage(np.zeros((1,1)), lut = self.lut, levels = [0,clim])
     
     def on_param_change(self, params, changes):
         do_create_grid = False
@@ -299,6 +279,11 @@ class QTimeFreq(WidgetNode):
             if param.name()=='refresh_interval':
                 for worker in self.workers:
                     worker.set_interval(data)
+            if param.name()=='clim':
+                i = self.by_channel_params.children().index(param.parent())
+                clim = param.value()
+                if self.images[i] is not None:
+                    self.images[i].setImage(self.images[i].image, lut = self.lut, levels = [0,clim])
             
             #difered action
             if param.name()=='xsize':
@@ -309,6 +294,8 @@ class QTimeFreq(WidgetNode):
                 do_create_grid = True
             if param.name() in ('f_start', 'f_stop', 'deltafreq', 'f0', 'normalisation'):
                 do_initialize_time_freq = True
+            if param.name()=='visible':
+                do_create_grid = True
         
         do_initialize_plots = do_initialize_plots or do_initialize_time_freq or do_create_grid
         with self.mutex_action:
@@ -327,18 +314,15 @@ class QTimeFreq(WidgetNode):
     def apply_actions(self):
         with self.mutex_action:
             for action in self.actions:
-                print('apply_actions', action)
                 action()
             self.actions = []
 
     def _on_new_map(self, pos, data):
         i = self.sender().i
-        #~ print('_on_new_map', i, pos, data.shape)
-        #~ print(data)
+        if self.images[i] is None: return
         tfr_params = self.params.param('timefreq')
-        clim = self.by_channel_params.children()[i]['clim']
         f_start, f_stop = tfr_params['f_start'], tfr_params['f_stop']
-        self.images[i].setImage(data, lut = self.lut, levels = [0,clim])
+        self.images[i].updateImage(data)
         self.images[i].setRect(QtCore.QRectF(-self.wanted_size, f_start,self.wanted_size, f_stop-f_start))
         self.plots[i].setXRange( -self.wanted_size, 0.)
 
@@ -352,10 +336,24 @@ class QTimeFreq(WidgetNode):
         limits = self.params.param('xsize').opts['limits']
         if newsize>limits[0] and newsize<limits[1]:
             self.params['xsize'] = newsize    
-    
-        
-register_node_type(QTimeFreq)
 
+    def auto_clim(self, identic = True):
+        if identic:
+            all = [ ]
+            for i, p in enumerate(self.by_channel_params.children()):
+                if p.param('visible').value():
+                    all.append(np.max(self.images[i].image))
+            clim = np.max(all)*1.1
+            for i, p in enumerate(self.by_channel_params.children()):
+                if p.param('visible').value():
+                    p.param('clim').setValue(float(clim))
+        else:
+            for i, p in enumerate(self.by_channel_params.children()):
+                if p.param('visible').value():
+                    clim = np.max(self.images[i].image)*1.1
+                    p.param('clim').setValue(float(clim))
+
+register_node_type(QTimeFreq)
 
 
 def generate_wavelet_fourier(len_wavelet, f_start, f_stop, deltafreq, sampling_rate, f0, normalisation):
@@ -507,7 +505,6 @@ class TimeFreqCompute(Node):
         self.timer.setInterval(interval)
     
     def compute(self):
-        #~ print('compute', self.wavelet_fourrier)
         if self.wavelet_fourrier is None: 
             # not on_fly_change_wavelet yet
             return
@@ -532,8 +529,6 @@ class TimeFreqCompute(Node):
         #send map
         self._n += 1
         self.output.send(self._n, wt)
-        #~ print('compute', self._n, wt.shape)
-        #~ print('self.output.send', self.output.params)
 
 register_node_type(TimeFreqCompute)
 
@@ -567,45 +562,39 @@ class TimeFreqControler(QtGui.QWidget):
         v = QtGui.QVBoxLayout()
         h.addLayout(v)
         
-        
-        
-        #~ if self.viewer.nb_channel>1:
-            #~ v.addWidget(QtGui.QLabel('<b>Select channel...</b>'))
-            #~ names = [ p.name() for p in self.viewer.by_channel_params ]
-            #~ self.qlist = QtGui.QListWidget()
-            #~ v.addWidget(self.qlist, 2)
-            #~ self.qlist.addItems(names)
-            #~ self.qlist.setSelectionMode(QtGui.QAbstractItemView.ExtendedSelection)
+        if self.viewer.nb_channel>1:
+            v.addWidget(QtGui.QLabel('<b>Select channel...</b>'))
+            names = [ p.name() for p in self.viewer.by_channel_params ]
+            self.qlist = QtGui.QListWidget()
+            v.addWidget(self.qlist, 2)
+            self.qlist.addItems(names)
+            self.qlist.setSelectionMode(QtGui.QAbstractItemView.ExtendedSelection)
             
-            #~ for i in range(len(names)):
-                #~ self.qlist.item(i).setSelected(True)            
-            #~ v.addWidget(QtGui.QLabel('<b>and apply...<\b>'))
-             
-            
-            
+            for i in range(len(names)):
+                self.qlist.item(i).setSelected(True)            
+            v.addWidget(QtGui.QLabel('<b>and apply...<\b>'))
         
-        # Gain and offset
-        #~ but = QtGui.QPushButton('set visble')
-        #~ v.addWidget(but)
-        #~ but.clicked.connect(self.on_set_visible)
+        # 
+        but = QtGui.QPushButton('set visble')
+        v.addWidget(but)
+        but.clicked.connect(self.on_set_visible)
         
-        #~ for i,text in enumerate(['Real scale (gain = 1, offset = 0)',
-                            #~ 'Fake scale (same gain for all)',
-                            #~ 'Fake scale (gain per channel)',]):
-            #~ but = QtGui.QPushButton(text)
-            #~ v.addWidget(but)
-            #~ but.mode = i
-            #~ but.clicked.connect(self.on_auto_gain_and_offset)
+        but = QtGui.QPushButton('Automatic clim (same for all)')
+        but.clicked.connect(lambda: self.auto_clim( identic = True))
+        v.addWidget(but)
+
+        but = QtGui.QPushButton('Automatic clim (independant)')
+        but.clicked.connect(lambda: self.auto_clim( identic = False))
+        v.addWidget(but)
         
-        
-        #~ v.addWidget(QtGui.QLabel(self.tr('<b>Gain zoom (mouse wheel on graph):</b>'),self))
-        #~ h = QtGui.QHBoxLayout()
-        #~ v.addLayout(h)
-        #~ for label, factor in [ ('--', 1./10.), ('-', 1./1.3), ('+', 1.3), ('++', 10.),]:
-            #~ but = QtGui.QPushButton(label)
-            #~ but.factor = factor
-            #~ but.clicked.connect(self.on_gain_zoom)
-            #~ h.addWidget(but)
+        v.addWidget(QtGui.QLabel(self.tr('<b>Clim change (mouse wheel on graph):</b>'),self))
+        h = QtGui.QHBoxLayout()
+        v.addLayout(h)
+        for label, factor in [ ('--', 1./10.), ('-', 1./1.3), ('+', 1.3), ('++', 10.),]:
+            but = QtGui.QPushButton(label)
+            but.factor = factor
+            but.clicked.connect(self.clim_zoom)
+            h.addWidget(but)
     
     @property
     def viewer(self):
@@ -624,14 +613,12 @@ class TimeFreqControler(QtGui.QWidget):
         visibles = self.selected
         for i,param in enumerate(self.viewer.by_channel_params.children()):
             param['visible'] = visibles[i]
-    
-    #~ def on_auto_gain_and_offset(self):
-        #~ mode = self.sender().mode
-        #~ self.viewer.auto_gain_and_offset(mode = mode, visibles = self.selected)
-    
-    #~ def on_gain_zoom(self):
-        #~ factor = self.sender().factor
-        #~ self.viewer.gain_zoom(factor, selected = self.selected)
 
+    def auto_clim(self, identic = True):
+        self.viewer.auto_clim(identic=identic)
 
+    def clim_zoom(self):
+        factor = self.sender().factor
+        for i, p in enumerate(self.viewer.by_channel_params.children()):
+            p.param('clim').setValue(p.param('clim').value()*factor)
 

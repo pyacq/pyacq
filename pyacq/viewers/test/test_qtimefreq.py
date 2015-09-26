@@ -9,7 +9,7 @@ import time
 from pyqtgraph.Qt import QtCore, QtGui
 import pyqtgraph as pg
 
-nb_channel = 2
+nb_channel = 16
 sampling_rate = 10000.
 chunksize = 100
 
@@ -88,7 +88,7 @@ def test_qtimefreq_simple():
     viewer.input.connect(dev.output)
     viewer.initialize()
     viewer.show()
-    viewer.params['nb_column'] = 3
+    viewer.params['nb_column'] = 4
 
 
     def terminate():
