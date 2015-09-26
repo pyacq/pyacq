@@ -1,7 +1,7 @@
 import pytest
 
 from pyacq import create_manager
-from pyacq.viewers.qtimefreq  import TimeFreqCompute, QTimeFreqViewer, HAVE_SCIPY, generate_wavelet_fourier
+from pyacq.viewers.qtimefreq  import TimeFreqCompute, QTimeFreq, HAVE_SCIPY, generate_wavelet_fourier
 from pyacq.devices import NumpyDeviceBuffer
 import numpy as np
 import time
@@ -9,7 +9,7 @@ import time
 from pyqtgraph.Qt import QtCore, QtGui
 import pyqtgraph as pg
 
-nb_channel = 32
+nb_channel = 2
 sampling_rate = 10000.
 chunksize = 100
 
@@ -64,7 +64,7 @@ def test_TimeFreqCompute():
 @pytest.mark.skipif(not HAVE_SCIPY, reason = 'no HAVE_SCIPY')
 def test_qtimefreq_simple():
     
-    man = create_manager(auto_close_at_exit = False)
+    man = create_manager(auto_close_at_exit = True)
     ng = man.create_nodegroup()
     
     app = pg.mkQApp()
@@ -83,11 +83,12 @@ def test_qtimefreq_simple():
     dev.initialize()
     
     
-    viewer = QTimeFreqViewer()
+    viewer = QTimeFreq()
     viewer.configure(with_user_dialog = True)
     viewer.input.connect(dev.output)
     viewer.initialize()
     viewer.show()
+    viewer.params['nb_column'] = 3
 
 
     def terminate():
@@ -103,11 +104,11 @@ def test_qtimefreq_simple():
     # start for a while
     timer = QtCore.QTimer(singleShot = True, interval = 2000)
     timer.timeout.connect(terminate)
-    timer.start()
+    #~ timer.start()
     
     app.exec_()
 
-    man.close()
+    #~ man.close()
 
 
 @pytest.mark.skipif(not HAVE_SCIPY, reason = 'no HAVE_SCIPY')
@@ -118,7 +119,7 @@ def test_stimefreq_distributed():
 
 
 if __name__ == '__main__':
-    test_TimeFreqCompute()
-    #~ test_qtimefreq_simple()
+    #~ test_TimeFreqCompute()
+    test_qtimefreq_simple()
     #~ test_stimefreq_distributed()
 

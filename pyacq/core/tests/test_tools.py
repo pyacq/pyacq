@@ -180,6 +180,6 @@ def test_stream_splitter():
     
 
 if __name__ == '__main__':
-    #~ test_ThreadPollInput()
-    #~ test_streamconverter()
+    test_ThreadPollInput()
+    test_streamconverter()
     test_stream_splitter()
