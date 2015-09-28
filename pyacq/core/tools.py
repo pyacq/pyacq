@@ -7,6 +7,7 @@ from collections import OrderedDict
 from .node import Node, register_node_type
 from .stream import OutputStream
 
+import time
 
 class ThreadPollInput(QtCore.QThread):
     """
@@ -34,6 +35,7 @@ class ThreadPollInput(QtCore.QThread):
             ev = self.input_stream().poll(timeout = self.timeout)
             if ev>0:
                 pos, data = self.input_stream().recv()
+                print('ThreadPollInput/eimit data', id(data))
                 self.new_data.emit(pos, data)
         
     def stop(self):
@@ -172,12 +174,14 @@ class StreamSplitter(Node):
         self.poller.new_data.connect(self.on_new_data)
     
     def on_new_data(self, pos, arr):
+        print('Splitter.on_new_data', id(arr))
+        
         if self.channelaxis == 1:
             for i in range(self.nb_channel):
                 self.outputs[str(i)].send(pos, arr[:, i:i+1].copy())
         else:
             for i in range(self.nb_channel):
-                self.outputs[str(i)].send(pos, arr[i:i+1, :].copy())
+                self.outputs[str(i)].send(pos, arr[i:i+1, :])
     
     def _start(self):
         self.poller.start()

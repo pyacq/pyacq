@@ -4,6 +4,7 @@ from pyqtgraph.util.mutex import Mutex
 
 import numpy as np
 import weakref
+import time
 
 from ..core import (WidgetNode, Node, register_node_type,  InputStream, OutputStream,
         ThreadPollInput, StreamConverter, StreamSplitter)
@@ -28,7 +29,7 @@ default_params = [
         {'name' : 'timefreq' , 'type' : 'group', 'children' : [
                         {'name': 'f_start', 'type': 'float', 'value': 3., 'step': 1.},
                         {'name': 'f_stop', 'type': 'float', 'value': 90., 'step': 1.},
-                        {'name': 'deltafreq', 'type': 'float', 'value': 3., 'step': 1.,  'limits' : (0.1, 1.e6)},
+                        {'name': 'deltafreq', 'type': 'float', 'value': 3., 'step': 1.,  'limits' : [0.1, 1.e6]},
                         {'name': 'f0', 'type': 'float', 'value': 2.5, 'step': 0.1},
                         {'name': 'normalisation', 'type': 'float', 'value': 0., 'step': 0.1},]}
     ]
@@ -72,17 +73,21 @@ class QTimeFreq(WidgetNode):
         self.params_controler.show()
         #TODO deal with modality
     
-    def _configure(self, with_user_dialog = True, max_xsize = 60.):
+    def _configure(self, with_user_dialog = True, max_xsize = 60., nodegroup_friends = None):
         self.with_user_dialog = with_user_dialog
         self.max_xsize = max_xsize
+        self.nodegroup_friends = nodegroup_friends
     
-    def _initialize(self):
+    def _initialize(self, ):
         self.sampling_rate = sr = self.input.params['sampling_rate']
         d0, d1 = self.input.params['shape']
         if self.input.params['timeaxis']==0:
             self.nb_channel  = d1
+            sharedarray_shape = (int(sr*self.max_xsize), 1)
         else:
             self.nb_channel  = d0
+            sharedarray_shape = (1, int(sr*self.max_xsize)),
+        print('sharedarray_shape', sharedarray_shape)
         
         #create splitter and worker
         self.splitter = StreamSplitter()
@@ -93,12 +98,21 @@ class QTimeFreq(WidgetNode):
         self.input_proxys = []
         self.pollers = []
         for i in range(self.nb_channel):
-            self.splitter.outputs[str(i)].configure()
+            self.splitter.outputs[str(i)].configure(transfermode='sharedarray', ring_buffer_method='double',
+                                sharedarray_shape=sharedarray_shape, )
+            #~ self.splitter.outputs[str(i)].configure()
             
-            worker = TimeFreqCompute()
+            if self.nodegroup_friends is None:
+                worker = TimeFreqCompute(workernum = i)
+            else:
+                ng = self.nodegroup_friends[i%len(self.nodegroup_friends)]
+                worker = ng.create_node('TimeFreqCompute', workernum = i)
+                print('worker', worker)
+                
             worker.configure(max_xsize = self.max_xsize)
+            print(self.splitter.outputs[str(i)].params)
             worker.input.connect(self.splitter.outputs[str(i)])
-            worker.output.configure()#the shape is after when TimeFreqCompute.on_fly_change_wavelet()
+            worker.output.configure(protocol = 'ipc', transfermode = 'plaindata')#the shape is after when TimeFreqCompute.on_fly_change_wavelet()
             worker.initialize()
             self.workers.append(worker)
             
@@ -144,21 +158,30 @@ class QTimeFreq(WidgetNode):
         
     def _start(self):
         self.splitter.start()
-        for worker in self.workers:
-            worker.start()
-        for poller in self.pollers:
-            poller.start()
+        for i in range(self.nb_channel):
+            if self.by_channel_params.children()[i]['visible']:
+                self.workers[i].start()
+                self.pollers[i].start()
     
     def _stop(self):
-        for worker in self.workers:
-            worker.stop()
-        for poller in self.pollers:
-            poller.stop()
+        for i in range(self.nb_channel):
+            if self.by_channel_params.children()[i]['visible']:
+                self.pollers[i].stop()
+                self.pollers[i].wait()
+                self.workers[i].start()
         self.splitter.stop()
     
     def _close(self):
+        print('ici 1')
+        if self.running():
+            self.stop()
+        print('ici 2')
+        if self.with_user_dialog:
+            self.params_controler.close()
+        print('ici 3')
         for worker in self.workers:
             worker.close()
+        print('ici 4')
         for poller in self.pollers:
             poller.close()
         self.splitter.close()
@@ -249,19 +272,33 @@ class QTimeFreq(WidgetNode):
         
         tfr_params = self.params.param('timefreq')
         for i in range(self.nb_channel):
-            if not self.by_channel_params.children()[i]['visible']: continue
-            for item in self.plots[i].items:
-                #remove old images
-                self.plots[i].removeItem(item)
-            
-            image = pg.ImageItem()
-            self.plots[i].addItem(image)
-            self.plots[i].setYRange(tfr_params['f_start'], tfr_params['f_stop'])
-            self.images[i] =image
-
-            clim = self.by_channel_params.children()[i]['clim']
-            f_start, f_stop = tfr_params['f_start'], tfr_params['f_stop']
-            self.images[i].setImage(np.zeros((1,1)), lut = self.lut, levels = [0,clim])
+            if self.by_channel_params.children()[i]['visible']:
+                for item in self.plots[i].items:
+                    #remove old images
+                    self.plots[i].removeItem(item)
+                
+                clim = self.by_channel_params.children()[i]['clim']
+                f_start, f_stop = tfr_params['f_start'], tfr_params['f_stop']
+                
+                image = pg.ImageItem()
+                image.setImage(np.zeros((self.plot_length,self.wavelet_fourrier.shape[1])), lut = self.lut, levels = [0,clim])
+                self.plots[i].addItem(image)
+                image.setRect(QtCore.QRectF(-self.wanted_size, f_start,self.wanted_size, f_stop-f_start))
+                self.plots[i].setXRange( -self.wanted_size, 0.)
+                self.plots[i].setYRange(f_start, f_stop)
+                self.images[i] =image
+                
+                if self.running() and not self.workers[i].running():
+                    
+                    self.workers[i].start()
+                    self.pollers[i].start()
+                else:
+                    print('not running yet')
+            else:
+                if self.workers[i].running():
+                    self.workers[i].stop()
+                    self.pollers[i].stop()
+                    self.pollers[i].wait()
     
     def on_param_change(self, params, changes):
         do_create_grid = False
@@ -319,12 +356,9 @@ class QTimeFreq(WidgetNode):
 
     def _on_new_map(self, pos, data):
         i = self.sender().i
+        print('_on_new_map', 'data', id(data))
         if self.images[i] is None: return
-        tfr_params = self.params.param('timefreq')
-        f_start, f_stop = tfr_params['f_start'], tfr_params['f_stop']
         self.images[i].updateImage(data)
-        self.images[i].setRect(QtCore.QRectF(-self.wanted_size, f_start,self.wanted_size, f_stop-f_start))
-        self.plots[i].setXRange( -self.wanted_size, 0.)
 
     def clim_zoom(self, factor):
         for i, p in enumerate(self.by_channel_params.children()):
@@ -396,6 +430,101 @@ def generate_wavelet_fourier(len_wavelet, f_start, f_stop, deltafreq, sampling_r
     return wf
 
 
+
+class ThreadCompute(QtCore.QThread):
+    def __init__(self, in_stream, out_stream, parent=None):
+        QtCore.QThread.__init__(self, parent)
+        self.in_stream = weakref.ref(in_stream)
+        self.out_stream = weakref.ref(out_stream)
+        
+        self.sampling_rate = sr = self.in_stream().params['sampling_rate']
+        self.interval = 500
+        self.lock = Mutex()
+        self.running = False
+        
+        self.wavelet_fourrier = None
+        
+    def run(self):
+        import time
+        with self.lock:
+            self.running = True
+        
+        self.head = 0
+        self._n = 0
+        while True:
+            with self.lock:
+                if not self.running:
+                    break
+            
+            while self.in_stream().poll(timeout = 0)>0:
+                #~ print('recv')
+                self.head, _ = self.in_stream().recv()
+            #~ print('head', self.head)
+            
+            self.compute()
+            print('sleep', self.interval/1000.)
+            time.sleep(self.interval/1000.)
+            
+
+    def stop(self):
+        with self.lock:
+            self.running = False
+
+    #~ def on_fly_change_wavelet(self, wavelet_fourrier=None, downsampling_factor=None, sig_chunk_size = None,
+            #~ plot_length=None, filter_a=None, filter_b=None):
+    def on_fly_change_wavelet(self, kargs):
+        
+        self.wavelet_fourrier = kargs['wavelet_fourrier']
+        self.downsampling_factor = kargs['downsampling_factor']
+        self.sig_chunk_size = kargs['sig_chunk_size']
+        self.plot_length = kargs['plot_length']
+        self.filter_a = kargs['filter_a']
+        self.filter_b = kargs['filter_b']
+        self.out_stream().params['shape'] = (self.plot_length, self.wavelet_fourrier.shape[1])
+        self.out_stream().params['sampling_rate'] = self.sampling_rate/self.downsampling_factor
+    
+    def set_interval(self, interval):
+        self.interval = interval
+        #~ self.timer.setInterval(interval)
+    
+    def compute(self):
+        #~ print('compute', self.wavelet_fourrier)
+        if self.wavelet_fourrier is None: 
+            # not on_fly_change_wavelet yet
+            return
+        #~ print(self.wavelet_fourrier.shape)
+        
+        t1 = time.time()
+        head = self.head
+        if self.downsampling_factor>1:
+            head = head - head%self.downsampling_factor
+        full_arr = self.in_stream().get_array_slice(head, self.sig_chunk_size).flatten()
+        
+        t2 = time.time()
+        
+        if self.downsampling_factor>1:
+            small_arr = scipy.signal.filtfilt(self.filter_b, self.filter_a, full_arr)
+            small_arr =small_arr[::self.downsampling_factor].copy()# to ensure continuity
+        else:
+            small_arr = full_arr
+        small_arr_f=scipy.fftpack.fft(small_arr)
+        #~ print('yep', self.wavelet_fourrier.shape, small_arr_f.shape)
+        if small_arr_f.shape[0] != self.wavelet_fourrier.shape[0]: return
+        wt_tmp=scipy.fftpack.ifft(small_arr_f[:,np.newaxis]*self.wavelet_fourrier,axis=0)
+        wt = scipy.fftpack.fftshift(wt_tmp,axes=[0])
+        wt = np.abs(wt).astype(self.out_stream().params['dtype'])
+        wt = wt[-self.plot_length:]
+        
+        #send map
+        self._n += 1
+        self.out_stream().send(self._n, wt)
+        t3 = time.time()
+        print('compute', self.workernum,  t2-t1, t3-t2, t3-t1)
+
+
+
+
+
 class TimeFreqCompute(Node):
     """
     TimeFreqCompute compute a wavelet scalogram every X interval and
@@ -404,9 +533,10 @@ class TimeFreqCompute(Node):
     _input_specs = {'signal' : dict(streamtype = 'signals', shape = (-1), )}
     _output_specs = {'timefreq' : dict(streamtype = 'image', dtype = 'float32')}
     
-    def __init__(self, **kargs):
+    def __init__(self, workernum = None, **kargs):
         Node.__init__(self, **kargs)
         assert HAVE_SCIPY, "TimeFreqCompute node depends on the `scipy` package, but it could not be imported."
+        self.workernum = workernum
     
     def _configure(self, max_xsize = 60.):
         self.max_xsize = max_xsize
@@ -425,7 +555,7 @@ class TimeFreqCompute(Node):
         assert self.nb_channel == 1, 'Wrong nb_channel: TimeFreqCompute work for one channel only'
         
         stream_spec = {}
-        stream_spec.update(self.input.params)
+        #~ stream_spec.update(self.input.params)
         stream_spec['port'] = '*'
         self.outputs['timefreq'] = OutputStream(spec = stream_spec)
         
@@ -445,7 +575,8 @@ class TimeFreqCompute(Node):
             self.conv.input.connect(self.input.params)
             self.conv.output.configure(protocol='inproc', interface='127.0.0.1', port='*', 
                    transfermode = 'sharedarray', streamtype = 'analogsignal',
-                   dtype='float32', shape=self.input.params['shape'], timeaxis=self.input.params['timeaxis'],
+                   dtype='float32', sampling_rate = sr,
+                   shape=self.input.params['shape'], timeaxis=self.input.params['timeaxis'],
                    compression='', scale=None, offset=None, units='',
                    sharedarray_shape=self.sharedarray_shape, ring_buffer_method='double',
                    )
@@ -453,83 +584,34 @@ class TimeFreqCompute(Node):
             self.proxy_input = InputStream()
             self.proxy_input.connect(self.conv.output)
         
-        #poller
-        self.poller = ThreadPollInput(input_stream = self.proxy_input)
-        self.poller.new_data.connect(self._on_new_data)
-        #timer
-        self._head = 0
-        self.timer = QtCore.QTimer(singleShot=False, interval = 500)
-        self.timer.timeout.connect(self.compute)
-        
-        self.wavelet_fourrier = None
+        self.thread = ThreadCompute(self.proxy_input, self.output)
+        self.thread.workernum = self.workernum
+        self.sig_on_fly_change_wavelet.connect(self.thread.on_fly_change_wavelet)
+        self.sig_set_interval.connect(self.thread.set_interval)
 
     def _start(self):
-        self._n = 0
         if self.conv is not None:
             self.conv.start()
-        self.poller.start()
-        self.timer.start()
+        self.thread.start()
     
     def _stop(self):
         if self.conv is not None:
             self.conv.stop()
-        self.poller.stop()
-        self.timer.stop()
+        self.thread.stop()
+        self.thread.wait()
     
     def _close(self):
         if self.running():
             self.stop()
-
-    def _on_new_data(self, pos, data):
-        self._head = pos
-        
-    def on_fly_change_wavelet(self, wavelet_fourrier=None, downsampling_factor=None, sig_chunk_size = None,
-            plot_length=None, filter_a=None, filter_b=None):
-        """
-        This can be call by RPC but it can be slow due to wavelet_fourrier size.
-        
-        Note that for optimization purpose wavelet_fourrier.shape[0] should be 2**N because
-        it is fft based.
-        
-        """
-        self.wavelet_fourrier = wavelet_fourrier
-        self.downsampling_factor = downsampling_factor
-        self.sig_chunk_size = sig_chunk_size
-        self.plot_length = plot_length
-        self.filter_a = filter_a
-        self.filter_b = filter_b
-        self.output.params['shape'] = (self.plot_length, self.wavelet_fourrier.shape[1])
-        self.output.params['sampling_rate'] = self.sampling_rate/downsampling_factor
     
+    sig_on_fly_change_wavelet = QtCore.pyqtSignal(object)
+    def on_fly_change_wavelet(self, **kargs):
+        self.sig_on_fly_change_wavelet.emit(kargs)
+    
+    sig_set_interval = QtCore.pyqtSignal(int)
     def set_interval(self, interval):
-        self.timer.setInterval(interval)
-    
-    def compute(self):
-        if self.wavelet_fourrier is None: 
-            # not on_fly_change_wavelet yet
-            return
-
-        head = self._head
-        if self.downsampling_factor>1:
-            head = head - head%self.downsampling_factor
-        full_arr = self.proxy_input.get_array_slice(head, self.sig_chunk_size).reshape(-1)
-        
-        
-        if self.downsampling_factor>1:
-            small_arr = scipy.signal.filtfilt(self.filter_b, self.filter_a, full_arr)
-            small_arr =small_arr[::self.downsampling_factor].copy()# to ensure continuity
-        else:
-            small_arr = full_arr
-        small_arr_f=scipy.fftpack.fft(small_arr)
-        wt_tmp=scipy.fftpack.ifft(small_arr_f[:,np.newaxis]*self.wavelet_fourrier,axis=0)
-        wt = scipy.fftpack.fftshift(wt_tmp,axes=[0])
-        wt = np.abs(wt).astype(self.output.params['dtype'])
-        wt = wt[-self.plot_length:]
-        
-        #send map
-        self._n += 1
-        self.output.send(self._n, wt)
-
+        self.sig_set_interval.emit(interval)
+ 
 register_node_type(TimeFreqCompute)
 
 

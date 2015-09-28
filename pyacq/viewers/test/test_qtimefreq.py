@@ -10,8 +10,8 @@ from pyqtgraph.Qt import QtCore, QtGui
 import pyqtgraph as pg
 
 nb_channel = 16
-sampling_rate = 10000.
-chunksize = 100
+sampling_rate = 20000.
+chunksize = 1000
 
 length = int(sampling_rate*20)
 t = np.arange(length)/sampling_rate
@@ -51,7 +51,7 @@ def test_TimeFreqCompute():
     
     #change the wavelet on fly
     worker.on_fly_change_wavelet(wavelet_fourrier=wavelet_fourrier, downsampling_factor=20,
-            sig_chunk_size = int(wf_size/sub_sr*sampling_rate),
+            sig_chunk_size = 2048*20,
             plot_length=int(sub_sr*xsize), filter_a=filter_a, filter_b=filter_b)
     
     time.sleep(2.)
@@ -89,6 +89,7 @@ def test_qtimefreq_simple():
     viewer.initialize()
     viewer.show()
     viewer.params['nb_column'] = 4
+    viewer.params['refresh_interval'] = 2000
 
 
     def terminate():
@@ -99,11 +100,12 @@ def test_qtimefreq_simple():
         app.quit()
     
     dev.start()
+
     viewer.start()
     
     # start for a while
-    timer = QtCore.QTimer(singleShot = True, interval = 2000)
-    timer.timeout.connect(terminate)
+    #~ timer = QtCore.QTimer(singleShot = True, interval = 2000)
+    #~ timer.timeout.connect(terminate)
     #~ timer.start()
     
     app.exec_()
@@ -113,13 +115,60 @@ def test_qtimefreq_simple():
 
 @pytest.mark.skipif(not HAVE_SCIPY, reason = 'no HAVE_SCIPY')
 def test_stimefreq_distributed():
-    pass
+    man = create_manager(auto_close_at_exit = True)
+    ng = man.create_nodegroup()
+    
+    app = pg.mkQApp()
+    
+    length = int(sampling_rate*20)
+    t = np.arange(length)/sampling_rate
+    buffer = np.random.rand(length, nb_channel)*.3
+    buffer += np.sin(2*np.pi*1.2*t)[:,None]*.5
+    buffer = buffer.astype('float32')
+
+    #~ dev =NumpyDeviceBuffer()
+    dev = ng.create_node('NumpyDeviceBuffer')
+    dev.configure( nb_channel = nb_channel, sample_interval = 1./sampling_rate, chunksize = chunksize,
+                    buffer = buffer)
+    dev.output.configure(protocol = 'tcp', interface = '127.0.0.1', transfermode = 'plaindata')
+    dev.initialize()
+    
+    
+    nodegroup_friends = [man.create_nodegroup() for _ in range(2)]
+    viewer = QTimeFreq()
+    viewer.configure(with_user_dialog = True, nodegroup_friends =nodegroup_friends)
+    viewer.input.connect(dev.output)
+    viewer.initialize()
+    viewer.show()
+    viewer.params['nb_column'] = 4
+    viewer.params['refresh_interval'] = 2000
+
+
+    def terminate():
+        viewer.stop()
+        dev.stop()
+        viewer.close()
+        dev.close()
+        app.quit()
+    
+    dev.start()
+
+    viewer.start()
+    
+    # start for a while
+    #~ timer = QtCore.QTimer(singleShot = True, interval = 2000)
+    #~ timer.timeout.connect(terminate)
+    #~ timer.start()
+    
+    app.exec_()
+
+    #~ man.close()
     
 
 
 
 if __name__ == '__main__':
     #~ test_TimeFreqCompute()
-    test_qtimefreq_simple()
-    #~ test_stimefreq_distributed()
+    #~ test_qtimefreq_simple()
+    test_stimefreq_distributed()
 
