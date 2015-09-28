@@ -397,7 +397,6 @@ class SharedArraySender:
         else:
             size1 = self._ring_size-tail
             size2 = data.shape[self._timeaxis] - size1
-            #~ print(size1, size2)
             
             # 1 full chunks continuous
             sl = [slice(None)] * self._ndim 

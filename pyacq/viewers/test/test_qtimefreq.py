@@ -9,9 +9,10 @@ import time
 from pyqtgraph.Qt import QtCore, QtGui
 import pyqtgraph as pg
 
-nb_channel = 32
-sampling_rate = 20000.
-chunksize = 1000
+nb_channel = 64
+#~ sampling_rate = 20000.
+sampling_rate = 500.
+chunksize = 100
 
 length = int(sampling_rate*20)
 t = np.arange(length)/sampling_rate
@@ -90,8 +91,7 @@ def test_qtimefreq_simple():
     viewer.show()
     viewer.params['nb_column'] = 4
     viewer.params['refresh_interval'] = 2000
-
-
+    
     def terminate():
         viewer.stop()
         dev.stop()
@@ -134,9 +134,10 @@ def test_stimefreq_distributed():
     dev.initialize()
     
     
-    nodegroup_friends = [man.create_nodegroup() for _ in range(8)]
+    nodegroup_friends = [man.create_nodegroup() for _ in range(4)]
     viewer = QTimeFreq()
     viewer.configure(with_user_dialog = True, nodegroup_friends =nodegroup_friends)
+    #~ viewer.configure(with_user_dialog = True, nodegroup_friends =None)
     viewer.input.connect(dev.output)
     viewer.initialize()
     viewer.show()

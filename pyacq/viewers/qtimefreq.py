@@ -87,7 +87,6 @@ class QTimeFreq(WidgetNode):
         else:
             self.nb_channel  = d0
             sharedarray_shape = (1, int(sr*self.max_xsize)),
-        print('sharedarray_shape', sharedarray_shape)
         
         #create splitter and worker
         if self.nodegroup_friends is None:
@@ -110,8 +109,6 @@ class QTimeFreq(WidgetNode):
                                 sharedarray_shape=sharedarray_shape, )
                 worker = TimeFreqCompute(workernum = i)
             else:
-                print(self.splitter.outputs)
-                # FIXME : problem de outputstream inputstream proxy car after_input_connect n'est pas appelé
                 self.splitter.outputs[str(i)].configure(transfermode='plaindata', protocol = 'ipc') #TODO ipc not in windows
                 ng = self.nodegroup_friends[i%(len(self.nodegroup_friends)-1)+1]
                 worker = ng.create_node('TimeFreqCompute', workernum = i)
@@ -178,16 +175,12 @@ class QTimeFreq(WidgetNode):
         self.splitter.stop()
     
     def _close(self):
-        print('ici 1')
         if self.running():
             self.stop()
-        print('ici 2')
         if self.with_user_dialog:
             self.params_controler.close()
-        print('ici 3')
         for worker in self.workers:
             worker.close()
-        print('ici 4')
         for poller in self.pollers:
             poller.close()
         self.splitter.close()
@@ -295,11 +288,8 @@ class QTimeFreq(WidgetNode):
                 self.images[i] =image
                 
                 if self.running() and not self.workers[i].running():
-                    
                     self.workers[i].start()
                     self.pollers[i].start()
-                else:
-                    print('not running yet')
             else:
                 if self.workers[i].running():
                     self.workers[i].stop()
@@ -362,7 +352,7 @@ class QTimeFreq(WidgetNode):
 
     def _on_new_map(self, pos, data):
         i = self.sender().i
-        print('_on_new_map', 'data', id(data))
+        #~ print('_on_new_map', 'data', id(data))
         if self.images[i] is None: return
         self.images[i].updateImage(data)
 
@@ -468,7 +458,6 @@ class ThreadCompute(QtCore.QThread):
             #~ print('head', self.head)
             
             self.compute()
-            print('sleep', self.interval/1000.)
             time.sleep(self.interval/1000.)
             
 
@@ -494,11 +483,9 @@ class ThreadCompute(QtCore.QThread):
         #~ self.timer.setInterval(interval)
     
     def compute(self):
-        #~ print('compute', self.wavelet_fourrier)
         if self.wavelet_fourrier is None: 
             # not on_fly_change_wavelet yet
             return
-        #~ print(self.wavelet_fourrier.shape)
         
         t1 = time.time()
         head = self.head
@@ -513,22 +500,21 @@ class ThreadCompute(QtCore.QThread):
             small_arr =small_arr[::self.downsampling_factor].copy()# to ensure continuity
         else:
             small_arr = full_arr
+        
         small_arr_f=scipy.fftpack.fft(small_arr)
-        #~ print('yep', self.wavelet_fourrier.shape, small_arr_f.shape)
         if small_arr_f.shape[0] != self.wavelet_fourrier.shape[0]: return
         wt_tmp=scipy.fftpack.ifft(small_arr_f[:,np.newaxis]*self.wavelet_fourrier,axis=0)
         wt = scipy.fftpack.fftshift(wt_tmp,axes=[0])
         wt = np.abs(wt).astype(self.out_stream().params['dtype'])
         wt = wt[-self.plot_length:]
         
+        #~ wt = np.random.randn(*self.wavelet_fourrier.shape).astype(self.out_stream().params['dtype'])
+        #~ wt = wt[-self.plot_length:]
         #send map
         self._n += 1
         self.out_stream().send(self._n, wt)
         t3 = time.time()
         print('compute', self.workernum,  t2-t1, t3-t2, t3-t1)
-
-
-
 
 
 class TimeFreqCompute(Node):
