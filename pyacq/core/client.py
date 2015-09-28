@@ -78,12 +78,19 @@ class NodeProxy(object):
     def __init__(self, nodegroup, name):
         self.nodegroup = nodegroup
         self.name = name
-        self.inputs = { name:InputStreamProxy(self, name) for name in self.nodegroup.get_node_attr(self.name, '_input_specs').keys()}
-        self.outputs = { name:OutputStreamProxy(self, name) for name in self.nodegroup.get_node_attr(self.name, '_output_specs').keys()}
-        
+        #~ self.inputs = { name:InputStreamProxy(self, name) for name in self.nodegroup.get_node_attr(self.name, '_input_specs').keys()}
+        #~ self.outputs = { name:OutputStreamProxy(self, name) for name in self.nodegroup.get_node_attr(self.name, '_output_specs').keys()}
         
     def __getattr__(self, name):
         return lambda *args, **kwargs: getattr(self.nodegroup, 'control_node')(self.name, name, *args, **kwargs)
+
+    @property
+    def inputs(self):
+        return { name:InputStreamProxy(self, name) for name in self.get_input_names() }
+
+    @property
+    def outputs(self):
+        return { name:OutputStreamProxy(self, name) for name in self.get_output_names() }
 
     @property
     def input(self):
@@ -115,8 +122,10 @@ class InputStreamProxy:
     
     def connect(self, output):
         if isinstance(output, dict):
+            print('InputStreamProxy.connect', output)
             self.node.connect_input(self.name, output)
         else:
+            print('InputStreamProxy.connect', output.params)
             self.node.connect_input(self.name, output.params)
         
         
