@@ -35,7 +35,6 @@ class ThreadPollInput(QtCore.QThread):
             ev = self.input_stream().poll(timeout = self.timeout)
             if ev>0:
                 pos, data = self.input_stream().recv()
-                print('ThreadPollInput/eimit data', id(data))
                 self.new_data.emit(pos, data)
         
     def stop(self):
@@ -111,6 +110,47 @@ class StreamConverter(Node):
 register_node_type(StreamConverter)
 
 
+
+class ThreadStreamSplitter(QtCore.QThread):
+    """
+    Thread that pool in backgroup an InputStream (zmq.SUB).
+    And emit Signal.
+    Util for Node that have inputs.    
+    """
+    def __init__(self, input_stream, outputs_stream, channelaxis, nb_channel, timeout = 200, parent = None):
+        QtCore.QThread.__init__(self, parent)
+        self.input_stream = weakref.ref(input_stream)
+        self.outputs_stream = weakref.WeakValueDictionary()
+        self.outputs_stream.update(outputs_stream)
+        self.channelaxis = channelaxis
+        self.nb_channel = nb_channel
+        self.timeout = timeout
+        
+        self.running = False
+        self.lock = Mutex()
+    
+    def run(self):
+        with self.lock:
+            self.running = True
+        
+        while True:
+            with self.lock:
+                if not self.running:
+                    break
+            ev = self.input_stream().poll(timeout = self.timeout)
+            if ev>0:
+                pos, data = self.input_stream().recv()
+                if self.channelaxis == 1:
+                    for i in range(self.nb_channel):
+                        self.outputs_stream[str(i)].send(pos, data[:, i:i+1].copy())
+                else:
+                    for i in range(self.nb_channel):
+                        self.outputs_stream[str(i)].send(pos, data[i:i+1, :])
+        
+    def stop(self):
+        with self.lock:
+            self.running = False
+
 class StreamSplitter(Node):
     """
     StreamSplitter take a multi signal as input and split it as N single signal output.
@@ -155,7 +195,7 @@ class StreamSplitter(Node):
             self.channelaxis = 0
             self.nb_channel = self.input.params['shape'][0]
             shape = (1, -1)
-        
+
         stream_spec = {}
         stream_spec.update(self.input.params)
         stream_spec['shape'] = shape
@@ -170,25 +210,14 @@ class StreamSplitter(Node):
         pass
         
     def _initialize(self):
-        self.poller = ThreadPollInput(input_stream = self.input)
-        self.poller.new_data.connect(self.on_new_data)
-    
-    def on_new_data(self, pos, arr):
-        print('Splitter.on_new_data', id(arr))
-        
-        if self.channelaxis == 1:
-            for i in range(self.nb_channel):
-                self.outputs[str(i)].send(pos, arr[:, i:i+1].copy())
-        else:
-            for i in range(self.nb_channel):
-                self.outputs[str(i)].send(pos, arr[i:i+1, :])
+        self.thread = ThreadStreamSplitter( self.input, self.outputs, self.channelaxis, self.nb_channel)
     
     def _start(self):
-        self.poller.start()
+        self.thread.start()
 
     def _stop(self):
-        self.poller.stop()
-        self.poller.wait()
+        self.thread.stop()
+        self.thread.wait()
     
     def _close(self):
         pass
