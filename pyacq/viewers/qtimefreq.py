@@ -90,7 +90,12 @@ class QTimeFreq(WidgetNode):
         print('sharedarray_shape', sharedarray_shape)
         
         #create splitter and worker
-        self.splitter = StreamSplitter()
+        if self.nodegroup_friends is None:
+            self.splitter = StreamSplitter()
+        else:
+            ng = self.nodegroup_friends[0]
+            self.splitter = ng.create_node('StreamSplitter')
+            
         self.splitter.configure()
         self.splitter.input.connect(self.input.params)
         
@@ -98,19 +103,20 @@ class QTimeFreq(WidgetNode):
         self.input_proxys = []
         self.pollers = []
         for i in range(self.nb_channel):
-            self.splitter.outputs[str(i)].configure(transfermode='sharedarray', ring_buffer_method='double',
-                                sharedarray_shape=sharedarray_shape, )
-            #~ self.splitter.outputs[str(i)].configure()
+            
             
             if self.nodegroup_friends is None:
+                self.splitter.outputs[str(i)].configure(transfermode='sharedarray', ring_buffer_method='double',
+                                sharedarray_shape=sharedarray_shape, )
                 worker = TimeFreqCompute(workernum = i)
             else:
-                ng = self.nodegroup_friends[i%len(self.nodegroup_friends)]
+                print(self.splitter.outputs)
+                # FIXME : problem de outputstream inputstream proxy car after_input_connect n'est pas appelé
+                self.splitter.outputs[str(i)].configure(transfermode='plaindata', protocol = 'ipc') #TODO ipc not in windows
+                ng = self.nodegroup_friends[i%(len(self.nodegroup_friends)-1)+1]
                 worker = ng.create_node('TimeFreqCompute', workernum = i)
-                print('worker', worker)
                 
             worker.configure(max_xsize = self.max_xsize)
-            print(self.splitter.outputs[str(i)].params)
             worker.input.connect(self.splitter.outputs[str(i)])
             worker.output.configure(protocol = 'ipc', transfermode = 'plaindata')#the shape is after when TimeFreqCompute.on_fly_change_wavelet()
             worker.initialize()

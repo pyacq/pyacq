@@ -84,6 +84,12 @@ class Node(QtCore.QObject):
         """
         return self.outputs[name].params
 
+    def  get_input(self, name):
+        """This is usefull for the InputStreamProxy
+        """
+        return self.inputs[name].params
+
+
     def running(self):
         """get the running state of the Node (thread safe)
         """
@@ -149,8 +155,9 @@ class Node(QtCore.QObject):
     def close(self):
         """Close the Node
         """
-        assert not self.running(),\
-                'Cannot close Node {} : the Node is running'.format(self.name)
+        #~ assert not self.running(),\
+                #~ 'Cannot close Node {} : the Node is running'.format(self.name)
+        
         self._close()
         with self.lock:
             self._configured = False
@@ -204,8 +211,9 @@ class WidgetNode(QtGui.QWidget, Node, ):
         Node.__init__(self, **kargs)
     
     def close(self):
-        QtGui.QWidget.close(self)
         Node.close(self)
+        QtGui.QWidget.close(self)
+        
 
 
 # For test purpos only
