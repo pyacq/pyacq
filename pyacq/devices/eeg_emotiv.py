@@ -41,7 +41,6 @@ def setupCrypto(serial):
     type = 0 #feature[5]
     type &= 0xF
     type = 0
-    #I believe type == True is for the Dev headset, I'm not using that. That's the point of this library in the first place I thought.
     k = ['\0'] * 16
     k[0] = serial[-1]
     k[1] = '\0'
@@ -70,8 +69,6 @@ def setupCrypto(serial):
     k[13] = '\0'
     k[14] = serial[-4]
     k[15] = 'P'
-    #It doesn't make sense to have more than one greenlet handling this as data needs to be in order anyhow. I guess you could assign an ID or something
-    #to each packet but that seems like a waste also or is it? The ID might be useful if your using multiple headsets or usb sticks.
     key = ''.join(k)
     iv = Random.new().read(AES.block_size)
     cipher = AES.new(key, AES.MODE_ECB, iv)
@@ -83,20 +80,34 @@ def get_level(data, bits):
     for i in range(13, -1, -1):
         level <<= 1
         b, o = (bits[i] / 8) + 1, bits[i] % 8
-        #~ level |= (ord(data[b]) >> o) & 1
-        int(b)
+        #~ level |= (ord(data[b]) >> o) & 1                    #Why b is a float that makes ord hungry ?
+        b = int(b)                                                         
         level |= (data[b] >> o) & 1
     return level
 
 
 class EmotivIOThread(QtCore.QThread):
-    def __init__(self, hidraw, cipher, outputs, parent = None):
+    def __init__(self, hidraw_file, cipher, outputs, parent = None):
         QtCore.QThread.__init__(self)
         self.outputs= outputs
-        self.hidraw = hidraw
+        self.hidraw_file = hidraw_file
         self.cipher = cipher
-        self.values = np.zeros((len(_channel_names)))   # is it really usefull ??
-        self.imp = np.zeros((len(_channel_names)))
+        
+        self.values = np.zeros((1, len(_channel_names)), dtype = np.int64 ) 
+        self.imp = np.zeros((1, len(_channel_names)), dtype = np.float64 )
+        self.gyro = np.zeros((1, 2), dtype = np.int64)
+        
+        self.impedance_qualities = { }
+        for name in _channel_names + ['X', 'Y', 'Unknown']:
+            self.impedance_qualities[name] = 0.
+        
+        self.num_to_name = { 0 : 'F3',  1:'FC5', 2 : 'AF3',  3 : 'F7', 4:'T7', 5 : 'P7', 
+                                                6 : 'O1', 7 : 'O2', 8: 'P8', 9 : 'T8', 10: 'F8', 11 : 'AF4', 
+                                                12 : 'FC6', 13: 'F4', 14 : 'F8', 15:'AF4', 
+                                                64 : 'F3', 65 : 'FC5', 66 : 'AF3', 67 : 'F7', 68 : 'T7', 69 : 'P7', 
+                                                70 : 'O1', 71 : 'O2', 72: 'P8', 73 : 'T8', 74: 'F8', 75 : 'AF4', 
+                                                76 : 'FC6', 77: 'F4', 78 : 'F8', 79:'AF4', 
+                                                80 : 'FC6'}
         
         self.lock = Mutex()
         self.running = False
@@ -106,40 +117,38 @@ class EmotivIOThread(QtCore.QThread):
             self.running = True
         n = 0
         
-        while True:
-            crypted_data = self.hidraw.read(32)
-            print ("crypted_data : ", crypted_data)
-            data = self.cipher.decrypt(crypted_data[:16]) + self.cipher.decrypt(crypted_data[16:])
-            print ("data : ", data)
+        while True:  
+            with self.lock:
+                if not self.running:
+                    break
+            crypted_dataBuffer = bytearray(self.hidraw_file.read(32))         
+            data = self.cipher.decrypt(bytes(crypted_dataBuffer[:16])) +self.cipher.decrypt(bytes(crypted_dataBuffer[16:]))
             
             #~ sensor_num = ord(data[0])
             sensor_num = data[0]
-            num_to_name = { 0 : 'F3',  1:'FC5', 2 : 'AF3',  3 : 'F7', 4:'T7', 5 : 'P7', 
-                                                6 : 'O1', 7 : 'O2', 8: 'P8', 9 : 'T8', 10: 'F8', 11 : 'AF4', 
-                                                12 : 'FC6', 13: 'F4', 14 : 'F8', 15:'AF4', 
-                                                64 : 'F3', 65 : 'FC5', 66 : 'AF3', 67 : 'F7', 68 : 'T7', 69 : 'P7', 
-                                                70 : 'O1', 71 : 'O2', 72: 'P8', 73 : 'T8', 74: 'F8', 75 : 'AF4', 
-                                                76 : 'FC6', 77: 'F4', 78 : 'F8', 79:'AF4', 
-                                                80 : 'FC6',
-                                                }
-            if sensor_num in num_to_name:
-                sensor_name = num_to_name[sensor_num]
-                impedance_qualities[sensor_name] = get_level(data, _quality_bits) / 540
-                print (impedance_qualities)
+            
+            if sensor_num in self.num_to_name:
+                sensor_name = self.num_to_name[sensor_num]
+                self.impedance_qualities[sensor_name] = get_level(data, _quality_bits) / 540
             
             for c, channel_name in enumerate(_channel_names):
                 bits = _sensorBits[channel_name]
                 # channel value
-                self.values[c] = get_level(data, bits)
-                self.imp[c] = impedance_qualities[_channel_name]
+                self.values[0,c] = get_level(data, bits)
+                self.imp[0,c] = self.impedance_qualities[channel_name]
             
-            gyroX = ord(data[29]) - 106
-            gyroY = ord(data[30]) - 105
-               
+            #~ self.gyro[0] = ord(data[29]) - 106 #X        #Why b is a float that makes ord hungry ?
+            #~ self.gyro[1] = ord(data[30]) - 105 #Y
+            self.gyro[0,0] = data[29]- 106 #X
+            self.gyro[0,1] = data[30] - 105 #Y
+            
             n += 1
             self.outputs['signals'].send(n, self.values)
-            self.outputs['impredances'].send(n, self.imp)
-            self.outputs['gyro'].send(n, [gyroX, gyroY])
+            self.outputs['impedances'].send(n, self.imp)
+            self.outputs['gyro'].send(n,self.gyro)
+            
+            # Maybe not needed if hidraw handle it ?
+            time.sleep(1./self.outputs['signals'].params['sampling_rate'])
 
 
     def stop(self):
@@ -165,22 +174,25 @@ class Emotiv(Node):
     ----
     device_info :  dict containing :
         - Path to the usb hidraw used
+<<<<<<< HEAD
         - Serial of the usb used
     """
     
     _input_specs = {'crypted_data'  : dict(streamtype = 'analogsignal',dtype = 'float64',
                                                             shape = (32, 1), sampling_rate =128.,  time_axis=0)   # is it the correct shape for inputs??
                             }
+=======
+        - Serial number of USB key
+    """ 
+>>>>>>> e539a3810aa2132c26b8024ca9bed645f9deee40
     
-    _output_specs = { 'signals'    : dict(streamtype = 'analogsignal',dtype = 'float64',  # bon type ?? 
-                                                        shape = (14,1), sampling_rate = 128.,  time_axis=0,
-                                                        chan_names = _channel_names), 
+    _output_specs = { 'signals'    : dict(streamtype = 'analogsignal',dtype = 'int64', 
+                                                        shape = (-1,14), sampling_rate = 128.,  timeaxis=0), 
                                 'impedances' : dict(streamtype = 'analogsignal',dtype = 'float64',
-                                                        shape = (14,1), sampling_rate = 128.,  time_axis=0,
-                                                        chan_names = _channel_names), 
-                                'gyro'           : dict(streamtype = 'analogsignal',dtype = 'float64',
-                                                        shape = (2,1), sampling_rate = 128.,  time_axis=0)
-                                }
+                                                        shape = (-1,14), sampling_rate = 128.,  time_axis=0),
+                                'gyro'           : dict(streamtype = 'analogsignal',dtype = 'int64',
+                                                        shape = (-1,2), sampling_rate = 128.,  time_axis=0)
+                                }  # TODO Why we don't keep channel names ??
         
     def __init__(self, **kargs):
         Node.__init__(self, **kargs)
@@ -193,16 +205,14 @@ class Emotiv(Node):
             
     def _initialize(self):
         self.cipher = setupCrypto(self.device_info['serial'])
-        #~ self.hidraw = open(self.device_info['path'],  mode = 'rb') # read as binary
-        self.hidraw = open(self.device_info['path'],  encoding="latin-1")
+        self.hidraw_file = open(self.device_info['path'],  mode = 'rb') # read as binary
             
     def _start(self):
-        self._thread = EmotivIOThread(self.hidraw, self.cipher, self.outputs)
+        self._thread = EmotivIOThread(self.hidraw_file, self.cipher, self.outputs)
         self._thread.start()
             
     def _stop(self):
         self._thread.stop()
-        self._running = False
             
     def _close(self):
         close(self.device_path)

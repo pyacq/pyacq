@@ -2,7 +2,7 @@ import time
 import pytest
 
 from pyacq.devices.eeg_emotiv import Emotiv, HAVE_PYCRYPTO#, HAVE_PYWINUSB
-from pyacq.viewers.imageviewer import ImageViewer
+from pyacq.viewers.qoscilloscope  import QOscilloscope
 from pyqtgraph.Qt import QtCore, QtGui
 
 from collections import OrderedDict
@@ -64,7 +64,7 @@ def get_available_devices():
 @pytest.mark.skipif(not HAVE_PYCRYPTO, reason = 'no have pycrypto')
 def test_eeg_emotiv_direct():
     
-    #Look for emotiveusb device
+    #Look for emotiv usb device
     device_info = []
     devices = get_available_devices()
     device_path= list(devices.values())[0]['path'] 
@@ -75,13 +75,14 @@ def test_eeg_emotiv_direct():
     
     dev = Emotiv(name = 'Emotiv0')
     dev.configure(device_info = device_info)
-    dev.outputs['signals'].configure(protocol = 'tcp', interface = '127.0.0.1',transfertmode = 'plaindata',)
-    dev.outputs['impedances'].configure(protocol = 'tcp', interface = '127.0.0.1',transfertmode = 'plaindata',)
-    dev.outputs['gyro'].configure(protocol = 'tcp', interface = '127.0.0.1',transfertmode = 'plaindata',)
+    dev.outputs['signals'].configure(protocol = 'tcp', interface = '127.0.0.1',transfermode = 'plaindata',)
+    dev.outputs['impedances'].configure(protocol = 'tcp', interface = '127.0.0.1',transfermode = 'plaindata',)
+    dev.outputs['gyro'].configure(protocol = 'tcp', interface = '127.0.0.1',transfermode = 'plaindata',)
     dev.initialize()
     
-    viewer = ImageViewer()
-    viewer.configure()
+    
+    viewer = QOscilloscope()
+    viewer.configure(with_user_dialog = True)
     viewer.input.connect(dev.outputs['signals'])
     viewer.initialize()
     viewer.show()
@@ -95,7 +96,7 @@ def test_eeg_emotiv_direct():
         app.quit()
     
     # start for a while
-    timer = QtCore.QTimer(singleShot = True, interval = 5000)
+    timer = QtCore.QTimer(singleShot = True, interval = 30000)
     timer.timeout.connect(terminate)
     timer.start()
     app.exec_()
