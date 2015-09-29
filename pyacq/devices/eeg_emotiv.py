@@ -165,6 +165,7 @@ class Emotiv(Node):
     ----
     device_info :  dict containing :
         - Path to the usb hidraw used
+        - Serial of the usb used
     """
     
     _input_specs = {'crypted_data'  : dict(streamtype = 'analogsignal',dtype = 'float64',
