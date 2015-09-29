@@ -32,6 +32,11 @@ class ThreadPollInput(QtCore.QThread):
             with self.lock:
                 if not self.running:
                     break
+            #~ if self.input_stream() is None:
+                #~ print('self.input_stream() is None')
+                #~ continue
+            #~ else:
+                #~ print('self.input_stream() is not None')
             ev = self.input_stream().poll(timeout = self.timeout)
             if ev>0:
                 pos, data = self.input_stream().recv()
@@ -91,10 +96,8 @@ class StreamConverter(Node):
     def on_new_data(self, pos, arr):
         if 'transfermode' in self.conversions and self.conversions['transfermode'][0]=='sharedarray':
             arr = self.input.get_array_slice(self, pos, None)
-
         if 'timeaxis' in self.conversions:
             arr = arr.swapaxes(*self.conversions['timeaxis'])
-        
         self.output.send(pos, arr)
     
     def _start(self):

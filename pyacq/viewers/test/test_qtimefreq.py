@@ -10,7 +10,7 @@ from pyqtgraph.Qt import QtCore, QtGui
 import pyqtgraph as pg
 
 nb_channel = 32
-sampling_rate = 20000.
+sampling_rate = 20000
 #~ sampling_rate = 500.
 chunksize = 100
 
