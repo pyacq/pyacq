@@ -12,7 +12,7 @@ class ManagerProxy(RPCClient):
     def connect_host(self, name, addr):
         self._call_method('connect_host', name, addr)
         if name not in self._host_proxy:
-            self._host_proxy[name] = HostProxy(name, addr)
+            self._host_proxy[name] = HostProxy(self, name, addr)
         return self._host_proxy[name]
     
     def default_host(self):
@@ -122,14 +122,10 @@ class InputStreamProxy:
     
     def connect(self, output):
         if isinstance(output, dict):
-            print('InputStreamProxy.connect', output)
             self.node.connect_input(self.name, output)
         else:
-            print('InputStreamProxy.connect', output.params)
             self.node.connect_input(self.name, output.params)
-        
-        
-
+    
     @property
     def params(self):
         return self.node.get_output(self.name)
