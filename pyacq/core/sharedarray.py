@@ -1,5 +1,5 @@
 import numpy as np
-import atexit
+#~ import atexit
 import sys, random, string, tempfile, mmap
 
 
@@ -27,7 +27,7 @@ class SharedArray:
     
     shm_id: str
         The id of the SharedMem If None then create it. If not None 
-        On linux this is the fileno() on Window this is the tagname.
+        On linux this is the filename , on Window this is the tagname.
     
     """
     def __init__(self, shape = (1,), dtype = 'float64', shm_id =  None):
@@ -40,16 +40,20 @@ class SharedArray:
         if sys.platform.startswith('win'):
             if shm_id is None:
                 self.shm_id = u'pyacq_SharedArray_'+''.join(random.SystemRandom().choice(string.ascii_uppercase + string.digits) for _ in range(128))
-            self.mmap = mmap.mmap(-1, self.nbytes, self.shm_id, access = mmap.ACCESS_WRITE)
+                self.mmap = mmap.mmap(-1, self.nbytes, self.shm_id, access = mmap.ACCESS_WRITE)
+            else:
+                self.mmap = mmap.mmap(-1, self.nbytes, self.shm_id, access = mmap.ACCESS_READ)
         else:
             if shm_id is None:
                 self._tmpFile = tempfile.NamedTemporaryFile(prefix=u'pyacq_SharedArray_')
                 self._tmpFile.write(b'\x00' * self.length)
                 self._tmpFile.flush() # I do not anderstand but this is needed....
-                self.shm_id = self._tmpFile.fileno()
-            self.mmap = mmap.mmap(self.shm_id, self.nbytes, mmap.MAP_SHARED)#, mmap.PROT_WRITE)
-        atexit.register(self.close)
-    
+                self.shm_id = self._tmpFile.name
+                self.mmap = mmap.mmap(self._tmpFile.fileno(), self.nbytes, mmap.MAP_SHARED, mmap.PROT_WRITE)
+            else:
+                self._tmpFile = open(self.shm_id, 'rb')
+                self.mmap = mmap.mmap(self._tmpFile.fileno(), self.nbytes, mmap.MAP_SHARED, mmap.PROT_READ)
+                
     def close(self):
         self.mmap.close()
         if not sys.platform.startswith('win') and hasattr(self, '_tmpFile'):
