@@ -95,7 +95,7 @@ class QTimeFreq(WidgetNode):
         #create proxy input to ensure sharedarray with time axis 1
         if self.input.params['transfermode'] == 'sharedarray' and self.input.params['timeaxis'] == 1:
             self.conv = None
-            self.proxy_input = self.input
+            #~ self.proxy_input = self.input
         else:
             # if input is not transfermode creat a proxy
             if self.local_workers:
@@ -111,7 +111,7 @@ class QTimeFreq(WidgetNode):
             # the inputstream is not needed except for parameters
             stream_spec = dict(self.input.params)
             self.conv.input.connect(stream_spec)
-            self.input.close()
+            #~ self.input.close()
             
             if self.input.params['timeaxis']==0:
                 new_shape = (d1, d0)
@@ -124,14 +124,16 @@ class QTimeFreq(WidgetNode):
                    sharedarray_shape = (self.nb_channel, int(sr*self.max_xsize)), ring_buffer_method = 'double',
                    )
             self.conv.initialize()
-
-            self.proxy_input = InputStream()
-            self.proxy_input.connect(self.conv.output)
-        
+            
+            #~ self.proxy_input = InputStream()
+            #~ self.proxy_input.connect(self.conv.output)
+                
+            
+            
         self.workers = []
         self.input_maps = []
 
-        self.global_poller = ThreadPollInput(input_stream = self.proxy_input)
+        self.global_poller = ThreadPollInput(input_stream = self.input)
         self.global_timer = QtCore.QTimer(interval = 500)
         self.global_timer.timeout.connect(self.compute_maps)
         
