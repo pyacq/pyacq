@@ -1,7 +1,7 @@
 import pytest
 
-from pyacq import create_manager
-from pyacq.viewers.qtimefreq  import TimeFreqCompute, QTimeFreq, HAVE_SCIPY, generate_wavelet_fourier
+from pyacq import create_manager, ThreadPollInput
+from pyacq.viewers.qtimefreq  import TimeFreqWorker, QTimeFreq, HAVE_SCIPY, generate_wavelet_fourier
 from pyacq.devices import NumpyDeviceBuffer
 import numpy as np
 import time
@@ -9,19 +9,26 @@ import time
 from pyqtgraph.Qt import QtCore, QtGui
 import pyqtgraph as pg
 
+#~ nb_channel = 8
+#~ sampling_rate = 1000.
+#~ chunksize = 50
 nb_channel = 32
 sampling_rate = 20000
-#~ sampling_rate = 500.
-chunksize = 100
+chunksize = 64
 
+# some moving sinus
 length = int(sampling_rate*20)
-t = np.arange(length)/sampling_rate
-buffer = np.random.rand(length, nb_channel)*.3
-buffer += np.sin(2*np.pi*1.2*t)[:,None]*.5
+times = np.arange(length)/sampling_rate
+buffer = np.random.rand(length, nb_channel)
+f1, f2, speed = 20., 60., .05
+freqs =  (np.sin(np.pi*2*speed*times)+1)/2 *  (f2-f1) + f1
+phases = np.cumsum(freqs/sampling_rate)*2*np.pi
+ampl = np.abs(np.sin(np.pi*2*speed*8*times))*.8
+buffer += (np.sin(phases)*ampl)[:,None]
 buffer = buffer.astype('float32')
 
 @pytest.mark.skipif(not HAVE_SCIPY, reason = 'no HAVE_SCIPY')
-def test_TimeFreqCompute():
+def test_TimeFreqWorker():
     # test only one worker
     man = create_manager(auto_close_at_exit = True)
     ng = man.create_nodegroup()
@@ -32,12 +39,16 @@ def test_TimeFreqCompute():
     dev.output.configure(protocol = 'tcp', interface = '127.0.0.1', transfermode = 'sharedarray',
                             sharedarray_shape = (nb_channel, 2048*50), ring_buffer_method = 'double')
     dev.initialize()
-    print(dev.output.params)
-    worker = ng.create_node('TimeFreqCompute')
-    worker.configure(max_xsize = 30., channel=0)
-    worker.input.connect(dev.output)
-    worker.output.configure()
-    worker.initialize()
+    
+    workers = []
+    for i in range(nb_channel):
+        worker = ng.create_node('TimeFreqWorker')
+        worker.configure(max_xsize = 30., channel=i, local=True)
+        worker.input.connect(dev.output)
+        worker.output.configure()
+        worker.initialize()
+        workers.append(worker)
+    
     
     # compute wavelet : 3 s. of signal at 500Hz
     import scipy.signal
@@ -47,21 +58,32 @@ def test_TimeFreqCompute():
     filter_a = np.array([1.])
     
     dev.start()
-    worker.start()
+    #~ for worker in workers:
+        #~ worker.start()
     
     time.sleep(.5)
     
     #change the wavelet on fly
-    worker.on_fly_change_wavelet(wavelet_fourrier=wavelet_fourrier, downsampling_factor=20,
+    for worker in workers:
+        worker.on_fly_change_wavelet(wavelet_fourrier=wavelet_fourrier, downsampling_factor=20,
             sig_chunk_size = 2048*20,
             plot_length=int(sub_sr*xsize), filter_a=filter_a, filter_b=filter_b)
     
-    time.sleep(2.)
+    
+    head = 0
+    for i in range(4):
+        time.sleep(.5)
+        head += int(sampling_rate*.5)
+        for worker in workers:
+            worker.compute_one_map(head)
     
     dev.stop()
-    worker.stop()
+    #~ for worker in workers:
+        #~ worker.stop()
     
     #~ man.close()
+
+
 
 @pytest.mark.skipif(not HAVE_SCIPY, reason = 'no HAVE_SCIPY')
 def test_qtimefreq_simple():
@@ -71,12 +93,6 @@ def test_qtimefreq_simple():
     
     app = pg.mkQApp()
     
-    length = int(sampling_rate*20)
-    t = np.arange(length)/sampling_rate
-    buffer = np.random.rand(length, nb_channel)*.3
-    buffer += np.sin(2*np.pi*1.2*t)[:,None]*.5
-    buffer = buffer.astype('float32')
-
     #~ dev =NumpyDeviceBuffer()
     dev = ng.create_node('NumpyDeviceBuffer')
     dev.configure( nb_channel = nb_channel, sample_interval = 1./sampling_rate, chunksize = chunksize,
@@ -85,13 +101,17 @@ def test_qtimefreq_simple():
     dev.initialize()
     
     
+    
     viewer = QTimeFreq()
     viewer.configure(with_user_dialog = True)
     viewer.input.connect(dev.output)
     viewer.initialize()
+    
+    #~ viewer.params.param('timefreq')['deltafreq'] = 2
+    viewer.params['nb_column'] = 4
+    viewer.params['refresh_interval'] = 1500
+    
     viewer.show()
-    viewer.params['nb_column'] = 8
-    viewer.params['refresh_interval'] = 2000
     
     def terminate():
         viewer.stop()
@@ -102,8 +122,15 @@ def test_qtimefreq_simple():
     
     dev.start()
 
+
+    #~ but = QtGui.QPushButton('start')
+    #~ but.clicked.connect(viewer.start)
+    #~ but.show()
+    #~ but2 = QtGui.QPushButton('stop')
+    #~ but2.clicked.connect(viewer.stop)
+    #~ but2.show()
+
     viewer.start()
-    
     # start for a while
     #~ timer = QtCore.QTimer(singleShot = True, interval = 2000)
     #~ timer.timeout.connect(terminate)
@@ -115,28 +142,27 @@ def test_qtimefreq_simple():
 
 
 @pytest.mark.skipif(not HAVE_SCIPY, reason = 'no HAVE_SCIPY')
-def test_stimefreq_distributed():
+def test_qtimefreq_distributed():
     man = create_manager(auto_close_at_exit = True)
-    ng = man.create_nodegroup()
+    
 
     #~ host = man.connect_host('neuro-090', 'tcp://neuro-090:240611')
-    #~ nodegroup_friends = [host.create_nodegroup() for _ in range(4)]
+    #~ nodegroup_friends = [host.create_nodegroup() for _ in range(8)]
+    #~ for rng in nodegroup_friends:
+        #~ print('ping', rng.ping())
     
     nodegroup_friends = [man.create_nodegroup() for _ in range(4)]
     
     
     app = pg.mkQApp()
-    
-    length = int(sampling_rate*20)
-    t = np.arange(length)/sampling_rate
-    buffer = np.random.rand(length, nb_channel)*.3
-    buffer += np.sin(2*np.pi*1.2*t)[:,None]*.5
-    buffer = buffer.astype('float32')
+
 
     #~ dev =NumpyDeviceBuffer()
+    ng = man.create_nodegroup()
     dev = ng.create_node('NumpyDeviceBuffer')
     dev.configure( nb_channel = nb_channel, sample_interval = 1./sampling_rate, chunksize = chunksize,
                     buffer = buffer)
+    #~ dev.output.configure(protocol = 'tcp', interface = '194.167.217.129', transfermode = 'plaindata')
     dev.output.configure(protocol = 'tcp', interface = '127.0.0.1', transfermode = 'plaindata')
     dev.initialize()
     
@@ -144,7 +170,6 @@ def test_stimefreq_distributed():
     
     viewer = QTimeFreq()
     viewer.configure(with_user_dialog = True, nodegroup_friends=nodegroup_friends)
-    #~ viewer.configure(with_user_dialog = True, nodegroup_friends =None)
     viewer.input.connect(dev.output)
     viewer.initialize()
     viewer.show()
@@ -176,7 +201,7 @@ def test_stimefreq_distributed():
 
 
 if __name__ == '__main__':
-    #~ test_TimeFreqCompute()
+    #~ test_TimeFreqWorker()
     #~ test_qtimefreq_simple()
-    test_stimefreq_distributed()
+    test_qtimefreq_distributed()
 

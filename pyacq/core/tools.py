@@ -23,6 +23,7 @@ class ThreadPollInput(QtCore.QThread):
         
         self.running = False
         self.lock = Mutex()
+        self._pos = None
     
     def run(self):
         with self.lock:
@@ -39,12 +40,15 @@ class ThreadPollInput(QtCore.QThread):
                 #~ print('self.input_stream() is not None')
             ev = self.input_stream().poll(timeout = self.timeout)
             if ev>0:
-                pos, data = self.input_stream().recv()
-                self.new_data.emit(pos, data)
+                self._pos, data = self.input_stream().recv()
+                self.new_data.emit(self._pos, data)
         
     def stop(self):
         with self.lock:
             self.running = False
+    
+    def pos(self):
+        return self._pos
 
 
 class StreamConverter(Node):
