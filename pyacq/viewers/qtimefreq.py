@@ -172,7 +172,7 @@ class QTimeFreq(WidgetNode):
 
                 
             else:
-                worker.output.configure(protocol = 'tcp', transfermode = 'plaindata')#, interface = 'eth0'
+                worker.output.configure(protocol = 'tcp', transfermode = 'plaindata')#, interface = 'eth0')
                 worker.initialize()
                 input_map = InputStream()
                 stream_spec = dict(worker.output.params)
@@ -180,6 +180,7 @@ class QTimeFreq(WidgetNode):
                 #~ print(stream_spec)
                 print(worker.output.params)
                 input_map.connect(worker.output)
+                #~ input_map.connect(stream_spec)
                 self.input_maps.append(input_map)
                 
                 poller = ThreadPollInput(input_stream = input_map)
