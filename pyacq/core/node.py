@@ -53,6 +53,7 @@ class Node(QtCore.QObject):
         self._running = False
         self._configured = False
         self._initialized = False
+        self._closed = False
         
         self.inputs = { name:InputStream(spec = spec, node = self, name = name) for name, spec in self._input_specs.items() }
         self.outputs = { name:OutputStream(spec = spec, node = self, name = name) for name, spec in self._output_specs.items() }
@@ -118,6 +119,12 @@ class Node(QtCore.QObject):
         with self.lock:
             return self._initialized
     
+    def closed(self):
+        """get the closed state of the Node (thread safe)
+        """
+        with self.lock:
+            return self._closed
+    
     def configure(self, **kargs):
         """Configure the Node
         """
@@ -167,11 +174,14 @@ class Node(QtCore.QObject):
         """
         #~ assert not self.running(),\
                 #~ 'Cannot close Node {} : the Node is running'.format(self.name)
-        
+        with self.lock:
+            if self._closed:
+                return
         self._close()
         with self.lock:
             self._configured = False
             self._initialized = False
+            self._closed = True
     
     #That method MUST be overwritten
     def _configure(self, **kargs):
@@ -223,6 +233,14 @@ class WidgetNode(QtGui.QWidget, Node, ):
     def close(self):
         Node.close(self)
         QtGui.QWidget.close(self)
+
+    def closeEvent(self,event ):
+        if self.running():
+            self.stop()
+        if not self.closed():
+            Node.close(self)
+        event.accept()
+
         
 
 
