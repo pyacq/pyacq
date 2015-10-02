@@ -46,14 +46,51 @@ default_by_channel_params = [
 
 class QTimeFreq(WidgetNode):
     """
-    Class to visulaize time-frequency morlet scalogram for multiple signal.
+    Class to visulaize time-frequency with Morlet continuous wavelet.
+    
+    It allow better visualisation the standart FFT spectrogram because it is not dependant
+    of the FFT size along frequency.
+    See https://en.wikipedia.org/wiki/Morlet_wavelet
+    
+    The implementation is done with one TimeFreqWorker per channel.
+    The computation is quite heavy:
+        * downsampling the signal chunk (with a filtfilt first)
+        * fft of signal
+        * multiplication line by line (freq by freq) with the FFT wavelet.
+        * ifft the maps
+        
+    There is 2 modes:
+        * each TimeFreqWorker live in the same QApp as QTimeFreq (nodegroup_friends=None)
+        * each TimeFreqWorker is spawn in some other NodeGroup to dustrubute the  (nodegroup_friends=[some_list_of_nodegroup])
+    
+    This viewer needs external tunning for perfomency: small refresh_interval, high number of freqs, hight f_stop, high xsize can lead to hevay CPU loads.
     
     The QTimeFreq need as inputstream:
         * transfermode==sharedarray
         * timeaxis==1
     
-    If the inputstream has not this propertis  the class create it own proxy input
+    If the inputstream has not this properties  the class create it own proxy input
     with a node StreamConverter.
+    
+    
+    QTimeFreq can on th fly parametrized by changin QTimeFreq.params and QTimeFreq.by_channel_params.
+    By default, double click on the viewer open a dialog for theses parameters.
+    
+    
+    Usage:
+    
+    viewer = QTimeFreq()
+    viewer.configure(with_user_dialog = True, nodegroup_friends = None)
+    viewer.input.connect(somedevice.output)
+    viewer.initialize()
+    viewer.show()
+    viewer.start()
+    
+    viewer.params['nb_column'] = 4
+    viewer.params['refresh_interval'] = 1000
+    
+    
+    
     
     """
     
@@ -133,7 +170,7 @@ class QTimeFreq(WidgetNode):
             if self.local_workers:
                 worker = TimeFreqWorker()
             else:
-                ng = self.nodegroup_friends[i%(len(self.nodegroup_friends)-1)]
+                ng = self.nodegroup_friends[i%max(len(self.nodegroup_friends)-1, 1)]
                 worker = ng.create_node('TimeFreqWorker')
                 worker.ng_proxy = ng
             worker.configure(max_xsize = self.max_xsize, channel = i, local = self.local_workers)
@@ -305,13 +342,13 @@ class QTimeFreq(WidgetNode):
         #TODO get cmap from somewhere esle
         from matplotlib.cm import get_cmap
         from matplotlib.colors import ColorConverter
-        
         lut = [ ]
         cmap = get_cmap(self.params['colormap'] , 3000)
         for i in range(3000):
             r,g,b =  ColorConverter().to_rgb(cmap(i) )
             lut.append([r*255,g*255,b*255])
         self.lut = np.array(lut, dtype = np.uint8)
+        #
         
         tfr_params = self.params.param('timefreq')
         for i in range(self.nb_channel):
@@ -387,13 +424,13 @@ class QTimeFreq(WidgetNode):
                 self.global_timer.start()
     
     def compute_maps(self):
-        head = self.global_poller.pos()
+        head = int(self.global_poller.pos())
         for i in range(self.nb_channel):
             if self.by_channel_params.children()[i]['visible']:
                 if self.local_workers:
                     self.workers[i].compute_one_map(head)
                 else:
-                    self.workers[i].compute_one_map(int(head), _sync = False)
+                    self.workers[i].compute_one_map(head, _sync = False)
     
     def on_new_map_local(self, chan):
         head, wt_map = self.input_maps[chan].recv()
@@ -501,34 +538,37 @@ class ComputeThread(QtCore.QThread):
             return
         head = self.head
         
-        #TODO find better:
-        for k, v in self.worker_params.items():
-            setattr(self, k, v)
+        downsampling_factor = self.worker_params['downsampling_factor']
+        sig_chunk_size = self.worker_params['sig_chunk_size']
+        filter_a = self.worker_params['filter_a']
+        filter_b = self.worker_params['filter_b']
+        wavelet_fourrier = self.worker_params['wavelet_fourrier']
+        plot_length = self.worker_params['plot_length']
         
-        t1 = time.time()
+        #~ t1 = time.time()
         
-        if self.downsampling_factor>1:
-            head = head - head%self.downsampling_factor
-        full_arr = self.in_stream().get_array_slice(head, self.sig_chunk_size)[self.channel, :]
+        if downsampling_factor>1:
+            head = head - head%downsampling_factor
+        full_arr = self.in_stream().get_array_slice(head, sig_chunk_size)[self.channel, :]
         
-        t2 = time.time()
+        #~ t2 = time.time()
         
-        if self.downsampling_factor>1:
-            small_arr = scipy.signal.filtfilt(self.filter_b, self.filter_a, full_arr)
-            small_arr =small_arr[::self.downsampling_factor].copy()# to ensure continuity
+        if downsampling_factor>1:
+            small_arr = scipy.signal.filtfilt(filter_b, filter_a, full_arr)
+            small_arr =small_arr[::downsampling_factor].copy()# to ensure continuity
         else:
             small_arr = full_arr
         
         small_arr_f=scipy.fftpack.fft(small_arr)
-        if small_arr_f.shape[0] != self.wavelet_fourrier.shape[0]: return
-        wt_tmp=scipy.fftpack.ifft(small_arr_f[:,np.newaxis]*self.wavelet_fourrier,axis=0)
+        if small_arr_f.shape[0] != wavelet_fourrier.shape[0]: return
+        wt_tmp=scipy.fftpack.ifft(small_arr_f[:,np.newaxis]*wavelet_fourrier,axis=0)
         wt = scipy.fftpack.fftshift(wt_tmp,axes=[0])
         wt = np.abs(wt).astype('float32')
-        wt = wt[-self.plot_length:]
+        wt = wt[-plot_length:]
         
-        self.last_wt_map = wt
-        self.out_stream().send(self.head, wt)
-        t3 = time.time()
+        #~ self.last_wt_map = wt
+        self.out_stream().send(head, wt)
+        #~ t3 = time.time()
         
         #print('compute', self.channel,  t2-t1, t3-t2, t3-t1, QtCore.QThread.currentThreadId())
 
@@ -576,10 +616,12 @@ class TimeFreqWorker(Node):
     #~ def on_fly_change_wavelet(self, wavelet_fourrier=None, downsampling_factor=None, sig_chunk_size = None,
             #~ plot_length=None, filter_a=None, filter_b=None):
     def on_fly_change_wavelet(self, **worker_params):
-        p = self.worker_params = worker_params
+        p = worker_params
         p['out_shape'] = (p['plot_length'], p['wavelet_fourrier'].shape[1])
         self.output.params['shape'] = p['out_shape']
         self.output.params['sampling_rate'] = self.sampling_rate/p['downsampling_factor']
+        
+        self.worker_params = worker_params
     
     def on_thread_done(self):
         self.thread.wait()
@@ -594,7 +636,7 @@ class TimeFreqWorker(Node):
         self.thread.worker_params = self.worker_params
         self.thread.head = head
         self.thread.start()
-    
+
 register_node_type(TimeFreqWorker)
 
 

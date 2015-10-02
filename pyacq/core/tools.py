@@ -115,15 +115,6 @@ class StreamConverter(Node):
         #if 'shape' in self.conversions:
         #    assert 'timeaxis' in self.conversions        
         self.thread = ThreadStreamConverter(self.input, self.output, self.conversions)
-        #~ self.poller = ThreadPollInput(input_stream = self.input)
-        #~ self.poller.new_data.connect(self.on_new_data)
-    
-    #~ def on_new_data(self, pos, arr):
-        #~ if 'transfermode' in self.conversions and self.conversions['transfermode'][0]=='sharedarray':
-            #~ arr = self.input.get_array_slice(self, pos, None)
-        #~ if 'timeaxis' in self.conversions:
-            #~ arr = arr.swapaxes(*self.conversions['timeaxis'])
-        #~ self.output.send(pos, arr)
     
     def _start(self):
         self.thread.start()

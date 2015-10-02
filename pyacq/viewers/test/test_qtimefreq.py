@@ -31,8 +31,8 @@ buffer = buffer.astype('float32')
 @pytest.mark.skipif(not HAVE_SCIPY, reason = 'no HAVE_SCIPY')
 def test_TimeFreqWorker():
     # test only one worker
-    #~ man = create_manager(auto_close_at_exit = False)
-    man = create_manager(auto_close_at_exit = True)
+    man = create_manager(auto_close_at_exit = False)
+    #~ man = create_manager(auto_close_at_exit = True)
     
     ng = man.create_nodegroup()
 
@@ -80,7 +80,7 @@ def test_TimeFreqWorker():
     
     dev.stop()
     
-    #~ man.close()
+    man.close()
 
 
 
@@ -118,26 +118,19 @@ def test_qtimefreq_simple():
         viewer.close()
         dev.close()
         app.quit()
+        print('yep')
     
     dev.start()
-
-
-    #~ but = QtGui.QPushButton('start')
-    #~ but.clicked.connect(viewer.start)
-    #~ but.show()
-    #~ but2 = QtGui.QPushButton('stop')
-    #~ but2.clicked.connect(viewer.stop)
-    #~ but2.show()
 
     viewer.start()
     
     # start for a while
     timer = QtCore.QTimer(singleShot = True, interval = 3000)
     timer.timeout.connect(terminate)
-    #~ timer.start()
+    timer.start()
     
     app.exec_()
-    print('man.close()')
+    
     man.close()
 
 
@@ -146,7 +139,8 @@ def test_qtimefreq_distributed():
     #~ man = create_manager(auto_close_at_exit = True)
     man = create_manager(auto_close_at_exit = False)
 
-    nodegroup_friends = [man.create_nodegroup() for _ in range(4)]
+    #~ nodegroup_friends = [man.create_nodegroup() for _ in range(4)]
+    nodegroup_friends = [man.create_nodegroup() for _ in range(1)]
     
     app = pg.mkQApp()
 
