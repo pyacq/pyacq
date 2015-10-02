@@ -3,6 +3,7 @@ from pyqtgraph.util.mutex import Mutex
 import weakref
 import numpy as np
 from collections import OrderedDict
+import logging
 
 from .node import Node, register_node_type
 from .stream import OutputStream
@@ -12,8 +13,10 @@ import time
 class ThreadPollInput(QtCore.QThread):
     """
     Thread that pool in backgroup an InputStream (zmq.SUB).
-    And emit Signal.
     Util for Node that have inputs.    
+    
+    By default it emit signal (new_data) but process_data can be override.
+    
     """
     new_data = QtCore.Signal(int,object)
     def __init__(self, input_stream, timeout = 200, parent = None):
@@ -33,22 +36,40 @@ class ThreadPollInput(QtCore.QThread):
             with self.lock:
                 if not self.running:
                     break
-            #~ if self.input_stream() is None:
-                #~ print('self.input_stream() is None')
-                #~ continue
-            #~ else:
-                #~ print('self.input_stream() is not None')
+                if self.input_stream() is None:
+                    logging.info("ThreadPollInput has lost InputStream")
+                    break
             ev = self.input_stream().poll(timeout = self.timeout)
             if ev>0:
                 self._pos, data = self.input_stream().recv()
-                self.new_data.emit(self._pos, data)
-        
+                self.process_data(self._pos, data)
+    
+    def process_data(self, pos, data):
+        #This can be override to chnage behavior
+        self.new_data.emit(self._pos, data)
+    
     def stop(self):
         with self.lock:
             self.running = False
     
     def pos(self):
         return self._pos
+
+
+
+
+class ThreadStreamConverter(ThreadPollInput):
+    def __init__(self, input_stream, output_stream, conversions,timeout = 200, parent = None):
+        ThreadPollInput.__init__(self, input_stream, timeout = timeout, parent = parent)
+        self.output_stream = weakref.ref(output_stream)
+        self.conversions = conversions
+    
+    def process_data(self, pos, data):
+        if 'transfermode' in self.conversions and self.conversions['transfermode'][0]=='sharedarray':
+            data = self.input_stream().get_array_slice(self, pos, None)
+        if 'timeaxis' in self.conversions:
+            data = data.swapaxes(*self.conversions['timeaxis'])
+        self.output_stream().send(pos, data)
 
 
 class StreamConverter(Node):
@@ -93,23 +114,23 @@ class StreamConverter(Node):
         #DO some check ???
         #if 'shape' in self.conversions:
         #    assert 'timeaxis' in self.conversions        
-        
-        self.poller = ThreadPollInput(input_stream = self.input)
-        self.poller.new_data.connect(self.on_new_data)
+        self.thread = ThreadStreamConverter(self.input, self.output, self.conversions)
+        #~ self.poller = ThreadPollInput(input_stream = self.input)
+        #~ self.poller.new_data.connect(self.on_new_data)
     
-    def on_new_data(self, pos, arr):
-        if 'transfermode' in self.conversions and self.conversions['transfermode'][0]=='sharedarray':
-            arr = self.input.get_array_slice(self, pos, None)
-        if 'timeaxis' in self.conversions:
-            arr = arr.swapaxes(*self.conversions['timeaxis'])
-        self.output.send(pos, arr)
+    #~ def on_new_data(self, pos, arr):
+        #~ if 'transfermode' in self.conversions and self.conversions['transfermode'][0]=='sharedarray':
+            #~ arr = self.input.get_array_slice(self, pos, None)
+        #~ if 'timeaxis' in self.conversions:
+            #~ arr = arr.swapaxes(*self.conversions['timeaxis'])
+        #~ self.output.send(pos, arr)
     
     def _start(self):
-        self.poller.start()
+        self.thread.start()
 
     def _stop(self):
-        self.poller.stop()
-        self.poller.wait()
+        self.thread.stop()
+        self.thread.wait()
     
     def _close(self):
         pass
@@ -118,45 +139,25 @@ register_node_type(StreamConverter)
 
 
 
-class ThreadStreamSplitter(QtCore.QThread):
+class ThreadStreamSplitter(ThreadPollInput):
     """
-    Thread that pool in backgroup an InputStream (zmq.SUB).
-    And emit Signal.
-    Util for Node that have inputs.    
+    
     """
     def __init__(self, input_stream, outputs_stream, channelaxis, nb_channel, timeout = 200, parent = None):
-        QtCore.QThread.__init__(self, parent)
-        self.input_stream = weakref.ref(input_stream)
+        ThreadPollInput.__init__(self, input_stream, timeout = timeout, parent = parent)
         self.outputs_stream = weakref.WeakValueDictionary()
         self.outputs_stream.update(outputs_stream)
         self.channelaxis = channelaxis
         self.nb_channel = nb_channel
-        self.timeout = timeout
-        
-        self.running = False
-        self.lock = Mutex()
     
-    def run(self):
-        with self.lock:
-            self.running = True
-        
-        while True:
-            with self.lock:
-                if not self.running:
-                    break
-            ev = self.input_stream().poll(timeout = self.timeout)
-            if ev>0:
-                pos, data = self.input_stream().recv()
-                if self.channelaxis == 1:
-                    for i in range(self.nb_channel):
-                        self.outputs_stream[str(i)].send(pos, data[:, i:i+1].copy())
-                else:
-                    for i in range(self.nb_channel):
-                        self.outputs_stream[str(i)].send(pos, data[i:i+1, :])
-        
-    def stop(self):
-        with self.lock:
-            self.running = False
+    def process_data(self, pos, data):
+        if self.channelaxis == 1:
+            for i in range(self.nb_channel):
+                self.outputs_stream[str(i)].send(pos, data[:, i:i+1].copy())
+        else:
+            for i in range(self.nb_channel):
+                self.outputs_stream[str(i)].send(pos, data[i:i+1, :])
+
 
 class StreamSplitter(Node):
     """
