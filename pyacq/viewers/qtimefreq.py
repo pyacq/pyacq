@@ -2,6 +2,7 @@ from pyqtgraph.Qt import QtCore, QtGui
 import pyqtgraph as pg
 from pyqtgraph.util.mutex import Mutex
 
+import sys
 import numpy as np
 import weakref
 import time
@@ -26,6 +27,8 @@ default_params = [
         {'name': 'background_color', 'type': 'color', 'value': 'k' },
         {'name': 'colormap', 'type': 'list', 'value': 'jet', 'values' : ['jet', 'gray', 'bone', 'cool', 'hot', ] },
         {'name': 'refresh_interval', 'type': 'int', 'value': 500 , 'limits':[5, 1000]},
+        {'name': 'mode', 'type': 'list', 'value': 'scroll' , 'values' : ['scan', 'scroll'] },
+        {'name': 'show_axis', 'type': 'bool', 'value': False},
         #~ {'name': 'display_labels', 'type': 'bool', 'value': False }, #TODO when title
         {'name' : 'timefreq' , 'type' : 'group', 'children' : [
                         {'name': 'f_start', 'type': 'float', 'value': 3., 'step': 1.},
@@ -68,14 +71,8 @@ class QTimeFreq(WidgetNode):
         self.graphiclayout =  pg.GraphicsLayoutWidget()
         self.mainlayout.addWidget(self.graphiclayout)
         
-        #~ self.grid = QtGui.QGridLayout()
-        #~ self.mainlayout.addLayout(self.grid)
-        
-        #~ self.graphicsviews = []
-    
     def show_params_controler(self):
         self.params_controler.show()
-        #TODO deal with modality
     
     def _configure(self, with_user_dialog = True, max_xsize = 60., nodegroup_friends = None):
         self.with_user_dialog = with_user_dialog
@@ -95,7 +92,6 @@ class QTimeFreq(WidgetNode):
         #create proxy input to ensure sharedarray with time axis 1
         if self.input.params['transfermode'] == 'sharedarray' and self.input.params['timeaxis'] == 1:
             self.conv = None
-            #~ self.proxy_input = self.input
         else:
             # if input is not transfermode creat a proxy
             if self.local_workers:
@@ -103,32 +99,23 @@ class QTimeFreq(WidgetNode):
             else:
                 ng = self.nodegroup_friends[-1]
                 self.conv = ng.create_node('StreamConverter')
-            
+                self.conv.ng_proxy = ng
             self.conv.configure()
 
-
-            #~ self.conv.input.connect(self.input.params)
             # the inputstream is not needed except for parameters
-            stream_spec = dict(self.input.params)
-            self.conv.input.connect(stream_spec)
-            #~ self.input.close()
+            input_spec = dict(self.input.params)
+            self.conv.input.connect(input_spec)
             
             if self.input.params['timeaxis']==0:
                 new_shape = (d1, d0)
             else:
                 new_shape = (d0, d1)
-            self.conv.output.configure(protocol = 'tcp', interface = '127.0.0.1', port='*', 
-                   transfermode = 'sharedarray', streamtype = 'analogsignal',
-                   dtype = 'float32', shape = new_shape, timeaxis = 1, 
+            self.conv.output.configure(protocol = 'tcp', interface = '127.0.0.1', port='*', dtype = 'float32',
+                   transfermode = 'sharedarray', streamtype = 'analogsignal', shape = new_shape, timeaxis = 1, 
                    compression ='', scale = None, offset = None, units = '',
                    sharedarray_shape = (self.nb_channel, int(sr*self.max_xsize)), ring_buffer_method = 'double',
                    )
             self.conv.initialize()
-            
-            #~ self.proxy_input = InputStream()
-            #~ self.proxy_input.connect(self.conv.output)
-                
-            
             
         self.workers = []
         self.input_maps = []
@@ -137,63 +124,43 @@ class QTimeFreq(WidgetNode):
         self.global_timer = QtCore.QTimer(interval = 500)
         self.global_timer.timeout.connect(self.compute_maps)
         
-        
-        if self.local_workers:
-            pass
-        else:
+        if not self.local_workers:
             self.map_pollers = []
-            
         
         for i in range(self.nb_channel):
+            
+            #create worker
             if self.local_workers:
                 worker = TimeFreqWorker()
             else:
                 ng = self.nodegroup_friends[i%(len(self.nodegroup_friends)-1)]
                 worker = ng.create_node('TimeFreqWorker')
-                
+                worker.ng_proxy = ng
             worker.configure(max_xsize = self.max_xsize, channel = i, local = self.local_workers)
             worker.input.connect(self.conv.output)
-            
-            #TODO tcp or ipc or inproc
             if self.local_workers:
-                # no output used
-                worker.output.configure(protocol = 'inproc', transfermode = 'plaindata')
-                worker.initialize()
-                worker.wt_map_done.connect(self.on_new_map_local)
-                #~ self.global_poller.new_data.connect(worker.back_compute.new_head)
-
-                input_map = InputStream()
-                stream_spec = dict(worker.output.params)
-                #~ stream_spec['interface'] = 'neuro-090'
-                #~ print(stream_spec)
-                print(worker.output.params)
-                input_map.connect(worker.output)
-                self.input_maps.append(input_map)
-
-                
+                protocol = 'inproc'
             else:
-                worker.output.configure(protocol = 'tcp', transfermode = 'plaindata')#, interface = 'eth0')
-                worker.initialize()
-                input_map = InputStream()
-                stream_spec = dict(worker.output.params)
-                #~ stream_spec['interface'] = 'neuro-090'
-                #~ print(stream_spec)
-                print(worker.output.params)
-                input_map.connect(worker.output)
-                #~ input_map.connect(stream_spec)
-                self.input_maps.append(input_map)
-                
-                poller = ThreadPollInput(input_stream = input_map)
-                poller.new_data.connect(self.on_new_map_socket)
-                poller.i = i
-                self.map_pollers.append(poller)
-                
+                protocol = 'tcp'
+            worker.output.configure(protocol = protocol, transfermode = 'plaindata')
+            worker.initialize()
             self.workers.append(worker)
             
+            #socket stream for maps from worker
+            input_map = InputStream()
+            stream_spec = dict(worker.output.params)
+            input_map.connect(worker.output)
+            self.input_maps.append(input_map)
+            if self.local_workers:
+                worker.wt_map_done.connect(self.on_new_map_local)
+            else:
+                poller = ThreadPollInput(input_stream = input_map)
+                poller.new_data.connect(self.on_new_map_socket)
+                poller.chan = i
+                self.map_pollers.append(poller)
         
-        #~ self.splitter.initialize()
-        
-        # This is used to diffred heavy action (setting plots, compute wavelet, ...)
+        # This is used to diffred heavy action whena changing params (setting plots, compute wavelet, ...)
+        # this avoid overload on CPU if multiple changes occurs in a short time
         self.mutex_action = Mutex()
         self.actions = OrderedDict([(self.create_grid, False),
                                                     (self.initialize_time_freq, False),
@@ -224,26 +191,24 @@ class QTimeFreq(WidgetNode):
         self.create_grid()
         self.initialize_time_freq()
         self.initialize_plots()
-        
+    
     def _start(self):
-        #~ self.start_workers()
         self.global_poller.start()
         self.global_timer.start()
-        if self.local_workers:
-            pass
-        else:
+        for worker in self.workers:
+            worker.start()
+        if not self.local_workers:
             for i in range(self.nb_channel):
                 self.map_pollers[i].start()
         self.conv.start()
     
     def _stop(self):
-        #~ self.stop_workers()
         self.global_timer.stop()
         self.global_poller.stop()
         self.global_poller.wait()
-        if self.local_workers:
-            pass
-        else:
+        for worker in self.workers:
+            worker.stop()
+        if not self.local_workers:
             for i in range(self.nb_channel):
                 self.map_pollers[i].stop()
                 self.map_pollers[i].wait()
@@ -256,9 +221,12 @@ class QTimeFreq(WidgetNode):
             self.params_controler.close()
         for worker in self.workers:
             worker.close()
-        for poller in self.map_pollers:
-            poller.close()
         self.conv.close()
+        if not self.local_workers:
+            #remove from NodeGroup
+            self.conv.ng_proxy.delete_node(self.conv.name)
+            for worker in self.workers:
+                worker.ng_proxy.delete_node(worker.name)
 
     def create_grid(self):
         color = self.params['background_color']
@@ -282,10 +250,9 @@ class QTimeFreq(WidgetNode):
             
             plot = pg.PlotItem(viewBox = viewBox)
             plot.hideButtons()
+            plot.showAxis('left', self.params['show_axis'])
+            plot.showAxis('bottom', self.params['show_axis'])
 
-            plot.showAxis('left', False)
-            plot.showAxis('bottom', False)
-            
             self.graphiclayout.ci.layout.addItem(plot, r, c)#, rowspan, colspan)
             if r not in self.graphiclayout.ci.rows:
                 self.graphiclayout.ci.rows[r] = {}
@@ -348,10 +315,9 @@ class QTimeFreq(WidgetNode):
         
         tfr_params = self.params.param('timefreq')
         for i in range(self.nb_channel):
-            print('initialize_plots', i)
             if self.by_channel_params.children()[i]['visible']:
                 for item in self.plots[i].items:
-                    #~ #remove old images
+                    #remove old images
                     self.plots[i].removeItem(item)
                 
                 clim = self.by_channel_params.children()[i]['clim']
@@ -364,20 +330,6 @@ class QTimeFreq(WidgetNode):
                 self.plots[i].setXRange( -self.wanted_size, 0.)
                 self.plots[i].setYRange(f_start, f_stop)
                 self.images[i] =image
-        print('initialize_plots', 'done')
-    
-    
-    def stop_workers(self):
-        pass
-        #~ for i in range(self.nb_channel):
-            #~ if self.workers[i].running():
-                #~ self.workers[i].stop()
-
-    def start_workers(self):
-        pass
-        #~ for i in range(self.nb_channel):
-            #~ if self.by_channel_params.children()[i]['visible']:
-                #~ self.workers[i].start()
     
     def on_param_change(self, params, changes):
         for param, change, data in changes:
@@ -395,9 +347,14 @@ class QTimeFreq(WidgetNode):
                 clim = param.value()
                 if self.images[i] is not None:
                     self.images[i].setImage(self.images[i].image, lut = self.lut, levels = [0,clim])
+            if param.name()=='show_axis':
+                for plot in self.plots:
+                    if plot is not None:
+                        plot.showAxis('left', data)
+                        plot.showAxis('bottom', data)                        
             
+            #difered action delayed with timer
             with self.mutex_action:
-                #difered action
                 if param.name()=='xsize':
                     self.actions[self.initialize_time_freq] = True
                     self.actions[self.initialize_plots] = True
@@ -421,20 +378,13 @@ class QTimeFreq(WidgetNode):
         with self.mutex_action:
             if self.running():
                 self.global_timer.stop()
-                #~ print('stop_workers')
-                #~ self.stop_workers
-            for action, flag in self.actions.items():
-                print(action, flag)
-                if flag:
+            for action, do_it in self.actions.items():
+                if do_it:
                     action()
-                    print('done')
             for action in self.actions:
                 self.actions[action] = False
-            
             if self.running():
                 self.global_timer.start()
-                #~ print('start_workers')
-                #~ self.start_workers
     
     def compute_maps(self):
         head = self.global_poller.pos()
@@ -445,17 +395,23 @@ class QTimeFreq(WidgetNode):
                 else:
                     self.workers[i].compute_one_map(int(head), _sync = False)
     
-    def on_new_map_local(self, i):
-        _, wt_map = self.input_maps[i].recv()
-        #~ print('on_new_map_local', 'wt_map', i, wt_map.shape)
-        if self.images[i] is None: return
-        self.images[i].updateImage(wt_map)
+    def on_new_map_local(self, chan):
+        head, wt_map = self.input_maps[chan].recv()
+        self.update_image(chan, head, wt_map)
     
-    def on_new_map_socket(self, pos, wt_map):
-        i = self.sender().i
-        if self.images[i] is None: return
-        self.images[i].updateImage(wt_map)
+    def on_new_map_socket(self, head, wt_map):
+        chan = self.sender().chan
+        self.update_image(chan, head, wt_map)
 
+    def update_image(self, chan, head, wt_map):
+        if self.images[chan] is None: return
+        if self.params['mode']=='scroll':
+            self.images[chan].updateImage(wt_map)
+        elif self.params['mode'] =='scan':
+            ind = (head//self.downsampling_factor)%self.plot_length+1
+            wt_map = np.concatenate([wt_map[-ind:, :], wt_map[:-ind, :]], axis = 0)
+            self.images[chan].updateImage(wt_map)
+    
     def clim_zoom(self, factor):
         for i, p in enumerate(self.by_channel_params.children()):
             p.param('clim').setValue(p.param('clim').value()*factor)
@@ -466,7 +422,7 @@ class QTimeFreq(WidgetNode):
         limits = self.params.param('xsize').opts['limits']
         if newsize>limits[0] and newsize<limits[1]:
             self.params['xsize'] = newsize    
-
+    
     def auto_clim(self, identic = True):
         if identic:
             all = [ ]
@@ -528,6 +484,9 @@ def generate_wavelet_fourier(len_wavelet, f_start, f_stop, deltafreq, sampling_r
 
 
 class ComputeThread(QtCore.QThread):
+    """
+    Thread used internal by TimeFreqWorker.
+    """
     def __init__(self, in_stream, out_stream, channel, local, parent=None):
         QtCore.QThread.__init__(self, parent)
         self.in_stream = weakref.ref(in_stream)
@@ -542,6 +501,7 @@ class ComputeThread(QtCore.QThread):
             return
         head = self.head
         
+        #TODO find better:
         for k, v in self.worker_params.items():
             setattr(self, k, v)
         
@@ -560,35 +520,28 @@ class ComputeThread(QtCore.QThread):
             small_arr = full_arr
         
         small_arr_f=scipy.fftpack.fft(small_arr)
-        #~ print(small_arr_f.shape[0], self.wavelet_fourrier.shape[0])
         if small_arr_f.shape[0] != self.wavelet_fourrier.shape[0]: return
         wt_tmp=scipy.fftpack.ifft(small_arr_f[:,np.newaxis]*self.wavelet_fourrier,axis=0)
         wt = scipy.fftpack.fftshift(wt_tmp,axes=[0])
         wt = np.abs(wt).astype('float32')
         wt = wt[-self.plot_length:]
         
-        #~ wt = np.random.randn(*self.wavelet_fourrier.shape).astype(self.out_stream().params['dtype'])
-        #~ wt = wt[-self.plot_length:]
-        #send map
-        #~ self._n += 1
-        if self.local:
-            self.last_wt_map = wt
-            #~ self.wt_map_done.emit(self.channel)
-            self.out_stream().send(0, wt)
-        else:
-            self.out_stream().send(0, wt)
+        self.last_wt_map = wt
+        self.out_stream().send(self.head, wt)
         t3 = time.time()
         
-        print('compute', self.channel,  t2-t1, t3-t2, t3-t1, QtCore.QThread.currentThreadId())
+        #print('compute', self.channel,  t2-t1, t3-t2, t3-t1, QtCore.QThread.currentThreadId())
 
 
 
 class TimeFreqWorker(Node):
+    """
+    TimeFreqWorker is Node than compute a timefrequancy map for one channel.
+    It is used by QTimeFreq.
+    """
     _input_specs = {'signal' : dict(streamtype = 'signals', transfermode = 'sharedarray', timeaxis=1, ring_buffer_method = 'double')}
     _output_specs = {'timefreq' : dict(streamtype = 'image', dtype = 'float32')}
     
-    #~ sig_on_fly_change_wavelet = QtCore.pyqtSignal(object)
-    #~ sig_set_interval = QtCore.pyqtSignal(int)
     wt_map_done = QtCore.pyqtSignal(int)
     def __init__(self, **kargs):
         Node.__init__(self, **kargs)
@@ -609,35 +562,16 @@ class TimeFreqWorker(Node):
         self.sampling_rate = sr = self.input.params['sampling_rate']
         self.thread = ComputeThread(self.input, self.output, self.channel, self.local)
         self.thread.finished.connect(self.on_thread_done)
-        
-        #~ if not self.local:
-            #~ self.poller = ThreadPollInput(input_stream = self.input)
-            #~ self.poller.new_data.connect(self.back_compute.new_head)
-
-        #~ self.poller = ThreadPollInput(input_stream = self.input)
-        #~ self.poller.new_data.connect(self.back_compute.new_head)
-
 
     def _start(self):
         pass
-        #~ self.thread.start()
-        #~ if not self.local:
-            #~ self.poller.start()
-        #~ self.poller.start()
     
     def _stop(self):
-        pass
-        #~ self.thread.exit()
-        #~ self.thread.wait()
-        #~ if not self.local:
-            #~ self.poller.stop()
-            #~ self.poller.wait()
-        #~ self.poller.stop()
-        #~ self.poller.wait()
+        if self.thread.isRunning():
+            self.thread.wait()
     
     def _close(self):
-        if self.running():
-            self.stop()
+        pass
     
     #~ def on_fly_change_wavelet(self, wavelet_fourrier=None, downsampling_factor=None, sig_chunk_size = None,
             #~ plot_length=None, filter_a=None, filter_b=None):
@@ -650,26 +584,26 @@ class TimeFreqWorker(Node):
     def on_thread_done(self):
         self.thread.wait()
         self.wt_map_done.emit(self.channel)
-        print('done', self.channel)
     
     def compute_one_map(self, head):
+        assert self.running(), 'TimeFreqWorker is not running'
         if self.thread.isRunning():
             return
-        #~ print(self.worker_params)
+        if self.closed():
+            return
         self.thread.worker_params = self.worker_params
         self.thread.head = head
         self.thread.start()
     
-    def set_interval(self, interval):
-        pass
-        #~ self.sig_set_interval.emit(interval)
-
 register_node_type(TimeFreqWorker)
 
 
 
 
 class TimeFreqControler(QtGui.QWidget):
+    """
+    This is GUI controler for QTimeFreq.
+    """
     def __init__(self, parent = None, viewer= None):
         QtGui.QWidget.__init__(self, parent)
         
@@ -710,7 +644,6 @@ class TimeFreqControler(QtGui.QWidget):
                 self.qlist.item(i).setSelected(True)            
             v.addWidget(QtGui.QLabel('<b>and apply...<\b>'))
         
-        # 
         but = QtGui.QPushButton('set visble')
         v.addWidget(but)
         but.clicked.connect(self.on_set_visible)

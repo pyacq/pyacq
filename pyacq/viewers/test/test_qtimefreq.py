@@ -9,12 +9,13 @@ import time
 from pyqtgraph.Qt import QtCore, QtGui
 import pyqtgraph as pg
 
-#~ nb_channel = 8
-#~ sampling_rate = 1000.
-#~ chunksize = 50
-nb_channel = 32
-sampling_rate = 20000
-chunksize = 64
+nb_channel = 8
+sampling_rate = 1000.
+chunksize = 50
+
+#~ nb_channel = 32
+#~ sampling_rate = 20000
+#~ chunksize = 100
 
 # some moving sinus
 length = int(sampling_rate*20)
@@ -30,7 +31,9 @@ buffer = buffer.astype('float32')
 @pytest.mark.skipif(not HAVE_SCIPY, reason = 'no HAVE_SCIPY')
 def test_TimeFreqWorker():
     # test only one worker
+    #~ man = create_manager(auto_close_at_exit = False)
     man = create_manager(auto_close_at_exit = True)
+    
     ng = man.create_nodegroup()
 
     dev = ng.create_node('NumpyDeviceBuffer')
@@ -49,7 +52,6 @@ def test_TimeFreqWorker():
         worker.initialize()
         workers.append(worker)
     
-    
     # compute wavelet : 3 s. of signal at 500Hz
     import scipy.signal
     xsize, wf_size,  sub_sr= 3., 2048, 500.
@@ -58,17 +60,16 @@ def test_TimeFreqWorker():
     filter_a = np.array([1.])
     
     dev.start()
-    #~ for worker in workers:
-        #~ worker.start()
     
     time.sleep(.5)
+    for worker in workers:
+        worker.start()
     
     #change the wavelet on fly
     for worker in workers:
         worker.on_fly_change_wavelet(wavelet_fourrier=wavelet_fourrier, downsampling_factor=20,
             sig_chunk_size = 2048*20,
             plot_length=int(sub_sr*xsize), filter_a=filter_a, filter_b=filter_b)
-    
     
     head = 0
     for i in range(4):
@@ -78,8 +79,6 @@ def test_TimeFreqWorker():
             worker.compute_one_map(head)
     
     dev.stop()
-    #~ for worker in workers:
-        #~ worker.stop()
     
     #~ man.close()
 
@@ -88,7 +87,8 @@ def test_TimeFreqWorker():
 @pytest.mark.skipif(not HAVE_SCIPY, reason = 'no HAVE_SCIPY')
 def test_qtimefreq_simple():
     
-    man = create_manager(auto_close_at_exit = True)
+    #~ man = create_manager(auto_close_at_exit = True)
+    man = create_manager(auto_close_at_exit = False)
     ng = man.create_nodegroup()
     
     app = pg.mkQApp()
@@ -106,12 +106,11 @@ def test_qtimefreq_simple():
     viewer.configure(with_user_dialog = True)
     viewer.input.connect(dev.output)
     viewer.initialize()
-    
-    #~ viewer.params.param('timefreq')['deltafreq'] = 2
-    viewer.params['nb_column'] = 4
-    viewer.params['refresh_interval'] = 1500
-    
     viewer.show()
+    
+    viewer.params['nb_column'] = 4
+    viewer.params['refresh_interval'] = 1000
+    
     
     def terminate():
         viewer.stop()
@@ -131,50 +130,41 @@ def test_qtimefreq_simple():
     #~ but2.show()
 
     viewer.start()
+    
     # start for a while
-    #~ timer = QtCore.QTimer(singleShot = True, interval = 2000)
-    #~ timer.timeout.connect(terminate)
+    timer = QtCore.QTimer(singleShot = True, interval = 3000)
+    timer.timeout.connect(terminate)
     #~ timer.start()
     
     app.exec_()
-
-    #~ man.close()
+    print('man.close()')
+    man.close()
 
 
 @pytest.mark.skipif(not HAVE_SCIPY, reason = 'no HAVE_SCIPY')
 def test_qtimefreq_distributed():
-    man = create_manager(auto_close_at_exit = True)
-    
+    #~ man = create_manager(auto_close_at_exit = True)
+    man = create_manager(auto_close_at_exit = False)
 
-    #~ host = man.connect_host('neuro-090', 'tcp://neuro-090:240611')
-    #~ nodegroup_friends = [host.create_nodegroup() for _ in range(8)]
-    #~ for rng in nodegroup_friends:
-        #~ print('ping', rng.ping())
-    
     nodegroup_friends = [man.create_nodegroup() for _ in range(4)]
-    
     
     app = pg.mkQApp()
 
-
-    #~ dev =NumpyDeviceBuffer()
     ng = man.create_nodegroup()
     dev = ng.create_node('NumpyDeviceBuffer')
     dev.configure( nb_channel = nb_channel, sample_interval = 1./sampling_rate, chunksize = chunksize,
                     buffer = buffer)
-    #~ dev.output.configure(protocol = 'tcp', interface = '194.167.217.129', transfermode = 'plaindata')
     dev.output.configure(protocol = 'tcp', interface = '127.0.0.1', transfermode = 'plaindata')
     dev.initialize()
-    
-    
     
     viewer = QTimeFreq()
     viewer.configure(with_user_dialog = True, nodegroup_friends=nodegroup_friends)
     viewer.input.connect(dev.output)
     viewer.initialize()
     viewer.show()
+    
     viewer.params['nb_column'] = 4
-    viewer.params['refresh_interval'] = 2000
+    viewer.params['refresh_interval'] = 1000
 
 
     def terminate():
@@ -189,19 +179,17 @@ def test_qtimefreq_distributed():
     viewer.start()
     
     # start for a while
-    #~ timer = QtCore.QTimer(singleShot = True, interval = 2000)
-    #~ timer.timeout.connect(terminate)
-    #~ timer.start()
+    timer = QtCore.QTimer(singleShot = True, interval = 3000)
+    timer.timeout.connect(terminate)
+    timer.start()
     
     app.exec_()
-
-    #~ man.close()
-    
+    man.close()
 
 
 
 if __name__ == '__main__':
     #~ test_TimeFreqWorker()
-    #~ test_qtimefreq_simple()
-    test_qtimefreq_distributed()
+    test_qtimefreq_simple()
+    #~ test_qtimefreq_distributed()
 
