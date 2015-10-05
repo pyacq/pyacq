@@ -183,7 +183,7 @@ def test_qtimefreq_distributed():
 
 
 if __name__ == '__main__':
-    #~ test_TimeFreqWorker()
+    test_TimeFreqWorker()
     test_qtimefreq_simple()
-    #~ test_qtimefreq_distributed()
+    test_qtimefreq_distributed()
 
