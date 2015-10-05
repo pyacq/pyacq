@@ -1,6 +1,7 @@
 from pyqtgraph.Qt import QtCore, QtGui
 import pyqtgraph as pg
 from pyqtgraph.util.mutex import Mutex
+import vispy.color
 
 import sys
 import numpy as np
@@ -25,7 +26,8 @@ default_params = [
         {'name': 'xsize', 'type': 'float', 'value': 10., 'step': 0.1, 'limits' : (.1, 60)},
         {'name': 'nb_column', 'type': 'int', 'value': 1},
         {'name': 'background_color', 'type': 'color', 'value': 'k' },
-        {'name': 'colormap', 'type': 'list', 'value': 'jet', 'values' : ['jet', 'gray', 'bone', 'cool', 'hot', ] },
+        #~ {'name': 'colormap', 'type': 'list', 'value': 'hot', 'values' : ['hot', 'coolwarm', 'ice', 'grays', ] },
+        {'name': 'colormap', 'type': 'list', 'value': 'hot', 'values' : list(vispy.color.get_colormaps().keys()) },
         {'name': 'refresh_interval', 'type': 'int', 'value': 500 , 'limits':[5, 1000]},
         {'name': 'mode', 'type': 'list', 'value': 'scroll' , 'values' : ['scan', 'scroll'] },
         {'name': 'show_axis', 'type': 'bool', 'value': False},
@@ -339,16 +341,9 @@ class QTimeFreq(WidgetNode):
             input_map.params['sampling_rate'] = sub_sampling_rate
     
     def initialize_plots(self):
-        #TODO get cmap from somewhere esle
-        from matplotlib.cm import get_cmap
-        from matplotlib.colors import ColorConverter
-        lut = [ ]
-        cmap = get_cmap(self.params['colormap'] , 3000)
-        for i in range(3000):
-            r,g,b =  ColorConverter().to_rgb(cmap(i) )
-            lut.append([r*255,g*255,b*255])
-        self.lut = np.array(lut, dtype = np.uint8)
-        #
+        N = 512
+        cmap = vispy.color.get_colormap(self.params['colormap'])
+        self.lut = (255*cmap.map(np.arange(N)[:,None]/float(N))).astype('uint8')
         
         tfr_params = self.params.param('timefreq')
         for i in range(self.nb_channel):

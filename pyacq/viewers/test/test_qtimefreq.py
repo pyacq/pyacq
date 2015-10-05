@@ -118,7 +118,6 @@ def test_qtimefreq_simple():
         viewer.close()
         dev.close()
         app.quit()
-        print('yep')
     
     dev.start()
 
