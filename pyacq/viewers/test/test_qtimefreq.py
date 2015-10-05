@@ -46,7 +46,7 @@ def test_TimeFreqWorker():
     workers = []
     for i in range(nb_channel):
         worker = ng.create_node('TimeFreqWorker')
-        worker.configure(max_xsize = 30., channel=i, local=True)
+        worker.configure(max_xsize = 30., channel=i, local=False)
         worker.input.connect(dev.output)
         worker.output.configure()
         worker.initialize()
