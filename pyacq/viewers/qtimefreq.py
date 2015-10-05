@@ -612,6 +612,12 @@ class TimeFreqWorker(Node):
             #~ plot_length=None, filter_a=None, filter_b=None):
     def on_fly_change_wavelet(self, **worker_params):
         p = worker_params
+        
+        if not self.local:
+            #with our RPC ndarray came from np.frombuffer
+            #but scipy.signal.filtflt need b writtable so:
+            p['filter_b'] = p['filter_b'].copy()
+        
         p['out_shape'] = (p['plot_length'], p['wavelet_fourrier'].shape[1])
         self.output.params['shape'] = p['out_shape']
         self.output.params['sampling_rate'] = self.sampling_rate/p['downsampling_factor']
