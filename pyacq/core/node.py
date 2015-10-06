@@ -172,12 +172,16 @@ class Node(QtCore.QObject):
     def close(self):
         """Close the Node
         """
-        #~ assert not self.running(),\
-                #~ 'Cannot close Node {} : the Node is running'.format(self.name)
+        assert not self.running(),\
+                'Cannot close Node {} : the Node is running'.format(self.name)
         with self.lock:
             if self._closed:
                 return
         self._close()
+        for input in self.inputs.values():
+            input.close()
+        for output in self.outputs.values():
+            output.close()
         with self.lock:
             self._configured = False
             self._initialized = False

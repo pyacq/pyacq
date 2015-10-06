@@ -627,6 +627,7 @@ class TimeFreqWorker(Node):
     def on_thread_done(self):
         self.thread.wait()
         self.wt_map_done.emit(self.channel)
+        self.thread.workers_params = None
     
     def compute_one_map(self, head):
         assert self.running(), 'TimeFreqWorker is not running'

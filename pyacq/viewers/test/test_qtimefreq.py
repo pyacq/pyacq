@@ -1,3 +1,4 @@
+from PyQt5 import QtCore, QtGui
 import pytest
 
 from pyacq import create_manager, ThreadPollInput
@@ -27,6 +28,7 @@ phases = np.cumsum(freqs/sampling_rate)*2*np.pi
 ampl = np.abs(np.sin(np.pi*2*speed*8*times))*.8
 buffer += (np.sin(phases)*ampl)[:,None]
 buffer = buffer.astype('float32')
+
 
 @pytest.mark.skipif(not HAVE_SCIPY, reason = 'no HAVE_SCIPY')
 def test_TimeFreqWorker():
@@ -85,7 +87,7 @@ def test_TimeFreqWorker():
 
 
 @pytest.mark.skipif(not HAVE_SCIPY, reason = 'no HAVE_SCIPY')
-def test_qtimefreq_simple():
+def test_qtimefreq_local_worker():
     
     #~ man = create_manager(auto_close_at_exit = True)
     man = create_manager(auto_close_at_exit = False)
@@ -93,7 +95,6 @@ def test_qtimefreq_simple():
     
     app = pg.mkQApp()
     
-    #~ dev =NumpyDeviceBuffer()
     dev = ng.create_node('NumpyDeviceBuffer')
     dev.configure( nb_channel = nb_channel, sample_interval = 1./sampling_rate, chunksize = chunksize,
                     buffer = buffer)
@@ -134,12 +135,11 @@ def test_qtimefreq_simple():
 
 
 @pytest.mark.skipif(not HAVE_SCIPY, reason = 'no HAVE_SCIPY')
-def test_qtimefreq_distributed():
+def test_qtimefreq_distributed_worker():
     #~ man = create_manager(auto_close_at_exit = True)
     man = create_manager(auto_close_at_exit = False)
 
-    #~ nodegroup_friends = [man.create_nodegroup() for _ in range(4)]
-    nodegroup_friends = [man.create_nodegroup() for _ in range(1)]
+    nodegroup_friends = [man.create_nodegroup() for _ in range(4)]
     
     app = pg.mkQApp()
 
@@ -177,12 +177,14 @@ def test_qtimefreq_distributed():
     timer.start()
     
     app.exec_()
+    
     man.close()
 
 
 
 if __name__ == '__main__':
     test_TimeFreqWorker()
-    test_qtimefreq_simple()
-    test_qtimefreq_distributed()
+    test_qtimefreq_local_worker()
+    test_qtimefreq_distributed_worker()
+
 
