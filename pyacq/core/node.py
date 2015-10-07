@@ -6,7 +6,7 @@ from .stream import OutputStream, InputStream
 from logging import info
 
 
-class Node(QtCore.QObject):
+class Node(object):
     """
     This class:
         * is a basic element to process data stream
@@ -46,7 +46,6 @@ class Node(QtCore.QObject):
     _output_specs = { }
     
     def __init__(self, name = '', parent = None):
-        QtCore.QObject.__init__(self, parent)
         self.name = name
         
         self.lock = Mutex() # on lock for all state
