@@ -1,4 +1,3 @@
-from PyQt5 import QtCore, QtGui
 import pytest
 
 from pyacq import create_manager, ThreadPollInput

@@ -569,7 +569,7 @@ class ComputeThread(QtCore.QThread):
 
 
 
-class TimeFreqWorker(Node):
+class TimeFreqWorker(Node, QtCore.QObject):
     """
     TimeFreqWorker is Node than compute a timefrequancy map for one channel.
     It is used by QTimeFreq.
@@ -579,6 +579,8 @@ class TimeFreqWorker(Node):
     
     wt_map_done = QtCore.pyqtSignal(int)
     def __init__(self, **kargs):
+        parent = kargs.pop('parent', None)
+        QtCore.QObject.__init__(self, parent)
         Node.__init__(self, **kargs)
         assert HAVE_SCIPY, "TimeFreqWorker node depends on the `scipy` package, but it could not be imported."
     
