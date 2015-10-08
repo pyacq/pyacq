@@ -23,7 +23,7 @@ class NumpyDeviceBuffer(Node):
     
     """
     _output_specs = {'signals' : dict(streamtype = 'analogsignal',dtype = 'float32',
-                                                shape = (-1, 16), compression ='', time_axis=0,
+                                                shape = (-1, 16), compression ='', timeaxis=0,
                                                 sampling_rate =30.
                                                 )}
 
@@ -52,6 +52,7 @@ class NumpyDeviceBuffer(Node):
             assert buffer.shape[1] == self.nb_channel, 'Wrong nb_channel'
             assert buffer.shape[0]%chunksize == 0, 'Wrong buffer.shape[0] not multiple chunksize'
             self.buffer = buffer
+            self.length = buffer.shape[0]
     
     def _initialize(self):
         self.head = 0
@@ -65,7 +66,7 @@ class NumpyDeviceBuffer(Node):
         self.timer.stop()
     
     def _close(self):
-        del self.buffer
+        pass
     
     def send_data(self):
         i1 = self.head%self.length

@@ -57,23 +57,23 @@ def test_stream_sharedarray():
     chunksize = 1024
     ring_size = chunksize * 5 - 334
     stream_spec = dict(protocol = 'tcp', interface = '127.0.0.1', port = '*',
-                        transfermode = 'shared_array', streamtype = 'analogsignal',
-                        dtype = 'float32', shape = (-1, nb_channel), time_axis = 0, compression ='',
+                        transfermode = 'sharedarray', streamtype = 'analogsignal',
+                        dtype = 'float32', shape = (-1, nb_channel), timeaxis = 0, compression ='',
                         scale = None, offset = None, units = '',
-                        shared_array_shape = ( ring_size, nb_channel), ring_buffer_method= 'single',
+                        sharedarray_shape = ( ring_size, nb_channel), ring_buffer_method= 'single',
                         )
     protocol = 'tcp'
     for ring_buffer_method in['single', 'double',]:
-        for time_axis in [0, 1]:
-            print('shared_array', ring_buffer_method, 'time_axis', time_axis)
+        for timeaxis in [0, 1]:
+            print('sharedarray', ring_buffer_method, 'timeaxis', timeaxis)
             stream_spec['ring_buffer_method'] = ring_buffer_method
-            stream_spec['time_axis'] = time_axis
-            if time_axis == 0:
+            stream_spec['timeaxis'] = timeaxis
+            if timeaxis == 0:
                 stream_spec['shape'] =  (-1, nb_channel)
-                stream_spec['shared_array_shape'] =  ( ring_size, nb_channel)
-            elif time_axis == 1:
+                stream_spec['sharedarray_shape'] =  ( ring_size, nb_channel)
+            elif timeaxis == 1:
                 stream_spec['shape'] =  (nb_channel, -1)
-                stream_spec['shared_array_shape'] =  (nb_channel,  ring_size)
+                stream_spec['sharedarray_shape'] =  (nb_channel,  ring_size)
             outstream = OutputStream()
             outstream.configure(**stream_spec)
             instream = InputStream()
@@ -85,9 +85,9 @@ def test_stream_sharedarray():
                 #~ print(i)
                 
                 #send
-                if time_axis==0:
+                if timeaxis==0:
                     arr = np.tile(np.arange(index, index+chunksize)[:, None], (1,nb_channel)).astype(stream_spec['dtype'])
-                elif time_axis==1:
+                elif timeaxis==1:
                     arr = np.tile(np.arange(index, index+chunksize)[None ,:], (nb_channel, 1)).astype(stream_spec['dtype'])
                 index += chunksize
                 outstream.send(index, arr)
@@ -100,9 +100,9 @@ def test_stream_sharedarray():
                 # get a buffer of size chunksize*3
                 if ring_buffer_method == 'double' and index>chunksize*3:
                     arr2 = instream.get_array_slice(index2, chunksize*3)
-                    if time_axis==0:
+                    if timeaxis==0:
                         assert np.all(arr2[:,0]==np.arange(index-chunksize*3, index).astype('float32'))
-                    elif time_axis==1:
+                    elif timeaxis==1:
                         assert np.all(arr2[0,:]==np.arange(index-chunksize*3, index).astype('float32'))
             
             outstream.close()
@@ -125,7 +125,7 @@ stream_spec = dict(protocol = {protocol}, interface = '127.0.0.1', port = '*',
                     dtype = 'float32', shape = (-1, nb_channel), compression ={compression},
                     scale = None, offset = None, units = '',
                     # for sharedarray
-                    shared_array_shape = ( ring_size, nb_channel), time_axis = 0,
+                    sharedarray_shape = ( ring_size, nb_channel), timeaxis = 0,
                     ring_buffer_method = 'double',
                         )
 outstream = OutputStream()
@@ -158,10 +158,10 @@ instream.close()
                 t = timeit.timeit(stmt, setup = setup2,  number = 1)
                 print(chunksize, nloop, 'plaindata', protocol, compression, 'time =', t, 's.', 'speed', nloop*chunksize*16*4/t/1e6, 'Mo/s')
         
-        setup2 = setup.format(compression = "''", protocol = "'tcp'", transfertmode = "'shared_array'",
+        setup2 = setup.format(compression = "''", protocol = "'tcp'", transfertmode = "'sharedarray'",
                     chunksize = chunksize, nloop = nloop)
         t = timeit.timeit(stmt, setup = setup2,  number = 1)
-        print(chunksize, nloop,  'shared_array', 'time =', t, 's.', 'speed', nloop*chunksize*16*4/t/1e6, 'Mo/s')
+        print(chunksize, nloop,  'sharedarray', 'time =', t, 's.', 'speed', nloop*chunksize*16*4/t/1e6, 'Mo/s')
         
         
         

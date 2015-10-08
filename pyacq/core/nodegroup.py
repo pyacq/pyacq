@@ -12,6 +12,7 @@ import weakref
 import random
 import string
 import zmq
+import logging
 
 class RpcThreadSocket( QtCore.QThread):
     new_message = QtCore.Signal(QtCore.QByteArray, QtCore.QByteArray)
