@@ -1,6 +1,8 @@
-====
+=====
 pyacq
-====
+=====
+
+|Build Status| 
 
 Version 0.1 is quite drafty.
 A version 0.2 is in preparation (summer 2015).
@@ -33,3 +35,7 @@ For installation instructions, see doc/source/install.rst
 
 :copyright: Copyright 2010-2012 by the pyacq team, see AUTHORS.
 :license: Modified BSD License, see LICENSE.txt for details.
+
+
+.. |Build Status| image:: https://travis-ci.org/pyacq/pyacq.svg?branch=master
+   :target: https://travis-ci.org/pyacq/pyacq
