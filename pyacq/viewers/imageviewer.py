@@ -31,26 +31,25 @@ class ImageViewer(WidgetNode):
         
         self.image = pg.ImageItem()
         self.plot.addItem(self.image)
-
-    def start(self):
-        self.timer.start()
-        self._running = True
-
-    def stop(self):
-        self.timer.stop()
-        self._running = False
     
-    def close(self):
+    def _configure(self, **kargs):
         pass
     
-    def initialize(self):
+    def _initialize(self):
         in_params = self.input.params
         self.timer = QtCore.QTimer(singleShot=False)
         self.timer.setInterval(int(1./in_params['sampling_rate']*1000))
         self.timer.timeout.connect(self.poll_socket)
 
-    def configure(self, **kargs):
+    def _start(self):
+        self.timer.start()
+
+    def _stop(self):
+        self.timer.stop()
+    
+    def _close(self):
         pass
+
     
     def poll_socket(self):
         event =  self.input.socket.poll(0)
