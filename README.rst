@@ -1,6 +1,8 @@
-====
+=====
 pyacq
-====
+=====
+
+|Build Status| 
 
 Version 0.1 is quite drafty.
 A version 0.2 is in preparation (summer 2015).
