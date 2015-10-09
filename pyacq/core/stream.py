@@ -85,7 +85,7 @@ class OutputStream:
     def __init__(self, spec = {}, node = None, name = None):
         self.configured = False
         self.spec = spec # this is a priori stream params, and must be change when Node.configure
-        if node:
+        if node is not None:
             self.node = weakref.ref(node)
         else:
             self.node = None
@@ -150,7 +150,7 @@ class InputStream:
     def __init__(self, spec = {}, node = None, name = None):
         self.configured = False
         self.spec = spec
-        if node:
+        if node is not None:
             self.node = weakref.ref(node)
         else:
             self.node = None
