@@ -52,10 +52,10 @@ class Node(object):
         self._running = False
         self._configured = False
         self._initialized = False
+        self._closed = False
         
-        
-        self.inputs = { name:InputStream(spec = spec) for name, spec in self._input_specs.items() }
-        self.outputs = { name:OutputStream(spec = spec) for name, spec in self._output_specs.items() }
+        self.inputs = { name:InputStream(spec = spec, node = self, name = name) for name, spec in self._input_specs.items() }
+        self.outputs = { name:OutputStream(spec = spec, node = self, name = name) for name, spec in self._output_specs.items() }
     
     @property
     def input(self):
@@ -69,20 +69,36 @@ class Node(object):
         assert len(self.outputs)==1, 'Node.output is a shortcut when Node have only 1 output ({} here)'.format(len(self.outputs))
         return list(self.outputs.values())[0]
     
+    def get_input_names(self):
+        """This is usefull for the InputStreamProxy only : remove if better rpc
+        """
+        return list(self.inputs.keys())
+    
+    def get_output_names(self):
+        """This is usefull for the OutputStreamProxy only : remove if better rpc
+        """
+        return list(self.outputs.keys())
+    
     def connect_input(self, name, stream_spec):
-        """This is usefull for the InputStreamProxy
+        """This is usefull for the InputStreamProxy only : remove if better rpc
         """
         self.inputs[name].connect(stream_spec)
     
     def configure_output(self, name, **stream_spec):
-        """This is usefull for the OutputStreamProxy
+        """This is usefull for the OutputStreamProxy  only : remove if better rpc
         """
         self.outputs[name].configure(**stream_spec)
     
     def  get_output(self, name):
-        """This is usefull for the OutputStreamProxy
+        """This is usefull for the OutputStreamProxy  only : remove if better rpc
         """
         return self.outputs[name].params
+
+    def  get_input(self, name):
+        """This is usefull for the InputStreamProxy  only : remove if better rpc
+        """
+        return self.inputs[name].params
+
 
     def running(self):
         """get the running state of the Node (thread safe)
@@ -101,6 +117,12 @@ class Node(object):
         """
         with self.lock:
             return self._initialized
+    
+    def closed(self):
+        """get the closed state of the Node (thread safe)
+        """
+        with self.lock:
+            return self._closed
     
     def configure(self, **kargs):
         """Configure the Node
@@ -151,10 +173,18 @@ class Node(object):
         """
         assert not self.running(),\
                 'Cannot close Node {} : the Node is running'.format(self.name)
+        with self.lock:
+            if self._closed:
+                return
         self._close()
+        for input in self.inputs.values():
+            input.close()
+        for output in self.outputs.values():
+            output.close()
         with self.lock:
             self._configured = False
             self._initialized = False
+            self._closed = True
     
     #That method MUST be overwritten
     def _configure(self, **kargs):
@@ -178,10 +208,22 @@ class Node(object):
     
     #That method SHOULD be overwritten
     def check_input_specs(self):
+        #call at the beginning of Node.initialize()
         pass
     
     #That method SHOULD be overwritten
     def check_output_specs(self):
+        #call at the beginning of Node.initialize()
+        pass
+    
+    #That method SHOULD be overwritten
+    def after_input_connect(self, inputname):
+        #call after one input of the Node have been connected
+        pass
+    
+    #That method SHOULD be overwritten
+    def after_output_configure(self, outputname):
+        #call after one output of the Node have been configured
         pass
     
 
@@ -192,8 +234,17 @@ class WidgetNode(QtGui.QWidget, Node, ):
         Node.__init__(self, **kargs)
     
     def close(self):
-        QtGui.QWidget.close(self)
         Node.close(self)
+        QtGui.QWidget.close(self)
+
+    def closeEvent(self,event ):
+        if self.running():
+            self.stop()
+        if not self.closed():
+            Node.close(self)
+        event.accept()
+
+        
 
 
 # For test purpos only
