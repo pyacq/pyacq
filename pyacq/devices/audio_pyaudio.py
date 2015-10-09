@@ -52,6 +52,7 @@ class PyAudio(Node):
     def __init__(self, **kargs):
         Node.__init__(self, **kargs)
         assert HAVE_PYAUDIO, "PyAudio node depends on the `pyaudio` package, but it could not be imported."
+        self.pa = pyaudio.PyAudio()
 
     def _configure(self, nb_channel = 2, sampling_rate =44100.,
                     input_device_index = None, output_device_index = None,
@@ -67,19 +68,23 @@ class PyAudio(Node):
         
         assert self.format in format_conv
         
-        self.pa = pyaudio.PyAudio()
         
         # check if supported
         if self.output_device_index is not None:
-            assert self.pa.is_format_supported(self.sampling_rate,  output_format=format_conv[format],
-                    output_channels=self.nb_channel, output_device=self.output_device_index),\
-                    'Output not supported {} {} device {}'.format(self.nb_channel, self.sampling_rate, self.output_device_index)
+            try:
+                self.pa.is_format_supported(self.sampling_rate,  output_format=format_conv[format],
+                    output_channels=self.nb_channel, output_device=self.output_device_index)
+            except ValueError as err:
+                msg = 'Output not supported: channels={} samplerate={} device_id={}'.format(self.nb_channel, self.sampling_rate, self.output_device_index)
+                raise ValueError(msg) from err
         
         if self.input_device_index is not None:
-            assert self.pa.is_format_supported(self.sampling_rate, input_format=format_conv[format],
-                    input_channels=self.nb_channel,  input_device=self.input_device_index),\
-                    'Input not supported {} {} device {}'.format(self.nb_channel, self.sampling_rate, self.input_device_index)
-        
+            try:
+                self.pa.is_format_supported(self.sampling_rate, input_format=format_conv[format],
+                    input_channels=self.nb_channel,  input_device=self.input_device_index)
+            except ValueError as err:
+                msg = 'Input not supported: channels={} samplerate={} device_id={}'.format(self.nb_channel, self.sampling_rate, self.input_device_index)
+                raise ValueError(msg) from err
 
         self.output.spec['shape'] = (chunksize, self.nb_channel)
         self.output.spec['dtype = '] = format
@@ -93,6 +98,19 @@ class PyAudio(Node):
     
     def check_output_specs(self):
         pass
+
+    def list_device_specs(self):
+        return [self.pa.get_device_info_by_index(i) for i in range(self.pa.get_device_count())]
+
+    def default_input_device(self):
+        """Return the index of the default input device.
+        """
+        return self.pa.get_default_input_device_info()['index']
+    
+    def default_output_device(self):
+        """Return the index of the default output device.
+        """
+        return self.pa.get_default_output_device_info()['index']
 
     def _initialize(self):
         self.audiostream = self.pa.open(

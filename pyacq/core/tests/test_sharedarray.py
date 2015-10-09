@@ -1,8 +1,7 @@
 
 from pyacq.core.sharedarray import SharedArray
 import numpy as np
-import multiprocessing as mp
-
+import pyqtgraph.multiprocess as mp
 
 
 def test_sharedarray():    
@@ -13,13 +12,7 @@ def test_sharedarray():
     sa2 = SharedArray(**sa.to_dict())
     np_a2 = sa.to_numpy()
     assert np_a is not np_a2
-    assert np.all(np_a ==np_a2)
-
-
-def check_sharedarray(d):
-    sa2 = SharedArray(**d)
-    np_a2 = sa2.to_numpy()
-    assert np.all(np_a2 ==np.arange(10))
+    assert np.all(np_a == np_a2)
 
 
 def test_sharedarray_multiprocess():
@@ -27,10 +20,15 @@ def test_sharedarray_multiprocess():
     np_a = sa.to_numpy()
     np_a[:] = np.arange(10)
     
-    mp.set_start_method('spawn')
-    proc = mp.Process(target=check_sharedarray, args=(sa.to_dict(), ))
-    proc.start()
-    proc.join()
+    # Start remote process, read data from shared array, then return to host
+    # process.
+    proc = mp.Process()
+    sa_mod = proc._import('pyacq.core.sharedarray')
+    sa2 = sa_mod.SharedArray(**sa.to_dict())
+    np_a2 = sa2.to_numpy(_returnType='value')
+    proc.close()
+    
+    assert np.all(np_a == np_a2)
     
     
 if __name__ == '__main__':
