@@ -1,12 +1,8 @@
-
-
 from ..core import Node, register_node_type
 from pyqtgraph.Qt import QtCore, QtGui
 from pyqtgraph.util.mutex import Mutex
 
 import numpy as np
-import msgpack
-import time
 
 try:
     from Crypto.Cipher import AES
@@ -87,15 +83,11 @@ def get_level(data, bits):
 
 
 class EmotivIOThread(QtCore.QThread):
-    def __init__(self, hidraw_file, cipher, outputs, parent = None):
+    def __init__(self, dev_handle, cipher, outputs, parent = None):
         QtCore.QThread.__init__(self)
         self.outputs= outputs
-        self.hidraw_file = hidraw_file
+        self.dev_handle = dev_handle
         self.cipher = cipher
-        
-        self.values = np.zeros((1, len(_channel_names)), dtype = np.int64 ) 
-        self.imp = np.zeros((1, len(_channel_names)), dtype = np.float64 )
-        self.gyro = np.zeros((1, 2), dtype = np.int64)
         
         self.impedance_qualities = { }
         for name in _channel_names + ['X', 'Y', 'Unknown']:
@@ -116,16 +108,20 @@ class EmotivIOThread(QtCore.QThread):
         with self.lock:
             self.running = True
         n = 0
+
+        values = np.zeros(len(_channel_names), dtype = np.int64 ) 
+        imp = np.zeros(len(_channel_names), dtype = np.float64 )
+        gyro = np.zeros(2, dtype = np.int64)
         
         while True:  
             with self.lock:
                 if not self.running:
                     break
-            crypted_dataBuffer = bytearray(self.hidraw_file.read(32))         
-            data = self.cipher.decrypt(bytes(crypted_dataBuffer[:16])) +self.cipher.decrypt(bytes(crypted_dataBuffer[16:]))
             
-            #~ sensor_num = ord(data[0])
-            sensor_num = data[0]
+            crypted_buffer = self.dev_handle.read(32)
+            data = self.cipher.decrypt(crypted_buffer[:16]) +self.cipher.decrypt(crypted_buffer[16:])
+            
+            sensor_num = int.from_bytes(data[0], 'little')
             
             if sensor_num in self.num_to_name:
                 sensor_name = self.num_to_name[sensor_num]
@@ -134,22 +130,16 @@ class EmotivIOThread(QtCore.QThread):
             for c, channel_name in enumerate(_channel_names):
                 bits = _sensorBits[channel_name]
                 # channel value
-                self.values[0,c] = get_level(data, bits)
-                self.imp[0,c] = self.impedance_qualities[channel_name]
+                values[c] = get_level(data, bits)
+                imp[c] = self.impedance_qualities[channel_name]
             
-            #~ self.gyro[0] = ord(data[29]) - 106 #X        #Why b is a float that makes ord hungry ?
-            #~ self.gyro[1] = ord(data[30]) - 105 #Y
-            self.gyro[0,0] = data[29]- 106 #X
-            self.gyro[0,1] = data[30] - 105 #Y
+            gyro[0] = int.from_bytes(data[29], 'little') - 106 #X
+            gyro[1] = dint.from_bytes(data[30], 'little') - 105 #Y
             
             n += 1
-            self.outputs['signals'].send(n, self.values)
-            self.outputs['impedances'].send(n, self.imp)
-            self.outputs['gyro'].send(n,self.gyro)
-            
-            # Maybe not needed if hidraw handle it ?
-            time.sleep(1./self.outputs['signals'].params['sampling_rate'])
-
+            self.outputs['signals'].send(n, values)
+            self.outputs['impedances'].send(n, imp)
+            self.outputs['gyro'].send(n, gyro)
 
     def stop(self):
         with self.lock:
@@ -193,25 +183,29 @@ class Emotiv(Node):
         assert HAVE_PYCRYPTO, "Emotiv node depends on the `pycrypto` package, but it could not be imported."
         self.device_info = dict()
             
-    def _configure(self, device_info = []):
-        self.device_info['path'] = device_info['path'] 
-        self.device_info['serial'] = device_info['serial']
-            
+    def _configure(self, device_path = '/dev/hidraw0'):
+        self.device_path = device_path
+        self.name = self.device_path.strip('/dev/')
+        real_input_path =  os.path.realpath("/sys/class/hidraw/" + name)
+        path = '/'.join(real_input_path.split('/')[:-4])
+        with open(path + "/manufacturer", 'r') as f:
+            self.manufacturer = f.readline()
+        with open(path + "/serial", 'r') as f:
+            self.serial = f.readline().strip()        
+    
     def _initialize(self):
-        self.cipher = setupCrypto(self.device_info['serial'])
-        self.hidraw_file = open(self.device_info['path'],  mode = 'rb') # read as binary
+        self.cipher = setupCrypto(self.serial)
+        self.dev_handle = open(self.device_path,  mode = 'rb')
             
     def _start(self):
-        self._thread = EmotivIOThread(self.hidraw_file, self.cipher, self.outputs)
+        self._thread = EmotivIOThread(self.dev_handle, self.cipher, self.outputs)
         self._thread.start()
             
     def _stop(self):
         self._thread.stop()
-            
+        self._thread.wait()
+        
     def _close(self):
-        close(self.device_path)
-        del self._thread
-            
-            
-            
+        self.dev_handle.close()
+
 register_node_type(Emotiv)
