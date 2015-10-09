@@ -54,7 +54,7 @@ def test_qoscilloscope():
     # start for a while
     timer = QtCore.QTimer(singleShot = True, interval = 2000)
     timer.timeout.connect(terminate)
-    timer.start()
+    #~ timer.start()
     
     app.exec_()
 
