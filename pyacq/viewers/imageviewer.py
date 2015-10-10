@@ -6,7 +6,7 @@ import pyqtgraph as pg
 
 class ImageViewer(WidgetNode):
     """
-    This simple Viewer with pyqtgraph waiting for for the vispy one.
+    A simple image viewer using pyqtgraph.
     """
     _input_specs = {'video' : dict(streamtype = 'video',dtype = 'uint8',
                                                 shape = (-1, -1, 3), compression ='',

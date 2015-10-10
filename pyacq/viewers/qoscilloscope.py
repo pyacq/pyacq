@@ -38,17 +38,16 @@ class BaseOscilloscope(WidgetNode):
     """
     Base Class for QOscilloscope and QOscilloscopeDigital
     
-    The BaseOscilloscope need as inputstream:
-        * transfermode==sharedarray
-        * timeaxis==1
+    The BaseOscilloscope requires its input stream to have the following properties:
     
-    If the inputstream has not this propertis  the class create it own proxy input
-    with a node StreamConverter. So if you use only one Oscilloscope don't care.
-    If you use many Oscilloscope for the same device (different scales) it is better
-    to create a node StreamConverter that could shared input for all Oscilloscope.
+    * transfermode==sharedarray
+    * timeaxis==1
     
-    
-    
+    If the input stream does not meet these requirements, then a StreamConverter
+    is created to proxy the input. This can degrade performance when multiple
+    Oscilloscopes are used to view data from the same device; in this case it is
+    better to manually create single StreamConverter to provide shared input
+    for all Oscilloscopes.
     """
     def __init__(self, **kargs):
         WidgetNode.__init__(self, **kargs)
@@ -239,9 +238,7 @@ default_by_channel_params = [
 
 class QOscilloscope(BaseOscilloscope):
     """
-    Continuous oscilloscope for multi signals.
-    Based on Qt and pyqtgraph.
-    Should be rewritten in vispy for optimisation.    
+    Continuous, multi-channel oscilloscope based on Qt and pyqtgraph.
     """
     _input_specs = {'signals' : dict(streamtype = 'signals')}
     

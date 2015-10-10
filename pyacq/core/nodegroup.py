@@ -14,7 +14,10 @@ import string
 import zmq
 import logging
 
+
 class RpcThreadSocket( QtCore.QThread):
+    # Thread to poll RPC socket and relay requests as `new_message` signal.
+    # Return values are delivered back to the thread via self.local_socket.
     new_message = QtCore.Signal(QtCore.QByteArray, QtCore.QByteArray)
     def __init__(self, rpc_server, local_addr, parent = None):
         QtCore.QThread.__init__(self, parent)
@@ -63,19 +66,28 @@ class RpcThreadSocket( QtCore.QThread):
 
 class NodeGroup(RPCServer):
     """
-    This class:
-       * is a bunch of Node inside a process.
-       * lauched/stoped by Host
-       * able to create/delete Node (by rpc command)
-       * distribute the start/stop/initialize/configure to appropriate Node
-    """
+    NodeGroup is responsible for managing a collection of Nodes within a single
+    process.
     
+    NodeGroups run an RPC server that allows the Manager to remotely create, 
+    manage, and destroy Node instances. All remote interaction with Nodes is done
+    via the NodeGroup RPC interface.
+    
+    Internally, a NodeGroup creates a QApplication for any GUI Nodes to use, and
+    all RPC requests are processed in the main thread of the GUI event loop.
+    
+    NodeGroups themselves are created and destroyed by Hosts, which manage all 
+    NodeGroups on a particular machine.
+    """
     def __init__(self, name, addr):
         RPCServer.__init__(self, name, addr)
         self.app = QtGui.QApplication([])
         self.nodes = {}
 
     def run_forever(self):
+        """Begin the Qt event loop and listen for RPC requests until `close()`
+        is called.
+        """
         # create a proxy socket between RpcThreadSocket and main
         addr = 'inproc://'+''.join(random.SystemRandom().choice(string.ascii_uppercase + string.digits) for _ in range(16))
         context = zmq.Context.instance()
@@ -119,6 +131,19 @@ class NodeGroup(RPCServer):
         self._local_socket.send_multipart([name, data])
 
     def create_node(self, name, classname, **kargs):
+        """Create a new Node.
+        
+        Parameters
+        ----------
+        name : str
+            The name to assign to the new Node. This name must be unique.
+        classname : str
+            The name of the class from which to instantiate the new Node.
+            The class name must be one that was registered using one of the 
+            `register_node_type_` methods.
+        kargs : 
+            All extra keyword arguments are passed to the Node's constructor.
+        """
         assert name not in self.nodes, 'This node already exists'
         assert classname in all_nodes, 'The node {} is not registered'.format(classname)
         class_ = all_nodes[classname] 
@@ -126,37 +151,69 @@ class NodeGroup(RPCServer):
         self.nodes[name] = node
     
     def delete_node(self, name):
+        """Delete a Node from this NodeGroup.
+        
+        Parameters
+        ----------
+        name : str
+            The name of the Node to delete.
+        """
         node = self.nodes[name]
         assert not node.running(), 'The node {} is running'.format(name)
         node.close()
         self.nodes.pop(name)
     
     def control_node(self, nodename, method, *args, **kargs):
+        """Call a method on a Node.
+        
+        Parameters
+        ----------
+        nodename : str
+            The name of the Node to interact with.
+        method : str
+            The name of the method to call.
+        
+        All other positional and keyword arguments are passed to the method call.
+        """
         return getattr(self.nodes[nodename], method)(*args, **kargs)
     
     def set_node_attr(self, nodename, attr, value):
+        """Set an attribute on a Node.
+        """
         return setattr(self.nodes[nodename], attr, value)
     
     def get_node_attr(self, nodename, attr):
+        """Get an attribute from a Node.
+        """
         return getattr(self.nodes[nodename], attr)
     
     def register_node_type_from_module(self, module, classname):
+        """Import a Node subclass and register it.
+        """
         mod = importlib.import_module(module)
         class_= getattr(mod, classname)
         register_node_type(class_,classname = classname)
     
     def register_node_type_with_pickle(self, picklizedclass, classname):
+        """Unpickle a Node subclass and register it.
+        """
         # this is not working at the moment, so bad....
         class_ = pickle.loads(picklizedclass)
         register_node_type(class_,classname = classname)
 
     def start_all_nodes(self):
+        """Call `Node.start()` for all Nodes in this group.
+        """
         for node in self.nodes.values():
             node.start()
         
     def stop_all_nodes(self):
+        """Call `Node.stop()` for all Nodes in this group.
+        """
         for node in self.nodes.values():
             node.stop()
 
     def any_node_running(self):
+        """Return True if any of the Nodes in this group are running.
+        """
         return any(node.running() for node in self.nodes.values())

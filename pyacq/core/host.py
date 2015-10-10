@@ -6,9 +6,12 @@ from logging import info
 
 class Host(RPCServer):
     """
-    This class:
-       * must run_forever or spawn on each host
-       * has the responsability to spawn (by rpc command) some NodeGroup
+    RPC server class that serves as a pre-existing contact point for spawning
+    new processes on a remote machine. 
+    
+    One Host instance must be running on each machine that will be connected
+    to by a Manager. The Host is only responsible for creating and destroying
+    NodeGroups.
        
     Parameters
     ----------
@@ -23,8 +26,7 @@ class Host(RPCServer):
 
     def close(self):
         """
-        Close the Host
-        And close all its NodeGroup.
+        Close the Host and all of its NodeGroups.
         """
         self.close_all_nodegroups(force = True)
         RPCServer.close(self)

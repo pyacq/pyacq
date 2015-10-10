@@ -48,51 +48,52 @@ default_by_channel_params = [
 
 class QTimeFreq(WidgetNode):
     """
-    Class to visulaize time-frequency with Morlet continuous wavelet.
+    Class for visualizing the frequency spectrogram with a Morlet continuous
+    wavelet transform.
     
-    It allow better visualisation the standart FFT spectrogram because it is not dependant
-    of the FFT size along frequency.
+    This allows better visualization than the standard FFT spectrogram because
+    it provides better temporal resolution for high-frequency signals without
+    sacrificing frequency resolution for low-frequency signals.
     See https://en.wikipedia.org/wiki/Morlet_wavelet
     
-    The implementation is done with one TimeFreqWorker per channel.
-    The computation is quite heavy:
-        * downsampling the signal chunk (with a filtfilt first)
-        * fft of signal
-        * multiplication line by line (freq by freq) with the FFT wavelet.
-        * ifft the maps
+    This class internally uses one TimeFreqWorker per channel, which allows
+    multiple signals to be transformed in parallel.
         
-    There is 2 modes:
-        * each TimeFreqWorker live in the same QApp as QTimeFreq (nodegroup_friends=None)
-        * each TimeFreqWorker is spawn in some other NodeGroup to dustrubute the  (nodegroup_friends=[some_list_of_nodegroup])
+    The node operates in one of 2 modes:
     
-    This viewer needs external tunning for perfomency: small refresh_interval, high number of freqs, hight f_stop, high xsize can lead to hevay CPU loads.
+    * Each TimeFreqWorker lives in the same QApplication as the QTimeFreq node
+      (nodegroup_friends=None).
+    * Each TimeFreqWorker is spawned in another NodeGroup to distribute the
+      load (nodegroup_friends=[some_list_of_nodegroup]).
     
-    The QTimeFreq need as inputstream:
-        * transfermode==sharedarray
-        * timeaxis==1
+    This viewer needs manual tuning for performance: small refresh_interval, 
+    high number of freqs, hight f_stop, and high xsize can all lead to heavy
+    CPU load.
     
-    If the inputstream has not this properties  the class create it own proxy input
-    with a node StreamConverter.
+    This node requires its input stream to use:
     
+    * ``transfermode==sharedarray``
+    * ``timeaxis==1``
     
-    QTimeFreq can on th fly parametrized by changin QTimeFreq.params and QTimeFreq.by_channel_params.
-    By default, double click on the viewer open a dialog for theses parameters.
+    If the input stream does not meet these requirements, then a StreamConverter
+    will be created to proxy the input.
     
-    
-    Usage:
-    
-    viewer = QTimeFreq()
-    viewer.configure(with_user_dialog = True, nodegroup_friends = None)
-    viewer.input.connect(somedevice.output)
-    viewer.initialize()
-    viewer.show()
-    viewer.start()
-    
-    viewer.params['nb_column'] = 4
-    viewer.params['refresh_interval'] = 1000
+    QTimeFreq can be configured on the fly by changing QTimeFreq.params and 
+    QTimeFreq.by_channel_params. By default, double-clicking on the viewer 
+    will open a GUI dialog for these parameters.
     
     
+    Usage::
     
+        viewer = QTimeFreq()
+        viewer.configure(with_user_dialog=True, nodegroup_friends=None)
+        viewer.input.connect(somedevice.output)
+        viewer.initialize()
+        viewer.show()
+        viewer.start()
+        
+        viewer.params['nb_column'] = 4
+        viewer.params['refresh_interval'] = 1000
     
     """
     
@@ -476,25 +477,29 @@ register_node_type(QTimeFreq)
 
 def generate_wavelet_fourier(len_wavelet, f_start, f_stop, deltafreq, sampling_rate, f0, normalisation):
     """
-    Compute the wavelet coefficients at all scales and makes its Fourier transform.
+    Compute the wavelet coefficients at all scales and compute its Fourier transform.
     
     Parameters
     ----------
     len_wavelet : int
-        length in sample of the windows
+        length in samples of the wavelet window
     f_start: float
         First frequency in Hz
     f_stop: float
         Last frequency in Hz
-    deltafreq:
-        Frequency interval in Hznew_head
-    sampling_rate:
-        Sampling rate in Hz
+    deltafreq : float
+        Frequency interval in Hz
+    sampling_rate : float
+        Sample rate in Hz
+    f0 : float
+    normalisation : float
     
     Returns:
-    ----------
-        wf : Fourier transform of the wavelet coefficients (after weighting)
-              axis 0 is time,  axis 1 is freq
+    -------
+    
+    wf : array
+        Fourier transform of the wavelet coefficients (after weighting).
+        Axis 0 is time; axis 1 is frequency.
     """
     # compute final map scales
     scales = f0/np.arange(f_start,f_stop,deltafreq)*sampling_rate
@@ -517,7 +522,7 @@ def generate_wavelet_fourier(len_wavelet, f_start, f_stop, deltafreq, sampling_r
 
 class ComputeThread(QtCore.QThread):
     """
-    Thread used internal by TimeFreqWorker.
+    Worker thread used internally by TimeFreqWorker.
     """
     def __init__(self, in_stream, out_stream, channel, local, parent=None):
         QtCore.QThread.__init__(self, parent)
@@ -571,8 +576,19 @@ class ComputeThread(QtCore.QThread):
 
 class TimeFreqWorker(Node, QtCore.QObject):
     """
-    TimeFreqWorker is Node than compute a timefrequancy map for one channel.
-    It is used by QTimeFreq.
+    TimeFreqWorker is a Node that computes the frequency spectrogram with a 
+    Morlet continuous wavelet transform.
+    
+    This allows better visualization than the standard FFT spectrogram because
+    it provides better temporal resolution for high-frequency signals without
+    sacrificing frequency resolution for low-frequency signals.
+    See https://en.wikipedia.org/wiki/Morlet_wavelet
+
+    The computation is quite heavy: Each signal chunk is first downsampled 
+    (with a filtfilt first), then convolved (using FFT method) with one wavelet
+    per frequency to be analyzed.
+
+    For visualization of this analysis, use QTimeFreq.
     """
     _input_specs = {'signal' : dict(streamtype = 'signals', transfermode = 'sharedarray', timeaxis=1, ring_buffer_method = 'double')}
     _output_specs = {'timefreq' : dict(streamtype = 'image', dtype = 'float32')}
@@ -648,7 +664,7 @@ register_node_type(TimeFreqWorker)
 
 class TimeFreqControler(QtGui.QWidget):
     """
-    This is GUI controler for QTimeFreq.
+    GUI controller for QTimeFreq.
     """
     def __init__(self, parent = None, viewer= None):
         QtGui.QWidget.__init__(self, parent)

@@ -12,9 +12,15 @@ def create_manager(mode='rpc', auto_close_at_exit = True):
     
     Parameters
     ----------
+    mode : str
+        Must be 'local' to create the Manager in the current process, or 'rpc'
+        to create the Manager in a new process (in which case a proxy to the 
+        remote manager will be returned).
     auto_close_at_exit : bool
-        call close automatiqcally if the programme exit.
+        If True, then call `Manager.close()` automatically when the calling
+        process exits (only used when ``mode=='rpc'``).
     """
+    assert mode in ('local', 'rpc'), "mode must be either 'local' or 'rpc'"
     if mode == 'local':
         return Manager(name='manager', addr='tcp://*:*')
     else:
@@ -30,11 +36,8 @@ class Manager(RPCServer):
     Nodegroups and Nodes, and interacting with Nodes.
     
     It can either be instantiated directly or in a subprocess and accessed
-    remotely by RPC::
+    remotely by RPC using `create_manager()`.
     
-        mgr_proc = ProcessSpawner(Manager, name='manager', addr='tcp://127.0.0.1:*')
-        mgr = RPCClient(mgr_proc.name, mgr_proc.addr)
-        
        
     Parameters
     ----------
@@ -137,9 +140,10 @@ class Manager(RPCServer):
         self.hosts[name].client.close()
     
     def close(self):
-        """
-        Close the manager
-        And close the default Host too.
+        """Close the Manager.
+        
+        If a default host was created by this Manager, then it will be closed 
+        as well.
         """
         if self._default_host is not None:
             self._default_host.stop()
@@ -152,7 +156,10 @@ class Manager(RPCServer):
         return list(self.hosts.keys())
     
     def create_nodegroup(self, host, name):
-        """Create a new Nodegroup.
+        """Create a new NodeGroup.
+        
+        A NodeGroup is a process that manages one or more Nodes for device
+        interaction, computation, or GUI.
         
         Parameters
         ----------

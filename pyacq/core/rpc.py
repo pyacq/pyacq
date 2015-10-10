@@ -1,13 +1,3 @@
-"""
-RPC implemented over zmq sockets.
-
-- remote procedure calls can be synchronous, asynchronous, or no-return
-- exceptions propagate nicely back to caller
-- no specific event loop requirements
-
-
-"""
-
 import os
 import sys
 import time

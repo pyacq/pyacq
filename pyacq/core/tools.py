@@ -11,12 +11,14 @@ from .stream import OutputStream
 import time
 
 class ThreadPollInput(QtCore.QThread):
-    """
-    Thread that pool in backgroup an InputStream (zmq.SUB).
-    Util for Node that have inputs.    
+    """Thread that polls an InputStream in the background and emits a signal
+    when data is received.
     
-    By default it emit signal (new_data) but process_data can be override.
+    This class is used where low-latency response to data is needed within a Qt
+    main thread (because polling from the main thread with QTimer either 
+    introduces too much latency or consumes too much CPU).
     
+    The `process_data()` method may be reimplemented to define other behaviors.
     """
     new_data = QtCore.Signal(int,object)
     def __init__(self, input_stream, timeout = 200, parent = None):
@@ -59,6 +61,9 @@ class ThreadPollInput(QtCore.QThread):
 
 
 class ThreadStreamConverter(ThreadPollInput):
+    """Thread that polls for data on an input stream and converts the transfer
+    mode or time axis of the data before relaying it through its output.
+    """
     def __init__(self, input_stream, output_stream, conversions,timeout = 200, parent = None):
         ThreadPollInput.__init__(self, input_stream, timeout = timeout, parent = parent)
         self.output_stream = weakref.ref(output_stream)
@@ -74,20 +79,23 @@ class ThreadStreamConverter(ThreadPollInput):
 
 class StreamConverter(Node):
     """
-    A Node that can convert a stream to another stream.
-    For instance:
-        * convert transfer mode 'plaindata' to 'sharedarray'. (to get a local long buffer)
-        * convert dtype 'int32' to 'float64'
-        * change timeaxis 0 to 1 (in fact a transpose)
-        * ...
+    A Node that converts one stream type to another.
     
-    usage:
-    conv = StreamConverter()
-    conv.configure()
-    conv.input.connect(someinput)
-    conv.output.configure(someotherspec)
-    conv.initialize()
-    conv.start()
+    For instance:
+    
+    * convert transfer mode 'plaindata' to 'sharedarray'. (to get a local long buffer)
+    * convert dtype 'int32' to 'float64'
+    * change timeaxis 0 to 1 (in fact a transpose)
+    * ...
+    
+    Usage::
+    
+        conv = StreamConverter()
+        conv.configure()
+        conv.input.connect(someinput)
+        conv.output.configure(someotherspec)
+        conv.initialize()
+        conv.start()
     
     
     """
@@ -131,8 +139,8 @@ register_node_type(StreamConverter)
 
 
 class ThreadStreamSplitter(ThreadPollInput):
-    """
-    
+    """Thread that splits a multi-channel input stream into multiple single-channel
+    output streams.    
     """
     def __init__(self, input_stream, outputs_stream, channelaxis, nb_channel, timeout = 200, parent = None):
         ThreadPollInput.__init__(self, input_stream, timeout = timeout, parent = parent)
@@ -152,19 +160,21 @@ class ThreadStreamSplitter(ThreadPollInput):
 
 class StreamSplitter(Node):
     """
-    StreamSplitter take a multi signal as input and split it as N single signal output.
+    StreamSplitter take a multi-channel input signal and splits it into
+    many single-channel outputs.
     
-    Work only for  transfermode = 'plaindata'.
+    This node requires its stream to use `transfermode = 'plaindata'`.
     
-    usage:
-    splitter = StreamSplitter()
-    splitter.configure()
-    splitter.input.connect(someinput)
-    for output in splitter.outputs.values():
-        output.configure(someotherspec)
-    splitter.initialize()
-    splitter.start()
+    Usage::
     
+        splitter = StreamSplitter()
+        splitter.configure()
+        splitter.input.connect(someinput)
+        for output in splitter.outputs.values():
+            output.configure(someotherspec)
+        splitter.initialize()
+        splitter.start()
+        
     """
     _input_specs = {'in' : {}}
     _output_specs = {}#done dynamically in _configure

@@ -24,7 +24,7 @@ common_doc = """
     Parameters
     ----------
     protocol : 'tcp', 'udp', 'inproc' or 'inpc' (linux only)
-        The type of protocol user for the zmq.PUB socket
+        The type of protocol used for the zmq.PUB socket
     interface : str
         The bind adress for the zmq.PUB socket
     port : str
@@ -40,47 +40,49 @@ common_doc = """
     dtype: str ('float32','float64', [('r', 'uint16'), ('g', 'uint16'), , ('b', 'uint16')], ...)
         The numpy.dtype of the data buffer. It can be a composed dtype for event or images.
     shape: list
-        The shape of each data frame. Unknown dim are -1 in case of variable chunk.
-            * for image it is (-1, H, W), (n_frames, H, W), or (H, W).
-            * for analogsignal it can be (n_samples, n_channels) or (-1, n_channels)
+        The shape of each data frame. If the stream will send chunks of variable length,
+        then use -1 for the unknown dimension.
+        
+        * For ``streamtype=image``, the shape should be (-1, H, W), (n_frames, H, W), or (H, W).
+        * For ``streamtype=analogsignal`` the shape should be (n_samples, n_channels) or (-1, n_channels)
     timeaxis: int
         The index of the axis that represents time within a single data chunk, or
         -1 if the chunk lacks this axis (in this case, each chunk represents exactly one
         timepoint).
     compression: '', 'blosclz', 'blosc-lz4', 'mp4', 'h264'
-        The compression for the data stream, the default is no compression ''.
+        The compression for the data stream. The default uses no compression.
     scale: float
         An optional scale factor + offset to apply to the data before it is sent over the stream.
-        real_data = offset + scale * data
+        ``output = offset + scale * input``
     offset:
         See scale.
     units: str
-        Units of the stream. Mainly used for 'analogsignal'.
+        Units of the stream data. Mainly used for 'analogsignal'.
     sampling_rate: float or None
-        Sampling rate of the stream in Hz.
+        Sample rate of the stream in Hz.
     sampling_interval: float or None
-        
-    
-    Parameters when using `transfermode` = 'sharedarray'
-    -----
     sharedarray_shape: tuple
-        Shape of the SharedArray
+        Shape of the SharedArray when using `transfermode = 'sharedarray'`.
     ring_buffer_method: 'double' or 'single'
-        Method for the ring buffer:
-            *  'double' : there 2 ring buffer concatenated. This ensure continuous chunk whenever the sample position.
-            * 'single': standart ring buffer
+        Method for the ring buffer when using `transfermode = 'sharedarray'`:
+
+        * 'single': a standard ring buffer.
+        * 'double': 2 ring buffers concatenated together. This ensures that
+          a continuous chunk exists in memory regardless of the sample position.
+        
         Note that, The ring buffer is along `timeaxis` for each case. And in case, of 'double', concatenated axis is also `timeaxis`.
     shm_id : str or int (depending on platform)
-        id of the SharedArray
-        
-    
-    
+        id of the SharedArray when using `transfermode = 'sharedarray'`.
 """
 
     
 
-class OutputStream:
-    """A OutputStream is a helper class to send data.
+class OutputStream(object):
+    """Class for streaming data to an InputStream.
+    
+    Streams allow data to be sent between objects that may exist on different
+    threads, processes, or machines. They offer a variety of transfer methods
+    including TCP for remote connections and IPC for local connections.
     """
     def __init__(self, spec = {}, node = None, name = None):
         self.configured = False
@@ -94,6 +96,7 @@ class OutputStream:
     def configure(self, **kargs):
         """
         Configure the output stream.
+        
         """+common_doc
         
         self.params = dict(default_stream)
@@ -122,30 +125,35 @@ class OutputStream:
             self.node().after_output_configure(self.name)
 
     def send(self, index, data):
-        """
-        Send the data chunk and its frame index.
+        """Send a data chunk and its frame index.
         
         Parameters
         ----------
         index: int
-            The absolut sample index. If the chunk is multiple sample then index is the last one (head).
+            The absolute sample index. If the chunk contains multiple samples,
+            then this is the index of the last sample.
         data: np.ndarray or bytes
-            The chunk of data to be send
+            The chunk of data to send.
         """
         self.sender.send(index, data)
 
     def close(self):
-        """
-        Close the output.
-        This close the socket and release the sharedarray if necessary.
+        """Close the output.
+        
+        This closes the socket and releases shared memory, if necessary.
         """
         self.sender.close()
         self.socket.close()
         del self.socket
         del self.sender
 
-class InputStream:
-    """InputStream is a helper class to receive data.
+
+class InputStream(object):
+    """Class for streaming data from an OutputStream.
+    
+    Streams allow data to be sent between objects that may exist on different
+    threads, processes, or machines. They offer a variety of transfer methods
+    including TCP for remote connections and IPC for local connections.
     """
     def __init__(self, spec = {}, node = None, name = None):
         self.configured = False
@@ -157,6 +165,11 @@ class InputStream:
         self.name = name
     
     def connect(self, output):
+        """Connect an output to this input.
+        
+        Any data send over the stream using `output.send()` can be retrieved
+        using `input.recv()`.
+        """
         if isinstance(output, dict):
             self.params = output
         elif isinstance(output, OutputStream) or isinstance(output, OutputStreamProxy):
@@ -185,42 +198,50 @@ class InputStream:
             self.node().after_input_connect(self.name)        
     
     def poll(self, timeout=None):
-        """
-        Poll the socket of input stream
+        """Poll the socket of input stream.
         """
         return self.socket.poll(timeout = timeout)
     
     def recv(self):
         """
-        Receiv chunk of data
+        Receive a chunk of data.
         
         Returns:
         ----
         index: int
-            The absolut sample index. If the chunk is multiple sample then index is the last one (head).
+            The absolute sample index. If the chunk contains multiple samples,
+            then this is the index of the last sample.
         data: np.ndarray or bytes
-            The chunk of data.
-            For 'sharedarray' transfert_mode data is None.
-            So the you must use InputStream.get_array_slice(index, length) that give you a chunk a desired size.
+            The received chunk of data.
+            If the stream uses `transfermode='sharedarray'`, then the data is 
+            returned as None and you must use `InputStream.get_array_slice(index, length)`
+            to read from the shared array.
 
         """
         return self.receiver.recv()
 
     def close(self):
-        """
-        Close the Input.
-        This close the socket.
-        The SharedArray (if transfert_mode 'sharedarray')) is not close. This is the responsobility of OuputStream
+        """Close the Input.
+        
+        This closes the socket.
+        
         """
         self.receiver.close()
         self.socket.close()
         del self.socket
     
     def get_array_slice(self, index, length):
-        """
-        For sharedarray transfert, you can a any chunk size (no more than the ring size)
-        If length is None so take the last chunk received.
+        """Return a slice from the shared memory array, if this stream uses
+        `transfermode='sharedarray'`.
         
+        Parameters
+        ----------
+        index : int
+            The starting index to read from the array.
+        length : int or None
+            The lengfth of the slice to read from the array. This value may not
+            be greater than the ring size. If length is None, then return the
+            last chunk received.
         """
         #assert self.params['transfermode'] == 'sharedarray', 'For sharedarray only'
         if length is None:
@@ -232,8 +253,10 @@ class InputStream:
 class PlainDataSender:
     """
     Helper class to send data in 2 parts with a zmq socket:
-       * index
-       * data
+    
+    * index
+    * data
+    
     The data parts can be compressed.
     """
     def __init__(self, socket, params):
@@ -273,7 +296,7 @@ class PlainDataSender:
 
 class PlainDataReceiver:
     """
-    Helper class to receiv data in 2 parts.
+    Helper class to receive data in 2 parts.
     
     See PlainDataSender.
     """
@@ -308,12 +331,11 @@ class SharedArraySender:
     Helper class to share data in a SharedArray and send in the socket only the index.
     The SharedArray can have any size larger than one chunk.
     
-    This is usefull for a Node that need to access older chunk.
+    This is useful for a Node that needs to access older chunks.
     
-    Be carfull to set correctly the timeaxis (concatenation axis).
+    Be careful to correctly set the timeaxis (concatenation axis).
     
-    Note that on Unix that plaindata+inproc can be faster.
-    
+    Note that on Unix using plaindata+inproc can be faster.
     """
     def __init__(self, socket, params):
         self.socket = socket
