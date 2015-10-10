@@ -13,20 +13,21 @@ except ImportError:
     HAVE_PYAUDIO = False
 
 if HAVE_PYAUDIO:
-    format_conv = { 'int16' : pyaudio.paInt16, 'int32' : pyaudio.paInt32, 'float32' : pyaudio.paFloat32, }
+    format_conv = {'int16': pyaudio.paInt16, 'int32': pyaudio.paInt32, 'float32': pyaudio.paFloat32, }
     # TODO add support for 'int24' (possible in pyaudio but not in numpy)
+
 
 class PyAudio(Node):
     """Simple wrapper around PyAudio for input and output to audio devices.
     """
 
-    _input_specs = {'signals' : dict(streamtype = 'analogsignal',dtype = 'int16',
-                                                shape = (-1, 2), compression ='', time_axis=0,
+    _input_specs = {'signals': dict(streamtype='analogsignal',dtype='int16',
+                                                shape=(-1, 2), compression ='', time_axis=0,
                                                 sampling_rate =44100.
                                                 )}
 
-    _output_specs = {'signals' : dict(streamtype = 'analogsignal',dtype = 'int16',
-                                                shape = (-1, 2), compression ='', time_axis=0,
+    _output_specs = {'signals': dict(streamtype='analogsignal',dtype='int16',
+                                                shape=(-1, 2), compression ='', time_axis=0,
                                                 sampling_rate =44100.
                                                 )}
 
@@ -59,9 +60,9 @@ class PyAudio(Node):
         """
         return Node.configure(self, *args, **kwargs)
 
-    def _configure(self, nb_channel = 2, sampling_rate =44100.,
-                    input_device_index = None, output_device_index = None,
-                    format = 'int16', chunksize = 1024):
+    def _configure(self, nb_channel=2, sampling_rate=44100.,
+                    input_device_index=None, output_device_index=None,
+                    format='int16', chunksize=1024):
         
         
         self.nb_channel = nb_channel
@@ -77,7 +78,7 @@ class PyAudio(Node):
         # check if supported
         if self.output_device_index is not None:
             try:
-                self.pa.is_format_supported(self.sampling_rate,  output_format=format_conv[format],
+                self.pa.is_format_supported(self.sampling_rate, output_format=format_conv[format],
                     output_channels=self.nb_channel, output_device=self.output_device_index)
             except ValueError as err:
                 msg = 'Output not supported: channels={} samplerate={} device_id={}'.format(self.nb_channel, self.sampling_rate, self.output_device_index)
@@ -86,7 +87,7 @@ class PyAudio(Node):
         if self.input_device_index is not None:
             try:
                 self.pa.is_format_supported(self.sampling_rate, input_format=format_conv[format],
-                    input_channels=self.nb_channel,  input_device=self.input_device_index)
+                    input_channels=self.nb_channel, input_device=self.input_device_index)
             except ValueError as err:
                 msg = 'Input not supported: channels={} samplerate={} device_id={}'.format(self.nb_channel, self.sampling_rate, self.input_device_index)
                 raise ValueError(msg) from err
@@ -94,7 +95,7 @@ class PyAudio(Node):
         self.output.spec['shape'] = (chunksize, self.nb_channel)
         self.output.spec['dtype = '] = format
         self.output.spec['sampling_rate'] = float(int(self.sampling_rate))
-        gains = { 'int16' : 1./2**15, 'int32' : 1./2**31, 'float32':1. }
+        gains = {'int16': 1./2**15, 'int32': 1./2**31, 'float32':1.}
         self.output.spec['gain'] = gains[self.format]
         self.output.spec['offset'] = 0.
     
@@ -119,26 +120,26 @@ class PyAudio(Node):
 
     def _initialize(self):
         self.audiostream = self.pa.open(
-                    rate = int(self.sampling_rate),
-                    channels = int(self.nb_channel),
-                    format = format_conv[self.format],
-                    input= self.input_device_index is not None,
-                    output= self.output_device_index is not None,
-                    input_device_index = self.input_device_index,
-                    output_device_index = self.output_device_index,
-                    frames_per_buffer = self._chunksize,
-                    stream_callback = self._audiocallback,
-                    start = False)
+                    rate=int(self.sampling_rate),
+                    channels=int(self.nb_channel),
+                    format=format_conv[self.format],
+                    input=self.input_device_index is not None,
+                    output=self.output_device_index is not None,
+                    input_device_index=self.input_device_index,
+                    output_device_index=self.output_device_index,
+                    frames_per_buffer=self._chunksize,
+                    stream_callback=self._audiocallback,
+                    start=False)
         self._head = 0
         
         # outbuffer
         size = self.nb_channel * self._chunksize * np.dtype(self.format).itemsize
-        self.enmpty_outputbuffer = b'\x00' *  size
+        self.enmpty_outputbuffer = b'\x00' * size
         self.out_queue = collections.deque()
         self.lock = Mutex()
         
         if self.output_device_index is not None:
-            self.thread = ThreadPollInput(self.input, parent = self)
+            self.thread = ThreadPollInput(self.input, parent=self)
             self.thread.new_data.connect(self._new_output_buffer)
     
     def _start(self):

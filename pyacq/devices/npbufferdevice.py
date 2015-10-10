@@ -9,8 +9,8 @@ class NumpyDeviceBuffer(Node):
     
     This node streams data from a predefined buffer in an endless loop.
     """
-    _output_specs = {'signals' : dict(streamtype = 'analogsignal',dtype = 'float32',
-                                                shape = (-1, 16), compression ='', timeaxis=0,
+    _output_specs = {'signals': dict(streamtype='analogsignal',dtype='float32',
+                                                shape=(-1, 16), compression ='', timeaxis=0,
                                                 sampling_rate =30.
                                                 )}
 
@@ -33,8 +33,8 @@ class NumpyDeviceBuffer(Node):
         """
         return Node.configure(self, *args, **kwargs)
 
-    def _configure(self, nb_channel = 16, sample_interval = 0.001, chunksize = 256,
-                timeaxis = 0, buffer = None):
+    def _configure(self, nb_channel=16, sample_interval=0.001, chunksize=256,
+                timeaxis=0, buffer=None):
         self.nb_channel = nb_channel
         self.sample_interval = sample_interval
         self.chunksize = chunksize
@@ -67,7 +67,7 @@ class NumpyDeviceBuffer(Node):
     
     def _initialize(self):
         self.head = 0
-        self.timer = QtCore.QTimer(singleShot = False, interval = int(self.chunksize*self.sample_interval*1000))
+        self.timer = QtCore.QTimer(singleShot=False, interval=int(self.chunksize*self.sample_interval*1000))
         self.timer.timeout.connect(self.send_data)
     
     def _start(self):

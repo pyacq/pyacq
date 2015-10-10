@@ -7,7 +7,8 @@ from .host import Host
 
 import logging
 
-def create_manager(mode='rpc', auto_close_at_exit = True):
+
+def create_manager(mode='rpc', auto_close_at_exit=True):
     """Create a new Manager either in this process or in a new process.
     
     Parameters
@@ -25,7 +26,7 @@ def create_manager(mode='rpc', auto_close_at_exit = True):
         return Manager(name='manager', addr='tcp://*:*')
     else:
         proc = ProcessSpawner(Manager, name='manager', addr='tcp://127.0.0.1:*')
-        man = ManagerProxy(proc.name, proc.addr, manager_process = proc)
+        man = ManagerProxy(proc.name, proc.addr, manager_process=proc)
         if auto_close_at_exit:
             atexit.register(man.close)
         return man
@@ -86,10 +87,10 @@ class Manager(RPCServer):
             self.nodegroup = nodegroup
             self.name = name
             self.classname = classname
-            self.outputs = [ ]# list of StreamDef
+            self.outputs = []  # list of StreamDef
     
     
-    def __init__(self, name, addr, manager_process = None):
+    def __init__(self, name, addr, manager_process=None):
         RPCServer.__init__(self, name, addr)
         
         self.hosts = {}  # name:HostProxy

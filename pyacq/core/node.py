@@ -53,20 +53,20 @@ class Node(object):
     * `Node.configured()`
     * `Node.initialized()`
     """
-    _input_specs = { }
-    _output_specs = { }
+    _input_specs = {}
+    _output_specs = {}
     
-    def __init__(self, name = '', parent = None):
+    def __init__(self, name='', parent=None):
         self.name = name
         
-        self.lock = Mutex() # on lock for all state
+        self.lock = Mutex()  # on lock for all state
         self._running = False
         self._configured = False
         self._initialized = False
         self._closed = False
         
-        self.inputs = { name:InputStream(spec = spec, node = self, name = name) for name, spec in self._input_specs.items() }
-        self.outputs = { name:OutputStream(spec = spec, node = self, name = name) for name, spec in self._output_specs.items() }
+        self.inputs = {name:InputStream(spec=spec, node=self, name=name) for name, spec in self._input_specs.items()}
+        self.outputs = {name:OutputStream(spec=spec, node=self, name=name) for name, spec in self._output_specs.items()}
     
     @property
     def input(self):
@@ -296,15 +296,15 @@ class Node(object):
 class WidgetNode(QtGui.QWidget, Node):
     """Base class for Nodes that implement a QWidget user interface.
     """
-    def __init__(self, parent = None, **kargs):
-        QtGui.QWidget.__init__(self, parent = parent)
+    def __init__(self, parent=None, **kargs):
+        QtGui.QWidget.__init__(self, parent=parent)
         Node.__init__(self, **kargs)
     
     def close(self):
         Node.close(self)
         QtGui.QWidget.close(self)
 
-    def closeEvent(self,event ):
+    def closeEvent(self,event):
         if self.running():
             self.stop()
         if not self.closed():
@@ -330,6 +330,7 @@ class _MyTest:
 class _MyTestNode(_MyTest, Node):
     pass
 register_node_type(_MyTestNode)
+
 
 class _MyTestNodeQWidget(_MyTest, WidgetNode):
     pass

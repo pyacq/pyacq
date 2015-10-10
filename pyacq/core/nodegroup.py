@@ -15,11 +15,11 @@ import zmq
 import logging
 
 
-class RpcThreadSocket( QtCore.QThread):
+class RpcThreadSocket(QtCore.QThread):
     # Thread to poll RPC socket and relay requests as `new_message` signal.
     # Return values are delivered back to the thread via self.local_socket.
     new_message = QtCore.Signal(QtCore.QByteArray, QtCore.QByteArray)
-    def __init__(self, rpc_server, local_addr, parent = None):
+    def __init__(self, rpc_server, local_addr, parent=None):
         QtCore.QThread.__init__(self, parent)
         self.rpc_socket = weakref.ref(rpc_server._socket)
         
@@ -44,12 +44,12 @@ class RpcThreadSocket( QtCore.QThread):
             with self.lock:
                 if not self.running:
                     # do a last poll
-                    socks = dict(self.poller.poll(timeout = 500))
+                    socks = dict(self.poller.poll(timeout=500))
                     if len(socks)==0:
                         self.local_socket.close()
                         break
             
-            socks = dict(self.poller.poll(timeout = 100))
+            socks = dict(self.poller.poll(timeout=100))
             
             if self.rpc_socket() in socks:
                 name, msg = self.rpc_socket().recv_multipart()
@@ -94,7 +94,7 @@ class NodeGroup(RPCServer):
         self._local_socket = context.socket(zmq.PAIR)
         self._local_socket.bind(addr)
         
-        self._rpcsocket_thread = RpcThreadSocket(self, addr,  parent = self.app)
+        self._rpcsocket_thread = RpcThreadSocket(self, addr, parent=self.app)
         self._rpcsocket_thread.new_message.connect(self._mainthread_process_one)
         self._rpcsocket_thread.start()
         
@@ -104,7 +104,7 @@ class NodeGroup(RPCServer):
     def _mainthread_process_one(self, name, msg):
         self._process_one(bytes(name), bytes(msg))
 
-        if  not self.running():
+        if not self.running():
             # stop the RPC
             self._rpcsocket_thread.stop()
             self._rpcsocket_thread.wait()
@@ -147,7 +147,7 @@ class NodeGroup(RPCServer):
         assert name not in self.nodes, 'This node already exists'
         assert classname in all_nodes, 'The node {} is not registered'.format(classname)
         class_ = all_nodes[classname] 
-        node = class_(name = name, **kargs)
+        node = class_(name=name, **kargs)
         self.nodes[name] = node
     
     def delete_node(self, name):
@@ -192,14 +192,14 @@ class NodeGroup(RPCServer):
         """
         mod = importlib.import_module(module)
         class_= getattr(mod, classname)
-        register_node_type(class_,classname = classname)
+        register_node_type(class_,classname=classname)
     
     def register_node_type_with_pickle(self, picklizedclass, classname):
         """Unpickle a Node subclass and register it.
         """
         # this is not working at the moment, so bad....
         class_ = pickle.loads(picklizedclass)
-        register_node_type(class_,classname = classname)
+        register_node_type(class_,classname=classname)
 
     def start_all_nodes(self):
         """Call `Node.start()` for all Nodes in this group.

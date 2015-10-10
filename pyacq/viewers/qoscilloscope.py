@@ -4,7 +4,7 @@ import pyqtgraph as pg
 import numpy as np
 import weakref
 
-from ..core import (WidgetNode, register_node_type,  InputStream,
+from ..core import (WidgetNode, register_node_type, InputStream,
         ThreadPollInput, StreamConverter)
 
 
@@ -23,7 +23,7 @@ class MyViewBox(pg.ViewBox):
     def mouseDragEvent(self, ev):
         ev.ignore()
     def wheelEvent(self, ev):
-        if ev.modifiers() ==  QtCore.Qt.ControlModifier:
+        if ev.modifiers() == QtCore.Qt.ControlModifier:
             z = 10 if ev.delta()>0 else 1/10.
         else:
             z = 1.3 if ev.delta()>0 else 1/1.3
@@ -55,13 +55,13 @@ class BaseOscilloscope(WidgetNode):
         self.layout = QtGui.QHBoxLayout()
         self.setLayout(self.layout)
         
-        self.graphicsview  = pg.GraphicsView()
+        self.graphicsview = pg.GraphicsView()
         self.layout.addWidget(self.graphicsview)
         
         # create graphic view and plot item
         self.viewBox = MyViewBox()
         
-        self.plot = pg.PlotItem(viewBox = self.viewBox)
+        self.plot = pg.PlotItem(viewBox=self.viewBox)
         self.graphicsview.setCentralItem(self.plot)
         self.plot.hideButtons()
         self.plot.showAxis('left', False)
@@ -71,9 +71,9 @@ class BaseOscilloscope(WidgetNode):
         
     def show_params_controler(self):
         self.params_controler.show()
-        #TODO deal with modality
+        # TODO deal with modality
     
-    def _configure(self, with_user_dialog = True, max_xsize = 60.):
+    def _configure(self, with_user_dialog=True, max_xsize=60.):
         self.with_user_dialog = with_user_dialog
         self.max_xsize = max_xsize
     
@@ -81,12 +81,12 @@ class BaseOscilloscope(WidgetNode):
         assert len(self.input.params['shape']) == 2, 'Are you joking ?'
         d0, d1 = self.input.params['shape']
         if self.input.params['timeaxis']==0:
-            self.nb_channel  = d1
+            self.nb_channel = d1
         else:
-            self.nb_channel  = d0
+            self.nb_channel = d0
         
         sr = self.input.params['sampling_rate']
-        #create proxy input
+        # create proxy input
         if self.input.params['transfermode'] == 'sharedarray' and self.input.params['timeaxis'] == 1:
             self.proxy_input = self.input
             self.conv = None
@@ -99,11 +99,11 @@ class BaseOscilloscope(WidgetNode):
                 new_shape = (d1, d0)
             else:
                 new_shape = (d0, d1)
-            self.conv.output.configure(protocol = 'inproc', interface = '127.0.0.1', port='*', 
-                   transfermode = 'sharedarray', streamtype = 'analogsignal',
-                   dtype = 'float32', shape = new_shape, timeaxis = 1, 
-                   compression ='', scale = None, offset = None, units = '',
-                   sharedarray_shape = (self.nb_channel, int(sr*self.max_xsize)), ring_buffer_method = 'double',
+            self.conv.output.configure(protocol='inproc', interface='127.0.0.1', port='*', 
+                   transfermode='sharedarray', streamtype='analogsignal',
+                   dtype='float32', shape=new_shape, timeaxis=1, 
+                   compression='', scale=None, offset=None, units='',
+                   sharedarray_shape=(self.nb_channel, int(sr*self.max_xsize)), ring_buffer_method = 'double',
                    )
             self.conv.initialize()
             self.proxy_input = InputStream()
@@ -111,32 +111,32 @@ class BaseOscilloscope(WidgetNode):
             
 
         # Create parameters
-        all = [ ]
+        all = []
         for i in range(self.nb_channel):
             name = 'Signal{}'.format(i)
-            all.append({ 'name': name, 'type' : 'group', 'children' : self._default_by_channel_params})
+            all.append({'name': name, 'type': 'group', 'children': self._default_by_channel_params})
         self.by_channel_params = pg.parametertree.Parameter.create(name='AnalogSignals', type='group', children=all)
-        self.params = pg.parametertree.Parameter.create( name='Global options',
-                                                    type='group', children =self._default_params)
-        self.all_params = pg.parametertree.Parameter.create(name = 'all param',
-                                    type = 'group', children = [self.params,self.by_channel_params  ])
+        self.params = pg.parametertree.Parameter.create(name='Global options',
+                                                    type='group', children=self._default_params)
+        self.all_params = pg.parametertree.Parameter.create(name='all param',
+                                    type='group', children=[self.params,self.by_channel_params])
         self.all_params.sigTreeStateChanged.connect(self.on_param_change)
         self.params.param('xsize').setLimits([2./sr, self.max_xsize*.95])
         
         if self.with_user_dialog:
-            self.params_controler = OscilloscopeControler(parent = self, viewer = self)
+            self.params_controler = OscilloscopeControler(parent=self, viewer=self)
             self.params_controler.setWindowFlags(QtCore.Qt.Window)
             self.viewBox.doubleclicked.connect(self.show_params_controler)
         else:
             self.params_controler = None
         
         
-        #poller
-        self.poller = ThreadPollInput(input_stream = self.proxy_input)
+        # poller
+        self.poller = ThreadPollInput(input_stream=self.proxy_input)
         self.poller.new_data.connect(self._on_new_data)
-        #timer
+        # timer
         self._head = 0
-        self.timer = QtCore.QTimer(singleShot=False, interval = 100)
+        self.timer = QtCore.QTimer(singleShot=False, interval=100)
         self.timer.timeout.connect(self.refresh)
 
     def _start(self):
@@ -197,17 +197,17 @@ class BaseOscilloscope(WidgetNode):
         sr = self.input.params['sampling_rate']
         self.full_size = int(xsize*sr)
         self.small_size = self.full_size//decimate
-        if self.small_size%2!=0:# ensure for min_max decimate
+        if self.small_size%2!=0:  # ensure for min_max decimate
             self.small_size -=1
         self.full_size = self.small_size*decimate
-        self.t_vect = np.arange(0,self.small_size, dtype = float)/(sr/decimate)
+        self.t_vect = np.arange(0,self.small_size, dtype=float)/(sr/decimate)
         self.t_vect -= self.t_vect[-1]
-        self.curves_data = [ np.zeros( ( self.small_size), dtype =float) for i in range(self.nb_channel) ]
+        self.curves_data = [np.zeros((self.small_size), dtype=float) for i in range(self.nb_channel)]
 
-    def estimate_decimate(self, nb_point = 4000):
+    def estimate_decimate(self, nb_point=4000):
         xsize = self.params['xsize']
         sr = self.input.params['sampling_rate']
-        self.params['decimate'] = max( int(xsize*sr)//nb_point, 1)
+        self.params['decimate'] = max(int(xsize*sr)//nb_point, 1)
 
     def xsize_zoom(self, xmove):
         factor = xmove/100.
@@ -219,15 +219,15 @@ class BaseOscilloscope(WidgetNode):
 
 default_params = [
     {'name': 'xsize', 'type': 'float', 'value': 3., 'step': 0.1},
-    {'name': 'ylim_max', 'type': 'float', 'value': 10. },
+    {'name': 'ylim_max', 'type': 'float', 'value': 10.},
     {'name': 'ylim_min', 'type': 'float', 'value': -10.},
-    {'name': 'background_color', 'type': 'color', 'value': 'k' },
-    {'name': 'refresh_interval', 'type': 'int', 'value': 100 , 'limits':[5, 1000]},
-    {'name': 'mode', 'type': 'list', 'value': 'scroll' , 'values' : ['scan', 'scroll'] },
-    {'name': 'auto_decimate', 'type': 'bool', 'value':  True },
-    {'name': 'decimate', 'type': 'int', 'value': 1, 'limits' : [1, None], },
-    {'name': 'decimation_method', 'type': 'list', 'value': 'pure_decimate', 'values' : [ 'pure_decimate', 'min_max', 'mean'] },
-    {'name': 'display_labels', 'type': 'bool', 'value': False },
+    {'name': 'background_color', 'type': 'color', 'value': 'k'},
+    {'name': 'refresh_interval', 'type': 'int', 'value': 100, 'limits':[5, 1000]},
+    {'name': 'mode', 'type': 'list', 'value': 'scroll', 'values': ['scan', 'scroll']},
+    {'name': 'auto_decimate', 'type': 'bool', 'value': True},
+    {'name': 'decimate', 'type': 'int', 'value': 1, 'limits': [1, None], },
+    {'name': 'decimation_method', 'type': 'list', 'value': 'pure_decimate', 'values': ['pure_decimate', 'min_max', 'mean']},
+    {'name': 'display_labels', 'type': 'bool', 'value': False},
     ]
 
 default_by_channel_params = [ 
@@ -236,11 +236,12 @@ default_by_channel_params = [
     {'name': 'visible', 'type': 'bool', 'value': True},
     ]
 
+
 class QOscilloscope(BaseOscilloscope):
     """
     Continuous, multi-channel oscilloscope based on Qt and pyqtgraph.
     """
-    _input_specs = {'signals' : dict(streamtype = 'signals')}
+    _input_specs = {'signals': dict(streamtype='signals')}
     
     _default_params = default_params
     _default_by_channel_params = default_by_channel_params
@@ -254,14 +255,14 @@ class QOscilloscope(BaseOscilloscope):
     def _initialize(self):
         BaseOscilloscope._initialize(self)
         
-        self.curves = [ ]
-        self.channel_labels = [ ]
+        self.curves = []
+        self.channel_labels = []
         for i in range(self.nb_channel):
-            color = '#7FFF00' #TODO
-            curve = pg.PlotCurveItem(pen = color)
+            color = '#7FFF00'  # TODO
+            curve = pg.PlotCurveItem(pen=color)
             self.plot.addItem(curve)
             self.curves.append(curve)
-            label = pg.TextItem('TODO name{}'.format(i), color = color,  anchor=(0.5, 0.5), border=None,  fill=pg.mkColor((128,128,128, 200)))
+            label = pg.TextItem('TODO name{}'.format(i), color=color, anchor=(0.5, 0.5), border=None, fill=pg.mkColor((128,128,128, 200)))
             self.plot.addItem(label)
             self.channel_labels.append(label)
         
@@ -272,7 +273,7 @@ class QOscilloscope(BaseOscilloscope):
         decimate = int(self.params['decimate'])
         gains = np.array([p['gain'] for p in self.by_channel_params.children()])
         offsets = np.array([p['offset'] for p in self.by_channel_params.children()])
-        visibles = np.array([p['visible'] for p in self.by_channel_params.children()], dtype = bool)
+        visibles = np.array([p['visible'] for p in self.by_channel_params.children()], dtype=bool)
         sr = self.input.params['sampling_rate']
         xsize = self.params['xsize'] 
         
@@ -289,7 +290,7 @@ class QOscilloscope(BaseOscilloscope):
                 small_arr = full_arr[:,::decimate].copy()
             elif self.params['decimation_method'] == 'min_max':
                 arr = full_arr.reshape(full_arr.shape[0], -1, decimate*2)
-                small_arr = np.empty((full_arr.shape[0], self.small_size), dtype = full_arr.dtype)
+                small_arr = np.empty((full_arr.shape[0], self.small_size), dtype=full_arr.dtype)
                 small_arr[:, ::2] = arr.max(axis=2)
                 small_arr[:, 1::2] = arr.min(axis=2)
             elif self.params['decimation_method'] == 'mean':
@@ -300,7 +301,7 @@ class QOscilloscope(BaseOscilloscope):
         else:
             small_arr = full_arr.copy()
         
-        #gain/offset
+        # gain/offset
         small_arr[visibles, :] *= gains[visibles, None]
         small_arr[visibles, :] += offsets[visibles, None]
         
@@ -316,23 +317,23 @@ class QOscilloscope(BaseOscilloscope):
 
         for c, visible in enumerate(visibles):
             if visible:
-               self.curves[c].setData(self.t_vect, self.curves_data[c], antialias = False)
+               self.curves[c].setData(self.t_vect, self.curves_data[c], antialias=False)
             
-        self.plot.setXRange( self.t_vect[0], self.t_vect[-1])
+        self.plot.setXRange(self.t_vect[0], self.t_vect[-1])
         self.plot.setYRange(self.params['ylim_min'], self.params['ylim_max'])
 
         for c, visible in enumerate(visibles):
             label = self.channel_labels[c]
             if visible and self.params['display_labels']:
                 if self.all_mean is not None:
-                    label.setPos(-self.params['xsize'],  self.all_mean[c]*gains[c]+offsets[c])
+                    label.setPos(-self.params['xsize'], self.all_mean[c]*gains[c]+offsets[c])
                 else:
-                    label.setPos(-self.params['xsize'],  offsets[c])
+                    label.setPos(-self.params['xsize'], offsets[c])
                 label.setVisible(True)
             else:
                 label.setVisible(False)
 
-    def gain_zoom(self, factor, selected = None):
+    def gain_zoom(self, factor, selected=None):
         for i, p in enumerate(self.by_channel_params.children()):
             if selected is not None and not selected[i]: continue
             if self.all_mean is not None:
@@ -347,17 +348,17 @@ class QOscilloscope(BaseOscilloscope):
         sr = self.input.params['sampling_rate']
         xsize = self.params['xsize'] 
         np_arr = self.proxy_input.get_array_slice(head,self.full_size)
-        self.all_sd = np.std(np_arr, axis = 1)
-        #self.all_mean = np.mean(np_arr, axis = 1)
-        self.all_mean = np.median(np_arr, axis = 1)
+        self.all_sd = np.std(np_arr, axis=1)
+        # self.all_mean = np.mean(np_arr, axis = 1)
+        self.all_mean = np.median(np_arr, axis=1)
         return self.all_mean, self.all_sd
 
-    def auto_gain_and_offset(self, mode = 0, visibles = None):
+    def auto_gain_and_offset(self, mode=0, visibles=None):
         """
         mode = 0, 1, 2
         """
         if visibles is None:
-            visibles = np.ones(self.nb_channel, dtype = bool)
+            visibles = np.ones(self.nb_channel, dtype=bool)
         
         n = np.sum(visibles)
         if n==0: return
@@ -367,16 +368,16 @@ class QOscilloscope(BaseOscilloscope):
         
         if mode==0:
             ylim_min, ylim_max = np.min(av[visibles]-3*sd[visibles]), np.max(av[visibles]+3*sd[visibles]) 
-            gains = np.ones(self.nb_channel, dtype = float)
-            offsets = np.zeros(self.nb_channel, dtype = float)
+            gains = np.ones(self.nb_channel, dtype=float)
+            offsets = np.zeros(self.nb_channel, dtype=float)
         elif mode in [1, 2]:
-            ylim_min, ylim_max  = -.5, n-.5 
-            gains = np.ones(self.nb_channel, dtype = float)
+            ylim_min, ylim_max = -.5, n-.5 
+            gains = np.ones(self.nb_channel, dtype=float)
             if mode==1 and max(sd[visibles])!=0:
-                gains = np.ones(self.nb_channel, dtype = float) * 1./(6.*max(sd[visibles]))
-            elif mode==2 :
+                gains = np.ones(self.nb_channel, dtype=float) * 1./(6.*max(sd[visibles]))
+            elif mode==2:
                 gains[sd!=0] = 1./(6.*sd[sd!=0])
-            offsets = np.zeros(self.nb_channel, dtype = float)
+            offsets = np.zeros(self.nb_channel, dtype=float)
             offsets[visibles] = range(n)[::-1] - av[visibles]*gains[visibles]
         
         # apply
@@ -394,12 +395,12 @@ register_node_type(QOscilloscope)
 
 
 class OscilloscopeControler(QtGui.QWidget):
-    def __init__(self, parent = None, viewer= None):
+    def __init__(self, parent=None, viewer=None):
         QtGui.QWidget.__init__(self, parent)
         
         self._viewer = weakref.ref(viewer)
         
-        #layout
+        # layout
         self.mainlayout = QtGui.QVBoxLayout()
         self.setLayout(self.mainlayout)
         t = 'Options for {}'.format(self.viewer.name)
@@ -426,7 +427,7 @@ class OscilloscopeControler(QtGui.QWidget):
         
         if self.viewer.nb_channel>1:
             v.addWidget(QtGui.QLabel('<b>Select channel...</b>'))
-            names = [ p.name() for p in self.viewer.by_channel_params ]
+            names = [p.name() for p in self.viewer.by_channel_params]
             self.qlist = QtGui.QListWidget()
             v.addWidget(self.qlist, 2)
             self.qlist.addItems(names)
@@ -456,7 +457,7 @@ class OscilloscopeControler(QtGui.QWidget):
         v.addWidget(QtGui.QLabel(self.tr('<b>Gain zoom (mouse wheel on graph):</b>'),self))
         h = QtGui.QHBoxLayout()
         v.addLayout(h)
-        for label, factor in [ ('--', 1./10.), ('-', 1./1.3), ('+', 1.3), ('++', 10.),]:
+        for label, factor in [('--', 1./10.), ('-', 1./1.3), ('+', 1.3), ('++', 10.),]:
             but = QtGui.QPushButton(label)
             but.factor = factor
             but.clicked.connect(self.on_gain_zoom)
@@ -468,7 +469,7 @@ class OscilloscopeControler(QtGui.QWidget):
 
     @property
     def selected(self):
-        selected = np.ones(self.viewer.nb_channel, dtype = bool)
+        selected = np.ones(self.viewer.nb_channel, dtype=bool)
         if self.viewer.nb_channel>1:
             selected[:] = False
             selected[[ind.row() for ind in self.qlist.selectedIndexes()]] = True
@@ -482,8 +483,8 @@ class OscilloscopeControler(QtGui.QWidget):
     
     def on_auto_gain_and_offset(self):
         mode = self.sender().mode
-        self.viewer.auto_gain_and_offset(mode = mode, visibles = self.selected)
+        self.viewer.auto_gain_and_offset(mode=mode, visibles=self.selected)
     
     def on_gain_zoom(self):
         factor = self.sender().factor
-        self.viewer.gain_zoom(factor, selected = self.selected)
+        self.viewer.gain_zoom(factor, selected=self.selected)

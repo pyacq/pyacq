@@ -4,6 +4,7 @@ from .nodegroup import NodeGroup
 
 from logging import info
 
+
 class Host(RPCServer):
     """
     RPC server class that serves as a pre-existing contact point for spawning
@@ -28,7 +29,7 @@ class Host(RPCServer):
         """
         Close the Host and all of its NodeGroups.
         """
-        self.close_all_nodegroups(force = True)
+        self.close_all_nodegroups(force=True)
         RPCServer.close(self)
     
     def create_nodegroup(self, name, addr):
@@ -37,12 +38,12 @@ class Host(RPCServer):
         Return the RPC name and address of the new nodegroup.
         """
         assert name not in self.nodegroup_process, 'This node group already exists'
-        #print(self._name, 'start_nodegroup', name)
+        # print(self._name, 'start_nodegroup', name)
         ps = ProcessSpawner(NodeGroup, name, addr)
         self.nodegroup_process[name] = ps
         return ps.name, ps.addr
     
-    def close_nodegroup(self, name, force = False):
+    def close_nodegroup(self, name, force=False):
         """
         Close a NodeGroup and stop its process.
         """
@@ -52,10 +53,10 @@ class Host(RPCServer):
         self.nodegroup_process[name].stop()
         del self.nodegroup_process[name]
 
-    def close_all_nodegroups(self, force = False):
+    def close_all_nodegroups(self, force=False):
         """Close all NodeGroups belonging to this host.
         """
         for name in list(self.nodegroup_process.keys()):
-            self.close_nodegroup(name, force = force)
+            self.close_nodegroup(name, force=force)
         
     

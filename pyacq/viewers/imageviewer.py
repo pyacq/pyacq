@@ -4,12 +4,13 @@ from pyqtgraph.Qt import QtCore, QtGui
 import numpy as np
 import pyqtgraph as pg
 
+
 class ImageViewer(WidgetNode):
     """
     A simple image viewer using pyqtgraph.
     """
-    _input_specs = {'video' : dict(streamtype = 'video',dtype = 'uint8',
-                                                shape = (-1, -1, 3), compression ='',
+    _input_specs = {'video': dict(streamtype='video',dtype='uint8',
+                                                shape=(-1, -1, 3), compression ='',
                                                 ),
                                 }
     def __init__(self, **kargs):
@@ -18,7 +19,7 @@ class ImageViewer(WidgetNode):
         self.layout = QtGui.QHBoxLayout()
         self.setLayout(self.layout)
         
-        self.graphicsview  = pg.GraphicsView()
+        self.graphicsview = pg.GraphicsView()
         self.layout.addWidget(self.graphicsview)
         
         self.plot = pg.PlotItem()
@@ -52,7 +53,7 @@ class ImageViewer(WidgetNode):
 
     
     def poll_socket(self):
-        event =  self.input.socket.poll(0)
+        event = self.input.socket.poll(0)
         if event != 0:
             index, data = self.input.recv()
             data = data[::-1,:,:]

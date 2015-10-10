@@ -30,7 +30,7 @@ class SharedArray:
         On linux this is the filename, on Windows this is the tagname.
     
     """
-    def __init__(self, shape = (1,), dtype = 'float64', shm_id =  None):
+    def __init__(self, shape=(1,), dtype = 'float64', shm_id = None):
         self.shape = shape
         self.dtype = np.dtype(dtype)
         self.nbytes = np.prod(shape)*self.dtype.itemsize
@@ -40,14 +40,14 @@ class SharedArray:
         if sys.platform.startswith('win'):
             if shm_id is None:
                 self.shm_id = u'pyacq_SharedArray_'+''.join(random.SystemRandom().choice(string.ascii_uppercase + string.digits) for _ in range(128))
-                self.mmap = mmap.mmap(-1, self.nbytes, self.shm_id, access = mmap.ACCESS_WRITE)
+                self.mmap = mmap.mmap(-1, self.nbytes, self.shm_id, access=mmap.ACCESS_WRITE)
             else:
-                self.mmap = mmap.mmap(-1, self.nbytes, self.shm_id, access = mmap.ACCESS_READ)
+                self.mmap = mmap.mmap(-1, self.nbytes, self.shm_id, access=mmap.ACCESS_READ)
         else:
             if shm_id is None:
                 self._tmpFile = tempfile.NamedTemporaryFile(prefix=u'pyacq_SharedArray_')
                 self._tmpFile.write(b'\x00' * self.length)
-                self._tmpFile.flush() # I do not anderstand but this is needed....
+                self._tmpFile.flush()  # I do not anderstand but this is needed....
                 self.shm_id = self._tmpFile.name
                 self.mmap = mmap.mmap(self._tmpFile.fileno(), self.nbytes, mmap.MAP_SHARED, mmap.PROT_WRITE)
             else:
@@ -60,8 +60,8 @@ class SharedArray:
             self._tmpFile.close()
     
     def to_dict(self):
-        return { 'shape' : self.shape, 'dtype' : self.dtype, 'shm_id' : self.shm_id }
+        return {'shape': self.shape, 'dtype': self.dtype, 'shm_id': self.shm_id}
     
     def to_numpy(self):
-        return np.frombuffer(self.mmap, dtype = self.dtype).reshape(self.shape)
+        return np.frombuffer(self.mmap, dtype=self.dtype).reshape(self.shape)
 

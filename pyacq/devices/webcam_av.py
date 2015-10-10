@@ -47,6 +47,7 @@ class AVThread(QtCore.QThread):
         with self.lock:
             self.running = False
 
+
 class WebCamAV(Node):
     """
     Simple webcam device using the `av` python module, which is a wrapper around
@@ -54,8 +55,8 @@ class WebCamAV(Node):
     
     See http://mikeboers.github.io/PyAV/index.html.
     """
-    _output_specs = {'video' : dict(streamtype = 'video',dtype = 'uint8',
-                                                shape = (4800, 6400, 3), compression ='',
+    _output_specs = {'video': dict(streamtype='video',dtype='uint8',
+                                                shape=(4800, 6400, 3), compression ='',
                                                 sampling_rate = 1.)
                                 }
     def __init__(self, **kargs):
