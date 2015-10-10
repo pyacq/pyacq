@@ -1,5 +1,5 @@
 from pyacq.core.stream  import OutputStream, InputStream
-from pyacq.core.tools  import ThreadPollInput, StreamConverter
+from pyacq.core.tools  import ThreadPollInput, StreamConverter, StreamSplitter
 from pyqtgraph.Qt import QtCore, QtGui
 import pyqtgraph as pg
 
@@ -8,7 +8,8 @@ import weakref
 import time
 
 nb_channel = 16
-chunksize = 1024
+chunksize = 100
+sr = 20000.
 
 stream_spec = dict(protocol = 'tcp', interface = '127.0.0.1', port='*', 
                    transfermode = 'plaindata', streamtype = 'analogsignal',
@@ -23,11 +24,11 @@ class ThreadSender(QtCore.QThread):
     
     def run(self):
         index = 0
-        for i in range(10):
+        for i in range(500):
             index += chunksize
             arr = np.random.rand(chunksize, nb_channel).astype(stream_spec['dtype'])
             self.output_stream().send(index, arr)
-            time.sleep(0.05)
+            time.sleep(chunksize/sr)
         self.terminated.emit()
 
 
@@ -69,8 +70,6 @@ def test_ThreadPollInput():
 def test_streamconverter():
     app = pg.mkQApp()
     
-    nb_channel = 16
-    chunksize = 1024
     stream_spec = dict(protocol = 'tcp', interface = '127.0.0.1', port='*', 
                        transfermode = 'plaindata', streamtype = 'analogsignal',
                        dtype = 'float32', shape = (-1, nb_channel), timeaxis = 0, 
@@ -125,7 +124,59 @@ def test_streamconverter():
     
     app.exec_()
 
+def test_stream_splitter():
+    app = pg.mkQApp()
+    
+    stream_spec = dict(protocol = 'tcp', interface = '127.0.0.1', port='*', 
+                       transfermode = 'plaindata', streamtype = 'analogsignal',
+                       dtype = 'float32', shape = (-1, nb_channel), timeaxis = 0, 
+                       compression ='', scale = None, offset = None, units = '')
+    
+    outstream = OutputStream()
+    outstream.configure(**stream_spec)
+    sender = ThreadSender(output_stream = outstream)
+
+    def on_new_data(pos, arr):
+        assert arr.shape==(chunksize, 1)
+        #print(pos, arr.shape)
+    
+    all_instream = []
+    all_poller = []
+    splitter = StreamSplitter()
+    splitter.configure()
+    splitter.input.connect(outstream)
+    for name, output in splitter.outputs.items():
+        output.configure()
+        instream = InputStream()
+        instream.connect(output)
+        poller = ThreadPollInput(input_stream = instream)
+        poller.new_data.connect(on_new_data)
+        all_instream.append(instream)
+        all_poller.append(poller)
+    splitter.initialize()
+
+    def terminate():
+        sender.wait()
+        splitter.stop()
+        for poller in all_poller:
+            poller.stop()
+            poller.wait()
+        app.quit()
+
+    sender.terminated.connect(terminate)
+    
+    for poller in all_poller:
+        poller.start()
+    
+    splitter.start()
+    sender.start()
+    
+    
+    app.exec_()
+    
+    
+
 if __name__ == '__main__':
     test_ThreadPollInput()
     test_streamconverter()
-    
+    test_stream_splitter()

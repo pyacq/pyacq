@@ -11,6 +11,8 @@ except ImportError:
 from .sharedarray import SharedArray
 from .client import OutputStreamProxy
 
+import weakref
+
 default_stream = dict( protocol = 'tcp', interface = '127.0.0.1', port = '*',
                         transfermode = 'plaindata', streamtype = 'analogsignal',
                         dtype = 'float32', shape = (-1, 1), timeaxis = 0, 
@@ -80,9 +82,14 @@ common_doc = """
 class OutputStream:
     """A OutputStream is a helper class to send data.
     """
-    def __init__(self, spec = {}):
+    def __init__(self, spec = {}, node = None, name = None):
         self.configured = False
         self.spec = spec # this is a priori stream params, and must be change when Node.configure
+        if node is not None:
+            self.node = weakref.ref(node)
+        else:
+            self.node = None
+        self.name = name
     
     def configure(self, **kargs):
         """
@@ -111,6 +118,8 @@ class OutputStream:
             self.sender = SharedArraySender(self.socket, self.params)
 
         self.configured = True
+        if self.node and self.node():
+            self.node().after_output_configure(self.name)
 
     def send(self, index, data):
         """
@@ -138,9 +147,14 @@ class OutputStream:
 class InputStream:
     """InputStream is a helper class to receive data.
     """
-    def __init__(self, spec = {}):
+    def __init__(self, spec = {}, node = None, name = None):
         self.configured = False
         self.spec = spec
+        if node is not None:
+            self.node = weakref.ref(node)
+        else:
+            self.node = None
+        self.name = name
     
     def connect(self, output):
         if isinstance(output, dict):
@@ -166,7 +180,9 @@ class InputStream:
         else:
             raise
         
-        self.configured = True
+        self.connected = True
+        if self.node and self.node():
+            self.node().after_input_connect(self.name)        
     
     def poll(self, timeout=None):
         """
@@ -246,6 +262,7 @@ class PlainDataSender:
         return index, data
     
     def send(self, index, data):
+        #TODO deal when data is nparray and self.copy is False and a.flags['C_CONTIGUOUS']=False
         for f in self.funcs:
             index, data = f(index, data)
         self.socket.send_multipart([np.int64(index), data], copy = self.copy)
@@ -380,7 +397,6 @@ class SharedArraySender:
         else:
             size1 = self._ring_size-tail
             size2 = data.shape[self._timeaxis] - size1
-            #~ print(size1, size2)
             
             # 1 full chunks continuous
             sl = [slice(None)] * self._ndim 
