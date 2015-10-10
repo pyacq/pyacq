@@ -101,7 +101,7 @@ class BrainAmpSocket(Node):
     """
     _output_specs = {'signals': dict(streamtype='analogsignal',dtype='float32',
                                                 shape=(-1, 32), compression ='', timeaxis=0,
-                                                sampling_rate = 512.),
+                                                sample_rate = 512.),
                                 'triggers': dict(streamtype = 'event', dtype = _dtype_trigger,
                                                 shape = (-1,)),
                                 }
@@ -120,17 +120,17 @@ class BrainAmpSocket(Node):
         id1, id2, id3, id4, msgsize, msgtype = struct.unpack('<llllLL', buf_header)
         rawdata = recv_brainamp_frame(brainamp_socket, msgsize - 24)
         assert msgtype == 1, 'First message from brainamp is not type 1'
-        self.nb_channel, sampling_interval = struct.unpack('<Ld', rawdata[:12])
+        self.nb_channel, sample_interval = struct.unpack('<Ld', rawdata[:12])
         n = self.nb_channel
-        sampling_interval = sampling_interval*1e-6
-        self.sampling_rate = 1./sampling_interval
+        sample_interval = sample_interval*1e-6
+        self.sample_rate = 1./sample_interval
         self.resolutions = np.array(struct.unpack('<'+'d'*n, rawdata[12:12+8*n]), dtype='f')
         self.channel_names = rawdata[12+8*n:].decode().split('\x00')[:-1]
         #~ self.channel_indexes = range(nb_channel)
         brainamp_socket.close()
         
         self.outputs['signals'].spec['shape'] = (-1, self.nb_channel)
-        self.outputs['signals'].spec['sampling_rate'] = self.sampling_rate
+        self.outputs['signals'].spec['sample_rate'] = self.sample_rate
 
     def _initialize(self):
         self._thread = BrainAmpThread(self.outputs, self.brainamp_host, self.brainamp_port,

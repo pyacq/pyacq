@@ -39,7 +39,7 @@ class ImageViewer(WidgetNode):
     def _initialize(self):
         in_params = self.input.params
         self.timer = QtCore.QTimer(singleShot=False)
-        self.timer.setInterval(int(1./in_params['sampling_rate']*1000))
+        self.timer.setInterval(int(1./in_params['sample_rate']*1000))
         self.timer.timeout.connect(self.poll_socket)
 
     def _start(self):
@@ -104,7 +104,7 @@ class ImageViewer(WidgetNode):
         self.view.camera.rect = (0,0) + tuple(in_params['shape'][:2])
         
         self.timer = QtCore.QTimer(singleShot=False)
-        self.timer.setInterval(int(1./in_params['sampling_rate']*1000))
+        self.timer.setInterval(int(1./in_params['sample_rate']*1000))
         self.timer.timeout.connect(self.poll_socket)
 
     def configure(self, **kargs):

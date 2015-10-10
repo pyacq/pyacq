@@ -23,12 +23,12 @@ class PyAudio(Node):
 
     _input_specs = {'signals': dict(streamtype='analogsignal',dtype='int16',
                                                 shape=(-1, 2), compression ='', time_axis=0,
-                                                sampling_rate =44100.
+                                                sample_rate =44100.
                                                 )}
 
     _output_specs = {'signals': dict(streamtype='analogsignal',dtype='int16',
                                                 shape=(-1, 2), compression ='', time_axis=0,
-                                                sampling_rate =44100.
+                                                sample_rate =44100.
                                                 )}
 
     def __init__(self, **kargs):
@@ -42,7 +42,7 @@ class PyAudio(Node):
         ----------
         nb_channel : int
             Number of audio channels
-        sampling_rate: float
+        sample_rate: float
             Sample rate. This value is rounded to integer.
         input_device_index : int or None
             Input device index (see `list_device_specs()` and pyaudio documentation).
@@ -60,13 +60,13 @@ class PyAudio(Node):
         """
         return Node.configure(self, *args, **kwargs)
 
-    def _configure(self, nb_channel=2, sampling_rate=44100.,
+    def _configure(self, nb_channel=2, sample_rate=44100.,
                     input_device_index=None, output_device_index=None,
                     format='int16', chunksize=1024):
         
         
         self.nb_channel = nb_channel
-        self.sampling_rate = sampling_rate
+        self.sample_rate = sample_rate
         self.input_device_index = input_device_index
         self.output_device_index = output_device_index
         self.format = format
@@ -78,23 +78,23 @@ class PyAudio(Node):
         # check if supported
         if self.output_device_index is not None:
             try:
-                self.pa.is_format_supported(self.sampling_rate, output_format=format_conv[format],
+                self.pa.is_format_supported(self.sample_rate, output_format=format_conv[format],
                     output_channels=self.nb_channel, output_device=self.output_device_index)
             except ValueError as err:
-                msg = 'Output not supported: channels={} samplerate={} device_id={}'.format(self.nb_channel, self.sampling_rate, self.output_device_index)
+                msg = 'Output not supported: channels={} samplerate={} device_id={}'.format(self.nb_channel, self.sample_rate, self.output_device_index)
                 raise ValueError(msg) from err
         
         if self.input_device_index is not None:
             try:
-                self.pa.is_format_supported(self.sampling_rate, input_format=format_conv[format],
+                self.pa.is_format_supported(self.sample_rate, input_format=format_conv[format],
                     input_channels=self.nb_channel, input_device=self.input_device_index)
             except ValueError as err:
-                msg = 'Input not supported: channels={} samplerate={} device_id={}'.format(self.nb_channel, self.sampling_rate, self.input_device_index)
+                msg = 'Input not supported: channels={} samplerate={} device_id={}'.format(self.nb_channel, self.sample_rate, self.input_device_index)
                 raise ValueError(msg) from err
 
         self.output.spec['shape'] = (chunksize, self.nb_channel)
         self.output.spec['dtype = '] = format
-        self.output.spec['sampling_rate'] = float(int(self.sampling_rate))
+        self.output.spec['sample_rate'] = float(int(self.sample_rate))
         gains = {'int16': 1./2**15, 'int32': 1./2**31, 'float32':1.}
         self.output.spec['gain'] = gains[self.format]
         self.output.spec['offset'] = 0.
@@ -120,7 +120,7 @@ class PyAudio(Node):
 
     def _initialize(self):
         self.audiostream = self.pa.open(
-                    rate=int(self.sampling_rate),
+                    rate=int(self.sample_rate),
                     channels=int(self.nb_channel),
                     format=format_conv[self.format],
                     input=self.input_device_index is not None,

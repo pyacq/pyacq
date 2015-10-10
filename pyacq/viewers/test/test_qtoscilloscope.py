@@ -9,7 +9,7 @@ from pyqtgraph.Qt import QtCore, QtGui
 import pyqtgraph as pg
 
 nb_channel = 32
-sampling_rate = 10000.
+sample_rate = 10000.
 chunksize = 100
 
 
@@ -20,15 +20,15 @@ def test_qoscilloscope():
     
     app = pg.mkQApp()
     
-    length = int(sampling_rate*20)
-    t = np.arange(length)/sampling_rate
+    length = int(sample_rate*20)
+    t = np.arange(length)/sample_rate
     buffer = np.random.rand(length, nb_channel)*.3
     buffer += np.sin(2*np.pi*1.2*t)[:,None]*.5
     buffer = buffer.astype('float32')
 
     #~ dev =NumpyDeviceBuffer()
     dev = ng.create_node('NumpyDeviceBuffer')
-    dev.configure(nb_channel=nb_channel, sample_interval=1./sampling_rate, chunksize=chunksize,
+    dev.configure(nb_channel=nb_channel, sample_interval=1./sample_rate, chunksize=chunksize,
                     buffer=buffer)
     dev.output.configure(protocol='tcp', interface='127.0.0.1', transfermode='plaindata')
     dev.initialize()

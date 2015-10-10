@@ -17,7 +17,7 @@ default_stream = dict(protocol='tcp', interface='127.0.0.1', port='*',
                         transfermode='plaindata', streamtype='analogsignal',
                         dtype='float32', shape=(-1, 1), timeaxis = 0, 
                         compression ='', scale = None, offset = None, units = '',
-                        sampling_rate = 1.,)
+                        sample_rate = 1.,)
 
 
 common_doc = """
@@ -58,9 +58,9 @@ common_doc = """
         See scale.
     units: str
         Units of the stream data. Mainly used for 'analogsignal'.
-    sampling_rate: float or None
+    sample_rate: float or None
         Sample rate of the stream in Hz.
-    sampling_interval: float or None
+    sample_interval: float or None
     sharedarray_shape: tuple
         Shape of the SharedArray when using `transfermode = 'sharedarray'`.
     ring_buffer_method: 'double' or 'single'

@@ -122,7 +122,7 @@ class QTimeFreq(WidgetNode):
         
     
     def _initialize(self, ):
-        self.sampling_rate = sr = self.input.params['sampling_rate']
+        self.sample_rate = sr = self.input.params['sample_rate']
         d0, d1 = self.input.params['shape']
         if self.input.params['timeaxis']==0:
             self.nb_channel = d1
@@ -307,39 +307,39 @@ class QTimeFreq(WidgetNode):
     def initialize_time_freq(self):
         tfr_params = self.params.param('timefreq')
         
-        # we take sampling_rate = f_stop*4 or (original sampling_rate)
-        if tfr_params['f_stop']*4 < self.sampling_rate:
-            sub_sampling_rate = tfr_params['f_stop']*4
+        # we take sample_rate = f_stop*4 or (original sample_rate)
+        if tfr_params['f_stop']*4 < self.sample_rate:
+            sub_sample_rate = tfr_params['f_stop']*4
         else:
-            sub_sampling_rate = self.sampling_rate
+            sub_sample_rate = self.sample_rate
         
         # this try to find the best size to get a timefreq of 2**N by changing
-        # the sub_sampling_rate and the sig_chunk_size
+        # the sub_sample_rate and the sig_chunk_size
         self.wanted_size = self.params['xsize']
-        self.len_wavelet = l = int(2**np.ceil(np.log(self.wanted_size*sub_sampling_rate)/np.log(2)))
-        self.sig_chunk_size = self.wanted_size*self.sampling_rate
-        self.downsampling_factor = int(np.ceil(self.sig_chunk_size/l))
-        self.sig_chunk_size = self.downsampling_factor*l
-        self.sub_sampling_rate = self.sampling_rate/self.downsampling_factor
-        self.plot_length = int(self.wanted_size*sub_sampling_rate)
+        self.len_wavelet = l = int(2**np.ceil(np.log(self.wanted_size*sub_sample_rate)/np.log(2)))
+        self.sig_chunk_size = self.wanted_size*self.sample_rate
+        self.downsample_factor = int(np.ceil(self.sig_chunk_size/l))
+        self.sig_chunk_size = self.downsample_factor*l
+        self.sub_sample_rate = self.sample_rate/self.downsample_factor
+        self.plot_length = int(self.wanted_size*sub_sample_rate)
         
         self.wavelet_fourrier = generate_wavelet_fourier(self.len_wavelet, tfr_params['f_start'], tfr_params['f_stop'],
-                            tfr_params['deltafreq'], self.sub_sampling_rate, tfr_params['f0'], tfr_params['normalisation'])
+                            tfr_params['deltafreq'], self.sub_sample_rate, tfr_params['f0'], tfr_params['normalisation'])
         
-        if self.downsampling_factor>1:
-            self.filter_b = scipy.signal.firwin(9, 1. / self.downsampling_factor, window='hamming')
+        if self.downsample_factor>1:
+            self.filter_b = scipy.signal.firwin(9, 1. / self.downsample_factor, window='hamming')
             self.filter_a = np.array([1.])
         else:
             self.filter_b = None
             self.filter_a = None
         
         for worker in self.workers:
-            worker.on_fly_change_wavelet(wavelet_fourrier=self.wavelet_fourrier, downsampling_factor=self.downsampling_factor,
+            worker.on_fly_change_wavelet(wavelet_fourrier=self.wavelet_fourrier, downsample_factor=self.downsample_factor,
                         sig_chunk_size=self.sig_chunk_size, plot_length=self.plot_length, filter_a=self.filter_a, filter_b=self.filter_b)
         
         for input_map in self.input_maps:
             input_map.params['shape'] = (self.plot_length, self.wavelet_fourrier.shape[1])
-            input_map.params['sampling_rate'] = sub_sampling_rate
+            input_map.params['sample_rate'] = sub_sample_rate
     
     def initialize_plots(self):
         N = 512
@@ -441,7 +441,7 @@ class QTimeFreq(WidgetNode):
         if self.params['mode']=='scroll':
             self.images[chan].updateImage(wt_map)
         elif self.params['mode'] =='scan':
-            ind = (head//self.downsampling_factor)%self.plot_length+1
+            ind = (head//self.downsample_factor)%self.plot_length+1
             wt_map = np.concatenate([wt_map[-ind:, :], wt_map[:-ind, :]], axis=0)
             self.images[chan].updateImage(wt_map)
     
@@ -475,7 +475,7 @@ class QTimeFreq(WidgetNode):
 register_node_type(QTimeFreq)
 
 
-def generate_wavelet_fourier(len_wavelet, f_start, f_stop, deltafreq, sampling_rate, f0, normalisation):
+def generate_wavelet_fourier(len_wavelet, f_start, f_stop, deltafreq, sample_rate, f0, normalisation):
     """
     Compute the wavelet coefficients at all scales and compute its Fourier transform.
     
@@ -489,7 +489,7 @@ def generate_wavelet_fourier(len_wavelet, f_start, f_stop, deltafreq, sampling_r
         Last frequency in Hz
     deltafreq : float
         Frequency interval in Hz
-    sampling_rate : float
+    sample_rate : float
         Sample rate in Hz
     f0 : float
     normalisation : float
@@ -502,7 +502,7 @@ def generate_wavelet_fourier(len_wavelet, f_start, f_stop, deltafreq, sampling_r
         Axis 0 is time; axis 1 is frequency.
     """
     # compute final map scales
-    scales = f0/np.arange(f_start,f_stop,deltafreq)*sampling_rate
+    scales = f0/np.arange(f_start,f_stop,deltafreq)*sample_rate
     
     # compute wavelet coeffs at all scales
     xi=np.arange(-len_wavelet/2.,len_wavelet/2.)
@@ -538,7 +538,7 @@ class ComputeThread(QtCore.QThread):
             return
         head = self.head
         
-        downsampling_factor = self.worker_params['downsampling_factor']
+        downsample_factor = self.worker_params['downsample_factor']
         sig_chunk_size = self.worker_params['sig_chunk_size']
         filter_a = self.worker_params['filter_a']
         filter_b = self.worker_params['filter_b']
@@ -547,15 +547,15 @@ class ComputeThread(QtCore.QThread):
         
         #~ t1 = time.time()
         
-        if downsampling_factor>1:
-            head = head - head%downsampling_factor
+        if downsample_factor>1:
+            head = head - head%downsample_factor
         full_arr = self.in_stream().get_array_slice(head, sig_chunk_size)[self.channel, :]
         
         #~ t2 = time.time()
         
-        if downsampling_factor>1:
+        if downsample_factor>1:
             small_arr = scipy.signal.filtfilt(filter_b, filter_a, full_arr)
-            small_arr =small_arr[::downsampling_factor].copy()  # to ensure continuity
+            small_arr =small_arr[::downsample_factor].copy()  # to ensure continuity
         else:
             small_arr = full_arr
         
@@ -612,7 +612,7 @@ class TimeFreqWorker(Node, QtCore.QObject):
         
         
     def _initialize(self):
-        self.sampling_rate = sr = self.input.params['sampling_rate']
+        self.sample_rate = sr = self.input.params['sample_rate']
         self.thread = ComputeThread(self.input, self.output, self.channel, self.local)
         self.thread.finished.connect(self.on_thread_done)
 
@@ -626,7 +626,7 @@ class TimeFreqWorker(Node, QtCore.QObject):
     def _close(self):
         pass
     
-    #~ def on_fly_change_wavelet(self, wavelet_fourrier=None, downsampling_factor=None, sig_chunk_size = None,
+    #~ def on_fly_change_wavelet(self, wavelet_fourrier=None, downsample_factor=None, sig_chunk_size = None,
             #~ plot_length=None, filter_a=None, filter_b=None):
     def on_fly_change_wavelet(self, **worker_params):
         p = worker_params
@@ -638,7 +638,7 @@ class TimeFreqWorker(Node, QtCore.QObject):
         
         p['out_shape'] = (p['plot_length'], p['wavelet_fourrier'].shape[1])
         self.output.params['shape'] = p['out_shape']
-        self.output.params['sampling_rate'] = self.sampling_rate/p['downsampling_factor']
+        self.output.params['sample_rate'] = self.sample_rate/p['downsample_factor']
         
         self.worker_params = worker_params
     

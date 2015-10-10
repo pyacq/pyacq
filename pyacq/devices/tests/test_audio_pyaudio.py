@@ -17,7 +17,7 @@ def test_local_app_in_out():
     app = pg.mkQApp()
     
     dev = PyAudio()
-    dev.configure(nb_channel=2, sampling_rate=44100.,
+    dev.configure(nb_channel=2, sample_rate=44100.,
                     input_device_index=0, output_device_index=0,
                     format='int16', chunksize=1024)
     dev.output.configure(protocol='tcp', interface='127.0.0.1', transfertmode='plaindata')
@@ -54,7 +54,7 @@ def test_play_sinus():
     audioin.output.configure(protocol='inproc', transfertmode='plaindata')
     audioin.initialize()
     
-    audioout.configure(nb_channel=nb_channel, sampling_rate=sr,
+    audioout.configure(nb_channel=nb_channel, sample_rate=sr,
                     input_device_index=None, output_device_index=0,
                     format='float32', chunksize=chunksize)
     audioout.input.connect(audioin.output)

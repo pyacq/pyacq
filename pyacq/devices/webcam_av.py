@@ -57,7 +57,7 @@ class WebCamAV(Node):
     """
     _output_specs = {'video': dict(streamtype='video',dtype='uint8',
                                                 shape=(4800, 6400, 3), compression ='',
-                                                sampling_rate = 1.)
+                                                sample_rate = 1.)
                                 }
     def __init__(self, **kargs):
         Node.__init__(self, **kargs)
@@ -71,7 +71,7 @@ class WebCamAV(Node):
         container = av.open('/dev/video{}'.format(self.camera_num), 'r','video4linux2', self.options)
         stream = next(s for s in container.streams if s.type == 'video')
         self.output.spec['shape'] = (stream.format.height, stream.format.width, 3)
-        self.output.spec['sampling_rate'] = float(stream.average_rate)
+        self.output.spec['sample_rate'] = float(stream.average_rate)
     
     def _initialize(self):
         pass

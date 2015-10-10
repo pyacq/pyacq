@@ -11,7 +11,7 @@ class NumpyDeviceBuffer(Node):
     """
     _output_specs = {'signals': dict(streamtype='analogsignal',dtype='float32',
                                                 shape=(-1, 16), compression ='', timeaxis=0,
-                                                sampling_rate =30.
+                                                sample_rate =30.
                                                 )}
 
     def __init__(self, **kargs):
@@ -48,7 +48,7 @@ class NumpyDeviceBuffer(Node):
             self.output.spec['shape'] = (nb_channel, -1)
             self.output.spec['timeaxis'] = self.timeaxis
             self.channelaxis = 0
-        self.output.spec['sampling_rate'] = 1./sample_interval
+        self.output.spec['sample_rate'] = 1./sample_interval
         
         if buffer is None:
             nloop = 40

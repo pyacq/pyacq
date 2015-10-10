@@ -85,7 +85,7 @@ class BaseOscilloscope(WidgetNode):
         else:
             self.nb_channel = d0
         
-        sr = self.input.params['sampling_rate']
+        sr = self.input.params['sample_rate']
         # create proxy input
         if self.input.params['transfermode'] == 'sharedarray' and self.input.params['timeaxis'] == 1:
             self.proxy_input = self.input
@@ -194,7 +194,7 @@ class BaseOscilloscope(WidgetNode):
     def reset_curves_data(self):
         xsize = self.params['xsize']
         decimate = self.params['decimate']
-        sr = self.input.params['sampling_rate']
+        sr = self.input.params['sample_rate']
         self.full_size = int(xsize*sr)
         self.small_size = self.full_size//decimate
         if self.small_size%2!=0:  # ensure for min_max decimate
@@ -206,7 +206,7 @@ class BaseOscilloscope(WidgetNode):
 
     def estimate_decimate(self, nb_point=4000):
         xsize = self.params['xsize']
-        sr = self.input.params['sampling_rate']
+        sr = self.input.params['sample_rate']
         self.params['decimate'] = max(int(xsize*sr)//nb_point, 1)
 
     def xsize_zoom(self, xmove):
@@ -274,7 +274,7 @@ class QOscilloscope(BaseOscilloscope):
         gains = np.array([p['gain'] for p in self.by_channel_params.children()])
         offsets = np.array([p['offset'] for p in self.by_channel_params.children()])
         visibles = np.array([p['visible'] for p in self.by_channel_params.children()], dtype=bool)
-        sr = self.input.params['sampling_rate']
+        sr = self.input.params['sample_rate']
         xsize = self.params['xsize'] 
         
         head = self._head
@@ -345,7 +345,7 @@ class QOscilloscope(BaseOscilloscope):
         if self._head is None:
             return None, None
         head = self._head
-        sr = self.input.params['sampling_rate']
+        sr = self.input.params['sample_rate']
         xsize = self.params['xsize'] 
         np_arr = self.proxy_input.get_array_slice(head,self.full_size)
         self.all_sd = np.std(np_arr, axis=1)

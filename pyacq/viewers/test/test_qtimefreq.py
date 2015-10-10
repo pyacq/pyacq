@@ -10,20 +10,20 @@ from pyqtgraph.Qt import QtCore, QtGui
 import pyqtgraph as pg
 
 nb_channel = 8
-sampling_rate = 1000.
+sample_rate = 1000.
 chunksize = 50
 
 #~ nb_channel = 32
-#~ sampling_rate = 20000
+#~ sample_rate = 20000
 #~ chunksize = 100
 
 # some moving sinus
-length = int(sampling_rate*20)
-times = np.arange(length)/sampling_rate
+length = int(sample_rate*20)
+times = np.arange(length)/sample_rate
 buffer = np.random.rand(length, nb_channel)
 f1, f2, speed = 20., 60., .05
 freqs = (np.sin(np.pi*2*speed*times)+1)/2 * (f2-f1) + f1
-phases = np.cumsum(freqs/sampling_rate)*2*np.pi
+phases = np.cumsum(freqs/sample_rate)*2*np.pi
 ampl = np.abs(np.sin(np.pi*2*speed*8*times))*.8
 buffer += (np.sin(phases)*ampl)[:,None]
 buffer = buffer.astype('float32')
@@ -38,7 +38,7 @@ def test_TimeFreqWorker():
     ng = man.create_nodegroup()
 
     dev = ng.create_node('NumpyDeviceBuffer')
-    dev.configure(nb_channel=nb_channel, sample_interval=1./sampling_rate, chunksize=chunksize,
+    dev.configure(nb_channel=nb_channel, sample_interval=1./sample_rate, chunksize=chunksize,
                     buffer=buffer.transpose(), timeaxis=1,)
     dev.output.configure(protocol='tcp', interface='127.0.0.1', transfermode='sharedarray',
                             sharedarray_shape=(nb_channel, 2048*50), ring_buffer_method = 'double')
@@ -68,14 +68,14 @@ def test_TimeFreqWorker():
     
     # change the wavelet on fly
     for worker in workers:
-        worker.on_fly_change_wavelet(wavelet_fourrier=wavelet_fourrier, downsampling_factor=20,
+        worker.on_fly_change_wavelet(wavelet_fourrier=wavelet_fourrier, downsample_factor=20,
             sig_chunk_size=2048*20,
             plot_length=int(sub_sr*xsize), filter_a=filter_a, filter_b=filter_b)
     
     head = 0
     for i in range(4):
         time.sleep(.5)
-        head += int(sampling_rate*.5)
+        head += int(sample_rate*.5)
         for worker in workers:
             worker.compute_one_map(head)
     
@@ -95,7 +95,7 @@ def test_qtimefreq_local_worker():
     app = pg.mkQApp()
     
     dev = ng.create_node('NumpyDeviceBuffer')
-    dev.configure(nb_channel=nb_channel, sample_interval=1./sampling_rate, chunksize=chunksize,
+    dev.configure(nb_channel=nb_channel, sample_interval=1./sample_rate, chunksize=chunksize,
                     buffer=buffer)
     dev.output.configure(protocol='tcp', interface='127.0.0.1', transfermode='plaindata')
     dev.initialize()
@@ -144,7 +144,7 @@ def test_qtimefreq_distributed_worker():
 
     ng = man.create_nodegroup()
     dev = ng.create_node('NumpyDeviceBuffer')
-    dev.configure(nb_channel=nb_channel, sample_interval=1./sampling_rate, chunksize=chunksize,
+    dev.configure(nb_channel=nb_channel, sample_interval=1./sample_rate, chunksize=chunksize,
                     buffer=buffer)
     dev.output.configure(protocol='tcp', interface='127.0.0.1', transfermode='plaindata')
     dev.initialize()

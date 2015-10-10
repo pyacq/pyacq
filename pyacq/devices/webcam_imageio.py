@@ -35,7 +35,7 @@ class ImageIOThread(QtCore.QThread):
             self.out_stream.send(n, im)
             # this is bad 
             # TODO : find a way to do trhis loop in blocking mode
-            time.sleep(1./self.out_stream.params['sampling_rate'])
+            time.sleep(1./self.out_stream.params['sample_rate'])
     
     def stop(self):
         with self.lock:
@@ -48,7 +48,7 @@ class WebCamImageIO(Node):
     """
     _output_specs = {'video': dict(streamtype='video',dtype='uint8',
                                                 shape=(4800, 6400, 3), compression ='',
-                                                sampling_rate =1.
+                                                sample_rate =1.
                                                 ),
                                 }
     def __init__(self, **kargs):
@@ -65,7 +65,7 @@ class WebCamImageIO(Node):
         
         s = self.metadata['size']
         self.output.spec['shape'] = (s[1], s[0], 3,)
-        self.output.spec['sampling_rate'] = float(self.metadata['fps'])
+        self.output.spec['sample_rate'] = float(self.metadata['fps'])
     
     def _initialize(self):
         pass
