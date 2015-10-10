@@ -49,9 +49,10 @@ class AVThread(QtCore.QThread):
 
 class WebCamAV(Node):
     """
-    Simple webcam device that use the av python module.
+    Simple webcam device using the `av` python module, which is a wrapper around
+    ffmpeg or libav.
+    
     See http://mikeboers.github.io/PyAV/index.html.
-    It is a wrapper on top ffmpeg or libav.
     """
     _output_specs = {'video' : dict(streamtype = 'video',dtype = 'uint8',
                                                 shape = (4800, 6400, 3), compression ='',

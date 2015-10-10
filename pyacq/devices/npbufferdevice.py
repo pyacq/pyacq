@@ -5,22 +5,9 @@ from pyqtgraph.Qt import QtCore, QtGui
 
 
 class NumpyDeviceBuffer(Node):
-    """
-    This is a fake analogsignal device
-    It send data chunk of a predifined buffer inloop at the approximated speed.
-    Done with QTimer.
-
-    Parameters for configure
-    ---
-    nb_channel: int
+    """A fake analogsignal device.
     
-    sample_interval: float
-    
-    chunksize: int
-    
-    buffer: np.ndarray
-        This can be used only on local because numpy is not JSON serilized.
-    
+    This node streams data from a predefined buffer in an endless loop.
     """
     _output_specs = {'signals' : dict(streamtype = 'analogsignal',dtype = 'float32',
                                                 shape = (-1, 16), compression ='', timeaxis=0,
@@ -30,11 +17,24 @@ class NumpyDeviceBuffer(Node):
     def __init__(self, **kargs):
         Node.__init__(self, **kargs)
 
+    def configure(self, *args, **kwargs):
+        """
+        Parameters for configure
+        ---
+        nb_channel: int
+            Number of output channels.
+        sample_interval: float
+            Time duration of a single data sample. This determines the rate at
+            which data is sent.
+        chunksize: int
+            Length of chunks to send.
+        buffer: array
+            Data to send. Must have `buffer.shape[0] == nb_channel`.
+        """
+        return Node.configure(self, *args, **kwargs)
+
     def _configure(self, nb_channel = 16, sample_interval = 0.001, chunksize = 256,
                 timeaxis = 0, buffer = None):
-        """
-        
-        """
         self.nb_channel = nb_channel
         self.sample_interval = sample_interval
         self.chunksize = chunksize

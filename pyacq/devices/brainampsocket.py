@@ -30,6 +30,7 @@ def recv_brainamp_frame(brainamp_socket, reqsize):
         buf = buf[:reqsize]
     return buf
 
+
 class BrainAmpThread(QtCore.QThread):
     def __init__(self, outputs, brainamp_host, brainamp_port, nb_channel, parent = None):
         QtCore.QThread.__init__(self)
@@ -92,9 +93,10 @@ class BrainAmpThread(QtCore.QThread):
 
 class BrainAmpSocket(Node):
     """
-    BrainAmp from BarinProduct http://www.brainproducts.com/ EEG.
-    Vision recorder acquisition software provide a socket based data streaming.
-    This class is a bridge between this socket and pyacq.
+    BrainAmp EEG amplifier from Brain Products http://www.brainproducts.com/.
+    
+    This class is a bridge between pyacq and the socket-based data streaming
+    provided by the Vision recorder acquisition software.
     """
     _output_specs = {'signals' : dict(streamtype = 'analogsignal',dtype = 'float32',
                                                 shape = (-1, 32), compression ='', timeaxis=0,

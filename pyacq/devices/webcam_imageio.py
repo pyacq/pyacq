@@ -43,7 +43,7 @@ class ImageIOThread(QtCore.QThread):
 
 class WebCamImageIO(Node):
     """
-    Simple webcam device that use the imageiopython module.
+    Simple webcam device using the imageio python module.
     """
     _output_specs = {'video' : dict(streamtype = 'video',dtype = 'uint8',
                                                 shape = (4800, 6400, 3), compression ='',

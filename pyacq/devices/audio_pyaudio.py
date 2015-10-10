@@ -17,26 +17,7 @@ if HAVE_PYAUDIO:
     # TODO add support for 'int24' (possible in pyaudio but not in numpy)
 
 class PyAudio(Node):
-    """
-    Simple wrapper with pyaudio to acess audio in/out in a Nodes.
-    
-    
-    Parameters for configure():
-    ----
-    nb_channel : int
-        Number of audio channel
-    sampling_rate: float
-        Sampling rate, not that internally sampling rate is an int so it is rounded.
-    input_device_index : int or None
-        Input device index (like in pyaudio)
-        If None, no grabbing to audio device input so the Node have no output.
-    output_device_index: in or None
-        Output device index (like in pyaudio)
-        If None, no playing to audio device output so the Node have no input.
-    format : str in ('int16', 'int32' or 'float32')
-        internal format for pyaudio.
-    chunksize : int (1024 by default)
-        Size of each chun. This impact latency. Too small lead to cracks.    
+    """Simple wrapper around PyAudio for input and output to audio devices.
     """
 
     _input_specs = {'signals' : dict(streamtype = 'analogsignal',dtype = 'int16',
@@ -53,6 +34,30 @@ class PyAudio(Node):
         Node.__init__(self, **kargs)
         assert HAVE_PYAUDIO, "PyAudio node depends on the `pyaudio` package, but it could not be imported."
         self.pa = pyaudio.PyAudio()
+
+    def configure(self, *args, **kwargs):
+        """
+        Parameters
+        ----------
+        nb_channel : int
+            Number of audio channels
+        sampling_rate: float
+            Sample rate. This value is rounded to integer.
+        input_device_index : int or None
+            Input device index (see `list_device_specs()` and pyaudio documentation).
+            If None then no recording will be requested from the device, and the
+            node will have no output.
+        output_device_index: in or None
+            Output device index (see `list_device_specs()` and pyaudio documentation).
+            If None then no playback will be requested from the device, and the
+            node will have no input.
+        format : str in ('int16', 'int32' or 'float32')
+            Internal data format for pyaudio.
+        chunksize : int (1024 by default)
+            Size of each chunk. Smaller chunks result in lower overall latency,
+            but may also cause buffering issues (cracks/pops in sound).
+        """
+        return Node.configure(self, *args, **kwargs)
 
     def _configure(self, nb_channel = 2, sampling_rate =44100.,
                     input_device_index = None, output_device_index = None,
