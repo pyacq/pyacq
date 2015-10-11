@@ -49,7 +49,7 @@ def test_eeg_emotiv_direct():
     # in main App
     app = QtGui.QApplication([])
     dev = Emotiv(name = 'Emotiv0')
-    dev.configure(device_info = device_path)
+    dev.configure(device_path = device_path)
     dev.outputs['signals'].configure(protocol = 'tcp', interface = '127.0.0.1',transfermode = 'plaindata',)
     dev.outputs['impedances'].configure(protocol = 'tcp', interface = '127.0.0.1',transfermode = 'plaindata',)
     dev.outputs['gyro'].configure(protocol = 'tcp', interface = '127.0.0.1',transfermode = 'plaindata',)

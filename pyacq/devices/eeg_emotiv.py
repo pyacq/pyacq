@@ -1,6 +1,7 @@
 from ..core import Node, register_node_type
 from pyqtgraph.Qt import QtCore, QtGui
 from pyqtgraph.util.mutex import Mutex
+import os 
 
 import numpy as np
 
@@ -186,7 +187,7 @@ class Emotiv(Node):
     def _configure(self, device_path = '/dev/hidraw0'):
         self.device_path = device_path
         self.name = self.device_path.strip('/dev/')
-        real_input_path =  os.path.realpath("/sys/class/hidraw/" + name)
+        real_input_path =  os.path.realpath("/sys/class/hidraw/" + self.name)
         path = '/'.join(real_input_path.split('/')[:-4])
         with open(path + "/manufacturer", 'r') as f:
             self.manufacturer = f.readline()
