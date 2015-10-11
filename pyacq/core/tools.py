@@ -74,7 +74,7 @@ class StreamConverter(Node):
             if k in ('port', 'protocol', 'interface', 'dtype'):
                 continue # the OutputStream/InputStream already do it
             
-            old, new = self.input.params[k], self.output.params[k]
+            old, new = self.input.params.get(k, None), self.output.params.get(k, None)
             if old != new and old is not None:
                 self.conversions[k] = (old, new)
                 
