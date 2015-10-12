@@ -5,7 +5,7 @@ import pyqtgraph.multiprocess as mp
 
 
 def test_sharedarray():    
-    sa = SharedArray(shape = (10), dtype = 'int32')
+    sa = SharedArray(shape=(10), dtype = 'int32')
     np_a = sa.to_numpy()
     np_a[:] = np.arange(10)
     
@@ -16,7 +16,7 @@ def test_sharedarray():
 
 
 def test_sharedarray_multiprocess():
-    sa = SharedArray(shape = (10), dtype = 'int32')
+    sa = SharedArray(shape=(10), dtype = 'int32')
     np_a = sa.to_numpy()
     np_a[:] = np.arange(10)
     

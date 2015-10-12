@@ -8,16 +8,17 @@ from pyqtgraph.Qt import QtCore, QtGui
 
 import pytest
 
-@pytest.mark.skipif(True, reason = 'Need brainamp device to test')
+
+@pytest.mark.skipif(True, reason='Need brainamp device to test')
 def test_brainampsocket():
     # in main App
     app = QtGui.QApplication([])
     
     dev = BrainAmpSocket()
     #~ dev.configure(brainamp_host = '194.167.217.129', brainamp_port = 51244)
-    dev.configure(brainamp_host = '194.167.217.84', brainamp_port = 51244)
-    dev.outputs['signals'].configure(protocol = 'tcp', interface = '127.0.0.1',transfermode = 'plaindata',)
-    dev.outputs['triggers'].configure(protocol = 'tcp', interface = '127.0.0.1',transfermode = 'plaindata',)
+    dev.configure(brainamp_host='194.167.217.84', brainamp_port=51244)
+    dev.outputs['signals'].configure(protocol='tcp', interface='127.0.0.1',transfermode='plaindata',)
+    dev.outputs['triggers'].configure(protocol='tcp', interface='127.0.0.1',transfermode='plaindata',)
     dev.initialize()
     
     viewer = QOscilloscope()
@@ -37,7 +38,7 @@ def test_brainampsocket():
         app.quit()
     
     # start for a while
-    timer = QtCore.QTimer(singleShot = True, interval = 5000)
+    timer = QtCore.QTimer(singleShot=True, interval=5000)
     timer.timeout.connect(terminate)
     #~ timer.start()
     

@@ -23,7 +23,7 @@ def test_rpc():
     serve_thread.start()
     
     client = RPCClient('some_server', 'tcp://localhost:5152')
-    #atexit.register(client.close)
+    # atexit.register(client.close)
     
     # test call / sync return
     assert client.add(7, 5) == 12
@@ -97,11 +97,11 @@ def test_rpc():
 
 
 def test_serializer():
-    d = dict(a = 1, b =1., c = 'abc', 
-                d = b'abc',
-                e = np.arange(8).reshape(2, 4).astype('float64'),
-                f = datetime.datetime(2015, 1, 1, 12, 00, 00),
-                g = datetime.date(2015, 1, 1),
+    d = dict(a=1, b=1., c='abc', 
+                d=b'abc',
+                e=np.arange(8).reshape(2, 4).astype('float64'),
+                f=datetime.datetime(2015, 1, 1, 12, 00, 00),
+                g=datetime.date(2015, 1, 1),
                 )
     
     serializers = [JsonSerializer()]

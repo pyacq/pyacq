@@ -71,9 +71,10 @@ def test_eeg_emotiv_direct():
         app.quit()
     
     # start for a while
-    timer = QtCore.QTimer(singleShot = True, interval = 30000)
+    timer = QtCore.QTimer(singleShot = True, interval = 3000)
     timer.timeout.connect(terminate)
     timer.start()
+    
     app.exec_()
     
     

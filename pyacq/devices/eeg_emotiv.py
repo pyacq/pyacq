@@ -32,40 +32,27 @@ _sensorBits = {
   'F4': [216, 217, 218, 219, 220, 221, 222, 223, 208, 209, 210, 211, 212, 213]
 }
 _quality_bits = [99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112]
+_quality_num_to_name = { 0 : 'F3',  1:'FC5', 2 : 'AF3',  3 : 'F7', 4:'T7', 5 : 'P7', 
+                                6 : 'O1', 7 : 'O2', 8: 'P8', 9 : 'T8', 10: 'F8', 11 : 'AF4', 
+                                12 : 'FC6', 13: 'F4', 14 : 'F8', 15:'AF4', 
+                                64 : 'F3', 65 : 'FC5', 66 : 'AF3', 67 : 'F7', 68 : 'T7', 69 : 'P7', 
+                                70 : 'O1', 71 : 'O2', 72: 'P8', 73 : 'T8', 74: 'F8', 75 : 'AF4', 
+                                76 : 'FC6', 77: 'F4', 78 : 'F8', 79:'AF4', 
+                                80 : 'FC6'}
 
 
 def setupCrypto(serial):
-    type = 0 #feature[5]
-    type &= 0xF
-    type = 0
-    k = ['\0'] * 16
-    k[0] = serial[-1]
-    k[1] = '\0'
-    k[2] = serial[-2]
-    if type:
-        k[3] = 'H'
-        k[4] = serial[-1]
-        k[5] = '\0'
-        k[6] = serial[-2]
-        k[7] = 'T'
-        k[8] = serial[-3]
-        k[9] = '\x10'
-        k[10] = serial[-4]
-        k[11] = 'B'
-    else:
-        k[3] = 'T'
-        k[4] = serial[-3]
-        k[5] = '\x10'
-        k[6] = serial[-4]
-        k[7] = 'B'
-        k[8] = serial[-1]
-        k[9] = '\0'
-        k[10] = serial[-2]
-        k[11] = 'H'
-    k[12] = serial[-3]
-    k[13] = '\0'
-    k[14] = serial[-4]
-    k[15] = 'P'
+    # original code fom http://github.com/qdot
+    #type = 0
+    #type &= 0xF
+    #type = 0
+    #k = [ serial[-1], '\0', serial[-2]]
+    #if type:
+    #    k += [ 'H', serial[-1], '\0', serial[-2], 'T', serial[-3], '\x10', serial[-4], 'B']
+    #else:
+    #    k += ['T', serial[-3], '\x10', serial[-4], 'B', serial[-1], '\0', serial[-2], 'H']
+    #k += [serial[-3], '\0', serial[-4], 'P']
+    k = [ serial[-1], '\0', serial[-2], 'T', serial[-3], '\x10', serial[-4], 'B', serial[-1], '\0', serial[-2], 'H', serial[-3], '\0', serial[-4], 'P']
     key = ''.join(k)
     iv = Random.new().read(AES.block_size)
     cipher = AES.new(key, AES.MODE_ECB, iv)
@@ -76,9 +63,7 @@ def get_level(data, bits):
     level = 0
     for i in range(13, -1, -1):
         level <<= 1
-        b, o = (bits[i] / 8) + 1, bits[i] % 8
-        #~ level |= (ord(data[b]) >> o) & 1                    #Why b is a float that makes ord hungry ?
-        b = int(b)                                                         
+        b, o = (bits[i] // 8) + 1, bits[i] % 8
         level |= (data[b] >> o) & 1
     return level
 
@@ -90,26 +75,14 @@ class EmotivIOThread(QtCore.QThread):
         self.dev_handle = dev_handle
         self.cipher = cipher
         
-        self.impedance_qualities = { }
-        for name in _channel_names + ['X', 'Y', 'Unknown']:
-            self.impedance_qualities[name] = 0.
-        
-        self.num_to_name = { 0 : 'F3',  1:'FC5', 2 : 'AF3',  3 : 'F7', 4:'T7', 5 : 'P7', 
-                                                6 : 'O1', 7 : 'O2', 8: 'P8', 9 : 'T8', 10: 'F8', 11 : 'AF4', 
-                                                12 : 'FC6', 13: 'F4', 14 : 'F8', 15:'AF4', 
-                                                64 : 'F3', 65 : 'FC5', 66 : 'AF3', 67 : 'F7', 68 : 'T7', 69 : 'P7', 
-                                                70 : 'O1', 71 : 'O2', 72: 'P8', 73 : 'T8', 74: 'F8', 75 : 'AF4', 
-                                                76 : 'FC6', 77: 'F4', 78 : 'F8', 79:'AF4', 
-                                                80 : 'FC6'}
-        
         self.lock = Mutex()
         self.running = False
         
     def run(self):
         with self.lock:
             self.running = True
+        
         n = 0
-
         values = np.zeros(len(_channel_names), dtype = np.int64 ) 
         imp = np.zeros(len(_channel_names), dtype = np.float64 )
         gyro = np.zeros(2, dtype = np.int64)
@@ -118,24 +91,26 @@ class EmotivIOThread(QtCore.QThread):
             with self.lock:
                 if not self.running:
                     break
-            
+
             crypted_buffer = self.dev_handle.read(32)
             data = self.cipher.decrypt(crypted_buffer[:16]) +self.cipher.decrypt(crypted_buffer[16:])
             
-            sensor_num = int.from_bytes(data[0], 'little')
+            #impedance value
+            sensor_num = data[0]
+            if sensor_num in _quality_num_to_name:
+                sensor_name = _quality_num_to_name[sensor_num]
+                if sensor_name in _channel_names:
+                    channel_index = _channel_names.index(sensor_name)
+                    imp[channel_index] = get_level(data, _quality_bits) / 540
             
-            if sensor_num in self.num_to_name:
-                sensor_name = self.num_to_name[sensor_num]
-                self.impedance_qualities[sensor_name] = get_level(data, _quality_bits) / 540
-            
+            # channel signals value
             for c, channel_name in enumerate(_channel_names):
                 bits = _sensorBits[channel_name]
-                # channel value
                 values[c] = get_level(data, bits)
-                imp[c] = self.impedance_qualities[channel_name]
             
-            gyro[0] = int.from_bytes(data[29], 'little') - 106 #X
-            gyro[1] = dint.from_bytes(data[30], 'little') - 105 #Y
+            #gyro value
+            gyro[0] = data[29] - 106 #X
+            gyro[1] = data[30] - 105 #Y
             
             n += 1
             self.outputs['signals'].send(n, values)
@@ -167,16 +142,12 @@ class Emotiv(Node):
         - Path to the usb hidraw used
         - Serial number of USB key
     """
-    
-    _input_specs = {'crypted_data'  : dict(streamtype = 'analogsignal',dtype = 'float64',
-                                                            shape = (32, 1), sampling_rate =128.,  time_axis=0)   # is it the correct shape for inputs??
-                            }  
     _output_specs = { 'signals'    : dict(streamtype = 'analogsignal',dtype = 'int64', 
-                                                        shape = (-1,14), sampling_rate = 128.,  timeaxis=0), 
+                                                        shape = (-1,14), sample_rate = 128.,  timeaxis=0), 
                                 'impedances' : dict(streamtype = 'analogsignal',dtype = 'float64',
-                                                        shape = (-1,14), sampling_rate = 128.,  time_axis=0),
+                                                        shape = (-1,14), sample_rate = 128.,  time_axis=0),
                                 'gyro'           : dict(streamtype = 'analogsignal',dtype = 'int64',
-                                                        shape = (-1,2), sampling_rate = 128.,  time_axis=0)
+                                                        shape = (-1,2), sample_rate = 128.,  time_axis=0)
                                 }  # TODO Why we don't keep channel names ??
         
     def __init__(self, **kargs):
