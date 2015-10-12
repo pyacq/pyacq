@@ -8,14 +8,15 @@ from pyqtgraph.Qt import QtCore, QtGui
 
 import pytest
 
-@pytest.mark.skipif(not HAVE_AV, reason = 'no have av')
+
+@pytest.mark.skipif(not HAVE_AV, reason='no have av')
 def test_webcam_opencv():
     # in main App
     app = QtGui.QApplication([])
     
-    dev = WebCamAV(name = 'cam')
-    dev.configure(camera_num = 0)
-    dev.output.configure(protocol = 'tcp', interface = '127.0.0.1',transfertmode = 'plaindata',)
+    dev = WebCamAV(name='cam')
+    dev.configure(camera_num=0)
+    dev.output.configure(protocol='tcp', interface='127.0.0.1',transfertmode='plaindata',)
     dev.initialize()
     print(dev.output.params)
     
@@ -36,7 +37,7 @@ def test_webcam_opencv():
         app.quit()
     
     # start for a while
-    timer = QtCore.QTimer(singleShot = True, interval = 3000)
+    timer = QtCore.QTimer(singleShot=True, interval=3000)
     timer.timeout.connect(terminate)
     timer.start()
     app.exec_()
