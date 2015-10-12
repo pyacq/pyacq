@@ -11,8 +11,8 @@ import struct
 _dtype_trigger = [('pos', 'int64'),
                 ('points', 'int64'),
                 ('channel', 'int64'),
-                ('type', 'S16'),#TODO check size
-                ('description', 'S16'),#TODO check size
+                ('type', 'S16'),  # TODO check size
+                ('description', 'S16'),  # TODO check size
                 ]
 
 
@@ -30,8 +30,9 @@ def recv_brainamp_frame(brainamp_socket, reqsize):
         buf = buf[:reqsize]
     return buf
 
+
 class BrainAmpThread(QtCore.QThread):
-    def __init__(self, outputs, brainamp_host, brainamp_port, nb_channel, parent = None):
+    def __init__(self, outputs, brainamp_host, brainamp_port, nb_channel, parent=None):
         QtCore.QThread.__init__(self)
         self.outputs = outputs
         self.brainamp_host= brainamp_host
@@ -59,22 +60,22 @@ class BrainAmpThread(QtCore.QThread):
             buf_header = recv_brainamp_frame(brainamp_socket, 24)
             (id1, id2, id3, id4, msgsize, msgtype) = struct.unpack('<llllLL', buf_header)
             
-            rawdata = recv_brainamp_frame(brainamp_socket,  msgsize - 24)
-            #TODO  msgtype == 3 (msgtype == 1 is header done in Node.configure)
+            rawdata = recv_brainamp_frame(brainamp_socket, msgsize - 24)
+            # TODO  msgtype == 3 (msgtype == 1 is header done in Node.configure)
             if msgtype == 4:
                 #~ block, chunk, markers = get_signal_and_markers(rawdata, self.nb_channel)
                 hs = 12
                 
                 # Extract numerical data
                 block, points, nb_marker = struct.unpack('<LLL', rawdata[:hs])
-                sigsize  = dt.itemsize * points * self.nb_channel
-                sigs = np.frombuffer(rawdata[hs:hs+sigsize], dtype = dt)
+                sigsize = dt.itemsize * points * self.nb_channel
+                sigs = np.frombuffer(rawdata[hs:hs+sigsize], dtype=dt)
                 sigs = sigs.reshape(points, self.nb_channel)
                 head += points
                 self.outputs['signals'].send(head, sigs)
 
                 # Extract markers
-                markers = np.empty((nb_marker,), dtype = _dtype_trigger)
+                markers = np.empty((nb_marker,), dtype=_dtype_trigger)
                 index = hs + sigsize
                 for m in range(nb_marker):
                     markersize, = struct.unpack('<L', rawdata[index:index+4])
@@ -90,48 +91,50 @@ class BrainAmpThread(QtCore.QThread):
         with self.lock:
             self.running = False
 
+
 class BrainAmpSocket(Node):
     """
-    BrainAmp from BarinProduct http://www.brainproducts.com/ EEG.
-    Vision recorder acquisition software provide a socket based data streaming.
-    This class is a bridge between this socket and pyacq.
+    BrainAmp EEG amplifier from Brain Products http://www.brainproducts.com/.
+    
+    This class is a bridge between pyacq and the socket-based data streaming
+    provided by the Vision recorder acquisition software.
     """
-    _output_specs = {'signals' : dict(streamtype = 'analogsignal',dtype = 'float32',
-                                                shape = (-1, 32), compression ='', timeaxis=0,
-                                                sampling_rate = 512.),
-                                'triggers' : dict(streamtype = 'event', dtype = _dtype_trigger,
+    _output_specs = {'signals': dict(streamtype='analogsignal',dtype='float32',
+                                                shape=(-1, 32), compression ='', timeaxis=0,
+                                                sample_rate = 512.),
+                                'triggers': dict(streamtype = 'event', dtype = _dtype_trigger,
                                                 shape = (-1,)),
                                 }
 
     def __init__(self, **kargs):
         Node.__init__(self, **kargs)
 
-    def _configure(self, brainamp_host = 'localhost', brainamp_port = 51244):
+    def _configure(self, brainamp_host='localhost', brainamp_port=51244):
         self.brainamp_host = brainamp_host
         self.brainamp_port = brainamp_port
         
-        #recv header from brain amp
+        # recv header from brain amp
         brainamp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         brainamp_socket.connect((self.brainamp_host, self.brainamp_port))
         buf_header = recv_brainamp_frame(brainamp_socket, 24)
         id1, id2, id3, id4, msgsize, msgtype = struct.unpack('<llllLL', buf_header)
         rawdata = recv_brainamp_frame(brainamp_socket, msgsize - 24)
         assert msgtype == 1, 'First message from brainamp is not type 1'
-        self.nb_channel, sampling_interval = struct.unpack('<Ld', rawdata[:12])
+        self.nb_channel, sample_interval = struct.unpack('<Ld', rawdata[:12])
         n = self.nb_channel
-        sampling_interval = sampling_interval*1e-6
-        self.sampling_rate = 1./sampling_interval
-        self.resolutions = np.array(struct.unpack('<'+'d'*n, rawdata[12:12+8*n]), dtype = 'f')
+        sample_interval = sample_interval*1e-6
+        self.sample_rate = 1./sample_interval
+        self.resolutions = np.array(struct.unpack('<'+'d'*n, rawdata[12:12+8*n]), dtype='f')
         self.channel_names = rawdata[12+8*n:].decode().split('\x00')[:-1]
         #~ self.channel_indexes = range(nb_channel)
         brainamp_socket.close()
         
         self.outputs['signals'].spec['shape'] = (-1, self.nb_channel)
-        self.outputs['signals'].spec['sampling_rate'] = self.sampling_rate
+        self.outputs['signals'].spec['sample_rate'] = self.sample_rate
 
     def _initialize(self):
         self._thread = BrainAmpThread(self.outputs, self.brainamp_host, self.brainamp_port,
-                             self.nb_channel, parent = self)
+                             self.nb_channel, parent=self)
 
     def _start(self):
         self._thread.start()

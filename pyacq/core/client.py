@@ -3,11 +3,11 @@ from .rpc import RPCClient
 
 
 class ManagerProxy(RPCClient):
-    def __init__(self, name, addr, manager_process = None):
+    def __init__(self, name, addr, manager_process=None):
         RPCClient.__init__(self, name, addr)
         self._host_proxy = {}
         
-        self.manager_process = manager_process # needed for properlly close and wait the process
+        self.manager_process = manager_process  # needed for properlly close and wait the process
 
     def connect_host(self, name, addr):
         self._call_method('connect_host', name, addr)
@@ -86,11 +86,11 @@ class NodeProxy(object):
 
     @property
     def inputs(self):
-        return { name:InputStreamProxy(self, name) for name in self.get_input_names() }
+        return {name:InputStreamProxy(self, name) for name in self.get_input_names()}
 
     @property
     def outputs(self):
-        return { name:OutputStreamProxy(self, name) for name in self.get_output_names() }
+        return {name:OutputStreamProxy(self, name) for name in self.get_output_names()}
 
     @property
     def input(self):
@@ -115,6 +115,7 @@ class OutputStreamProxy:
     def params(self):
         return self.node.get_output(self.name)
     
+
 class InputStreamProxy:
     def __init__(self, node, name):
         self.node = node
