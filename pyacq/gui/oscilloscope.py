@@ -428,9 +428,10 @@ class OscilloscopeControler(QtGui.QWidget):
         h.addLayout(v)
         
         self.treeParamGlobal = pg.parametertree.ParameterTree()
+        self.treeParamGlobal.setParameters(self.viewer.paramGlobal, showTop=True)
         self.treeParamGlobal.header().hide()
         v.addWidget(self.treeParamGlobal)
-        self.treeParamGlobal.setParameters(self.viewer.paramGlobal, showTop=True)
+        
 
         # Gain and offset
         v.addWidget(QLabel(u'<b>Automatic gain and offset on selection:<\b>'))

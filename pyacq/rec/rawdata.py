@@ -44,7 +44,7 @@ class RawDataRecording:
         self.running = True
         
         # header in json
-        info = { }
+        info = self.info = { }
         info['pyacq_version'] = pyacq_version
         info['streams'] = [ ]
         for stream in self.streams:
@@ -62,14 +62,16 @@ class RawDataRecording:
             info['streams'].append(infostream)
         self.annotations['rec_datetime'] = datetime.datetime.now().isoformat()
         info['annotations'] = self.annotations
+        info['first_pos'] = {}
         
-        info_file = io.open(os.path.join(self.dirname, 'info.json'), mode = 'w', encoding = 'utf8')
-        info_file.write(json.dumps(info, sort_keys=True, indent=4, separators=(',', ': '), ensure_ascii = False, encoding =  'utf8'))
-        info_file.close()
+        self.flush_json()
+        #~ info_file = io.open(os.path.join(self.dirname, 'info.json'), mode = 'w', encoding = 'utf8')
+        #~ info_file.write(json.dumps(info, sort_keys=True, indent=4, separators=(',', ': '), ensure_ascii = False, encoding =  'utf8'))
+        #~ info_file.close()
         
         # one thread per stream
-        self.threads = [ ]
-        self.files = [ ]
+        self.threads = []
+        self.files = []
         context = zmq.Context()
         for stream in self.streams:
             callback = 'rec_loop_'+type(stream).__name__
@@ -87,7 +89,11 @@ class RawDataRecording:
                 thread = threading.Thread(target = func, args = (socket,stream, f, bounds))
                 self.threads.append(thread)
                 thread.start()
-        
+    
+    def flush_json(self):
+        info_file = io.open(os.path.join(self.dirname, 'info.json'), mode = 'w', encoding = 'utf8')
+        info_file.write(json.dumps(self.info, sort_keys=True, indent=4, separators=(',', ': '), ensure_ascii = False, encoding =  'utf8'))
+        info_file.close()
     
     def rec_loop_AnalogSignalSharedMemStream(self, socket, stream, file, bounds):
         self.rec_loop_common(socket, stream, file, bounds, self.dtype_sig)
@@ -122,6 +128,8 @@ class RawDataRecording:
             message = socket.recv()
             pos = msgpack.loads(message)
             if last_pos is None:
+                self.info['first_pos'][stream['name']] = pos
+                self.flush_json()
                 last_pos = pos
                 continue
             if pos_stop is not None and pos>pos_stop:
@@ -149,6 +157,7 @@ class RawDataRecording:
             if socket.poll(timeout = 100):
                 message = socket.recv()
                 file.write(message)
+                file.flush()
         file.close()
 
     

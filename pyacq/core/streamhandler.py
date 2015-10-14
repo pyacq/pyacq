@@ -66,6 +66,8 @@ class StreamHandler:
     def get_stream_list(self):
         return self.streams
     
+    def reset(self):
+        self.streams = OrderedDict()
 
 
 class StreamServer(StreamHandler):

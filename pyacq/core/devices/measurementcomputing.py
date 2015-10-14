@@ -24,7 +24,10 @@ try:
     _cbw = ctypes.windll.cbw32
     #~ print 'cbw32'
 except WindowsError:
-    _cbw = ctypes.windll.cbw64
+    try:
+        _cbw = ctypes.windll.cbw64
+    except:
+        _cbw = None
     #~ _cbw = ctypes.WinDLL('cbw64.dll')
     #~ print 'cbw64'
 
@@ -47,6 +50,7 @@ def decorate_with_error(f):
 
 class CBW:
     def __getattr__(self, attr):
+        assert _cbw is not None, 'Do not have Universal Library DLL'
         f = getattr(_cbw, attr)
         return decorate_with_error(f)
 
@@ -317,6 +321,7 @@ def get_info(board_num):
                 "USB-1208LS" : 64,
                 "USB-1608FS" : 31,
                 'PCI-1602/16' : 64,
+                "USB-1608FS-Plus" : 32,
                 }
     info['device_packet_size'] = dict_packet_size.get(info['board_name'], 512)
     
