@@ -10,8 +10,8 @@ from pyacq.core.rpc import RPCClient
 
 def test_host1():
     
-    process_host0  = ProcessSpawner(Host,  'host0', 'tcp://127.0.0.1:*')
-    process_host1  = ProcessSpawner(Host,  'host1', 'tcp://127.0.0.1:*')
+    process_host0 = ProcessSpawner(Host, 'host0', 'tcp://127.0.0.1:*')
+    process_host1 = ProcessSpawner(Host, 'host1', 'tcp://127.0.0.1:*')
     
     client0 = RPCClient('host0', process_host0.addr)
     print('on ping: ', client0.ping())
@@ -24,7 +24,7 @@ def test_host1():
 
 def test_host2():
     
-    process_host0  = ProcessSpawner(Host,  'host0', 'tcp://127.0.0.1:*')
+    process_host0 = ProcessSpawner(Host, 'host0', 'tcp://127.0.0.1:*')
     
     client0 = RPCClient('host0', process_host0.addr)
     

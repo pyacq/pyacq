@@ -12,8 +12,9 @@ except ImportError:
 
 import time
 
+
 class ImageIOThread(QtCore.QThread):
-    def __init__(self, out_stream, reader, parent = None):
+    def __init__(self, out_stream, reader, parent=None):
         QtCore.QThread.__init__(self)
         self.out_stream= out_stream
         self.reader = reader
@@ -34,7 +35,7 @@ class ImageIOThread(QtCore.QThread):
             self.out_stream.send(n, im)
             # this is bad 
             # TODO : find a way to do trhis loop in blocking mode
-            time.sleep(1./self.out_stream.params['sampling_rate'])
+            time.sleep(1./self.out_stream.params['sample_rate'])
     
     def stop(self):
         with self.lock:
@@ -43,11 +44,11 @@ class ImageIOThread(QtCore.QThread):
 
 class WebCamImageIO(Node):
     """
-    Simple webcam device that use the imageiopython module.
+    Simple webcam device using the imageio python module.
     """
-    _output_specs = {'video' : dict(streamtype = 'video',dtype = 'uint8',
-                                                shape = (4800, 6400, 3), compression ='',
-                                                sampling_rate =1.
+    _output_specs = {'video': dict(streamtype='video',dtype='uint8',
+                                                shape=(4800, 6400, 3), compression ='',
+                                                sample_rate =1.
                                                 ),
                                 }
     def __init__(self, **kargs):
@@ -56,7 +57,7 @@ class WebCamImageIO(Node):
 
     
 
-    def _configure(self, camera_num = 0):
+    def _configure(self, camera_num=0):
         self.camera_num = camera_num
         reader = imageio.get_reader('<video{}>'.format(self.camera_num))
         self.metadata = reader.get_meta_data()
@@ -64,7 +65,7 @@ class WebCamImageIO(Node):
         
         s = self.metadata['size']
         self.output.spec['shape'] = (s[1], s[0], 3,)
-        self.output.spec['sampling_rate'] = float(self.metadata['fps'])
+        self.output.spec['sample_rate'] = float(self.metadata['fps'])
     
     def _initialize(self):
         pass

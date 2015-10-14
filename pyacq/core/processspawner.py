@@ -44,6 +44,8 @@ server.run_forever()
 
 
 class ProcessSpawner:
+    """Utility for spawning and bootstrapping a new process with an RPC server.
+    """
     def __init__(self, rpcserverclass, name, addr, **kargs):
         self.name = name
         

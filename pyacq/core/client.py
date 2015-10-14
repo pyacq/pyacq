@@ -3,16 +3,16 @@ from .rpc import RPCClient
 
 
 class ManagerProxy(RPCClient):
-    def __init__(self, name, addr, manager_process = None):
+    def __init__(self, name, addr, manager_process=None):
         RPCClient.__init__(self, name, addr)
         self._host_proxy = {}
         
-        self.manager_process = manager_process # needed for properlly close and wait the process
+        self.manager_process = manager_process  # needed for properlly close and wait the process
 
     def connect_host(self, name, addr):
         self._call_method('connect_host', name, addr)
         if name not in self._host_proxy:
-            self._host_proxy[name] = HostProxy(name, addr)
+            self._host_proxy[name] = HostProxy(self, name, addr)
         return self._host_proxy[name]
     
     def default_host(self):
@@ -78,11 +78,19 @@ class NodeProxy(object):
     def __init__(self, nodegroup, name):
         self.nodegroup = nodegroup
         self.name = name
-        self.inputs = { name:InputStreamProxy(self, name) for name in self.nodegroup.get_node_attr(self.name, '_input_specs').keys()}
-        self.outputs = { name:OutputStreamProxy(self, name) for name in self.nodegroup.get_node_attr(self.name, '_output_specs').keys()}
+        #~ self.inputs = { name:InputStreamProxy(self, name) for name in self.nodegroup.get_node_attr(self.name, '_input_specs').keys()}
+        #~ self.outputs = { name:OutputStreamProxy(self, name) for name in self.nodegroup.get_node_attr(self.name, '_output_specs').keys()}
         
     def __getattr__(self, name):
         return lambda *args, **kwargs: getattr(self.nodegroup, 'control_node')(self.name, name, *args, **kwargs)
+
+    @property
+    def inputs(self):
+        return {name:InputStreamProxy(self, name) for name in self.get_input_names()}
+
+    @property
+    def outputs(self):
+        return {name:OutputStreamProxy(self, name) for name in self.get_output_names()}
 
     @property
     def input(self):
@@ -107,11 +115,19 @@ class OutputStreamProxy:
     def params(self):
         return self.node.get_output(self.name)
     
+
 class InputStreamProxy:
     def __init__(self, node, name):
         self.node = node
         self.name = name
     
     def connect(self, output):
-        self.node.connect_input(self.name, output.params)
+        if isinstance(output, dict):
+            self.node.connect_input(self.name, output)
+        else:
+            self.node.connect_input(self.name, output.params)
+    
+    @property
+    def params(self):
+        return self.node.get_output(self.name)
 
