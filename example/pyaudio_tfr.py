@@ -25,7 +25,7 @@ dev = ng.create_node('PyAudio')
 
 # Configure PyAudio device with a single (default) input channel.
 default_input = dev.default_input_device()
-dev.configure(nb_channel=1, sampling_rate=44100., input_device_index=default_input,
+dev.configure(nb_channel=1, sample_rate=44100., input_device_index=default_input,
               format='int16', chunksize=1024)
 dev.output.configure(protocol='tcp', interface='127.0.0.1', transfertmode='plaindata')
 dev.initialize()
@@ -49,10 +49,7 @@ viewer.params['refresh_interval'] = 100
 viewer.params['timefreq', 'f_start'] = 50
 viewer.params['timefreq', 'f_stop'] = 5000
 viewer.params['timefreq', 'deltafreq'] = 500
-
-
-
-
+viewer.by_channel_params['Signal0', 'clim'] = 2500
 
 
 # Start both nodes
