@@ -30,15 +30,13 @@ def test_recv_loop(port, stop_recv):
 
 def run_Emotiv():
     streamhandler = StreamHandler()
-    
+
     # Configure and start
     dev = EmotivMultiSignals(streamhandler = streamhandler)
-    dev.configure(buffer_length = 1800,
-                                device_path = '/dev/hidraw1',
-                                ) 
+    dev.configure(buffer_length = 1800)
     dev.initialize()
     dev.start()
-    
+
     # Create and starts receiver with multuprocessing
     stream_chan = dev.streams[0]
     stream_imp = dev.streams[1]
@@ -47,18 +45,18 @@ def run_Emotiv():
     process_chan = mp.Process(target= test_recv_loop, args = (stream_chan['port'],stop_recv))
     process_imp = mp.Process(target= test_recv_loop, args = (stream_imp['port'],stop_recv))
     process_gyro = mp.Process(target= test_recv_loop, args = (stream_gyro['port'],stop_recv))
-    
+
     process_chan.start()
     process_imp.start()
     process_gyro.start()
-    
+
     time.sleep(10.)
     stop_recv.value = 1
-    
+
     process_chan.join()
     process_imp.join()
     process_gyro.join()
-        
+
     # Stope and release the device
     dev.stop()
     dev.close()
