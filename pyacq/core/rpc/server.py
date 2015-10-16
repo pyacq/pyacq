@@ -8,9 +8,7 @@ from .serializer import serializer
 
 
 class RPCServer(object):
-    """An RPC server abstract class.
-    
-    Subclasses must define any extra methods that may be called by the client.
+    """RPC server for invoking requests on proxied objects.
     
     Parameters
     ----------
@@ -26,6 +24,10 @@ class RPCServer(object):
         self._socket.bind(addr)
         self._addr = self._socket.getsockopt(zmq.LAST_ENDPOINT)
         self._closed = False
+        
+        # Objects that may be retrieved by name using client['obj_name']
+        self._namespace = {}
+        
         info("RPC start server: %s@%s", self._name.decode(), self._addr.decode())
 
     def __del__(self):
@@ -38,7 +40,6 @@ class RPCServer(object):
         This method sends back to the client either the return value or an
         error message.
         """
-        
         name, msg = self._read_socket()
         self._process_one(name, msg)
         

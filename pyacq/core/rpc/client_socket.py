@@ -42,6 +42,9 @@ class Future(concurrent.futures.Future):
 class RPCClientSocket(object):
     """A single socket for connecting to multiple RPC servers.
     
+    This allows a single thread to easily poll for responses from multiple RPC
+    connections.
+    
     This class should only be used to create RPCClient instances using
     `get_client()`.
     """
@@ -52,6 +55,7 @@ class RPCClientSocket(object):
         self.clients = {}
         self.next_call_id = 0
         self.futures = weakref.WeakValueDictionary()
+        # atexit.register(self.close)
         
     def connect(self, addr):
         """Conncet the socket to an RPCServer address.
@@ -61,7 +65,7 @@ class RPCClientSocket(object):
         self.socket.connect(addr)
     
     def send(self, name, action, *args, **kwds):
-        """Send a request to the remote process.
+        """Send a request to a remote process.
         
         Parameters
         ----------
