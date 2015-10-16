@@ -126,8 +126,8 @@ class ObjectProxy(object):
         object.__init__(self)
         ## can't set attributes directly because setattr is overridden.
         self.__dict__['_rpc_id'] = rpc_id
-        self.__dict__['_type_str'] = type_str
         self.__dict__['_obj_id'] = obj_id
+        self.__dict__['_type_str'] = type_str
         self.__dict__['_attributes'] = ()
         ## attributes that affect the behavior of the proxy. 
         ## in all cases, a value of None causes the proxy to ask

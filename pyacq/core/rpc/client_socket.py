@@ -5,7 +5,7 @@ import concurrent.futures
 from logging import info
 import zmq
 
-from .serializer import serializer
+from .serializer import MsgpackSerializer
 
 
 class RemoteCallException(Exception):
@@ -56,6 +56,12 @@ class RPCClientSocket(object):
         self.next_call_id = 0
         self.futures = weakref.WeakValueDictionary()
         # atexit.register(self.close)
+
+        # For unserializing results returned from servers. This cannot be
+        # used to send proxies of local objects unless there is also a server
+        # for this thread..
+        self._serializer = MsgpackSerializer()
+        
         
     def connect(self, addr):
         """Conncet the socket to an RPCServer address.
@@ -79,7 +85,7 @@ class RPCClientSocket(object):
         self.next_call_id += 1
         cmd = {'action': action, 'call_id': call_id,
                'args': args, 'kwds': kwds}
-        cmd = serializer.dumps(cmd)
+        cmd = self._serializer.dumps(cmd)
         info("RPC send req: %s => %s, %s", self.socket.getsockopt(zmq.IDENTITY), name, cmd)
         self.socket.send_multipart([name, cmd])
         fut = Future(self, call_id)
@@ -95,7 +101,7 @@ class RPCClientSocket(object):
             try:
                 name = self.socket.recv(zmq.NOBLOCK)
                 msg = self.socket.recv()
-                msg = serializer.loads(msg)
+                msg = self._serializer.loads(msg)
                 self._process_msg(name, msg)
             except zmq.error.Again:
                 break  # no messages left
