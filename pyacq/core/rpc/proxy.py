@@ -78,7 +78,7 @@ def unpickleObjectProxy(processId, proxyId, typeStr, attributes=None, opts=None)
 
 class ObjectProxy(object):
     """
-    Proxy to an object stored by the remote process. Proxies are created
+    Proxy to an object stored by a remote process. Proxies are created
     by calling Process._import(), Process.transfer(), or by requesting/calling
     attributes on existing proxy objects.
     

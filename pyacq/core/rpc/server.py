@@ -83,30 +83,94 @@ class RPCServer(object):
         """
         msg = self._serializer.loads(msg)
         action = msg['action']
-        if action == 'call':
-            fn, args = msg['args'][0], msg['args'][1:]
-            kwds = msg['kwds']
-            ret = kwds.pop('_return', True)
-            try:
-                call_id = msg['call_id']
-                if len(kwds) == 0:
-                    # need to do this because some functions do not allow
-                    # keyword arguments.
-                    rval = fn(*args)
+        req_id = msg['req_id']
+        return_type = msg.get('return_type', 'auto')
+        opts = self._serializer.loads(msg['opts'])
+        
+        # Attempt to invoke requested action
+        try:
+            info("    handleRequest: id=%s opts=%s", req_id, opts)
+            
+            if cmd == 'get_obj_attr':
+                result = getattr(opts['obj'], opts['attr'])
+            elif cmd == 'call_obj':
+                obj = opts['obj']
+                fnargs = opts['args']
+                fnkwds = opts['kwds']
+                
+                if len(fnkwds) == 0:  ## need to do this because some functions do not allow keyword arguments.
+                    try:
+                        result = obj(*fnargs)
+                    except:
+                        info("Failed to call object %s: %d, %s", obj, len(fnargs), fnargs[1:])
+                        raise
                 else:
-                    rval = fn(*args, **kwds)
-                if ret:
-                    self._send_result(caller, call_id, rval=rval)
-            except:
-                exc_str = ["Error while processing request %s.%s(%s, %s)" % (str(self), method, args, kwds)]
-                exc_str += traceback.format_stack()
-                exc_str += [" < exception caught here >\n"]
-                exc = sys.exc_info()
-                exc_str += traceback.format_exception(*exc)
-                if ret:
-                    self._send_result(caller, call_id, error=(exc[0].__name__, exc_str))
-        elif action == 'get_obj_attr':
-            result = getattr(opts['obj'], opts['attr'])
+                    result = obj(*fnargs, **fnkwds)
+                    
+            elif cmd == 'get_obj_value':
+                result = opts['obj']  ## has already been unpickled into its local value
+                return_type = 'value'
+            elif cmd == 'transfer':
+                result = opts['obj']
+                return_type = 'proxy'
+            elif cmd == 'import':
+                name = opts['module']
+                fromlist = opts.get('fromlist', [])
+                mod = builtins.__import__(name, fromlist=fromlist)
+                
+                if len(fromlist) == 0:
+                    parts = name.lstrip('.').split('.')
+                    result = mod
+                    for part in parts[1:]:
+                        result = getattr(result, part)
+                else:
+                    result = map(mod.__getattr__, fromlist)
+            elif cmd == 'del':
+                LocalObjectProxy.releaseProxyId(opts['proxyId'])
+                #del self.proxiedObjects[opts['objId']]
+            elif cmd == 'close':
+                result = True
+            else:
+                raise ValueError("Invalid RPC action '%s'" % cmd)
+            exc = None
+        except:
+            exc = sys.exc_info()
+
+            
+        # Send result or error back to client
+        if return_type is not None:
+            if exc is None:
+                self.debugMsg("    handleRequest: sending return value for %d: %s", req_id, result) 
+                #print "returnValue:", returnValue, result
+                if return_type == 'auto':
+                    with self.optsLock:
+                        noProxyTypes = self.proxyOptions['noProxyTypes']
+                    result = self.autoProxy(result, noProxyTypes)
+                elif return_type == 'proxy':
+                    result = LocalObjectProxy(result)
+                
+                try:
+                    self._send_result(caller, req_id, rval=result)
+                except:
+                    sys.excepthook(*sys.exc_info())
+                    self._send_error(req_id, sys.exc_info())
+            else:
+                info("    handleRequest: returning exception for %d", req_id) 
+                self._send_error(req_id, exc)
+                    
+        elif exc is not None:
+            sys.excepthook(*exc)
+    
+        if cmd == 'close':
+            self.close()
+    
+    def _send_error(self, caller, req_id, exc):
+        exc_str = ["Error while processing request %s-%d: " % (caller, req_id)]
+        exc_str += traceback.format_stack()
+        exc_str += [" < exception caught here >\n"]
+        exc = sys.exc_info()
+        exc_str += traceback.format_exception(*exc)
+        self._send_result(caller, req_id, error=(exc[0].__name__, exc_str))
     
     def _send_result(self, name, call_id, rval=None, error=None):
         result = {'action': 'return', 'call_id': call_id,
@@ -130,6 +194,3 @@ class RPCServer(object):
     def run_forever(self):
         while self.running():
             self._read_and_process_one()
-
-    def ping(self):
-        return 'pong'
