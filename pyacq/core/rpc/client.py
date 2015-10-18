@@ -1,10 +1,10 @@
+import os
 import time
 import weakref
 import concurrent.futures
 from logging import info
 import zmq
 
-from .client_socket import RPCClientSocket
 from .serializer import MsgpackSerializer
 
 
@@ -41,9 +41,9 @@ class RPCClient(object):
         # unlike ROUTER, it only connects to a single endpoint.
         self.socket = zmq.Context.instance().socket(zmq.DEALER)
         self.sock_name = ('%d-%x' % (os.getpid(), id(self))).encode()
-        self.socket.setsockopt(zmq.IDENTITY, self._sock_name)
+        self.socket.setsockopt(zmq.IDENTITY, self.sock_name)
         
-        info("RPC connect %s => %s@%s", rpc_socket._name, name, addr)
+        info("RPC connect %s => %s@%s", self.sock_name, name, addr)
         self.socket.connect(addr)
         self.next_request_id = 0
         self.futures = weakref.WeakValueDictionary()
@@ -53,12 +53,18 @@ class RPCClient(object):
         self.establishing_connect = False
 
         # Proxies we have received from other machines. 
-        self._proxies = {}
+        self.proxies = {}
 
         # For unserializing results returned from servers. This cannot be
         # used to send proxies of local objects unless there is also a server
         # for this thread..
-        self._serializer = MsgpackSerializer()
+        self.serializer = MsgpackSerializer()
+        
+        self.ensure_connection()
+
+    def __getitem__(self, name):
+        fut = self.send('getitem', opts={'name': name})
+        return fut.result()
 
     def send(self, action, return_type='auto', opts=None):
         """Send a request to the remote process.
@@ -81,11 +87,11 @@ class RPCClient(object):
         # cannot.
         # TODO: This might be expensive; a better way might be to send opts in
         # a subsequent packet, but this makes the protocol more complicated..
-        opts = self._serializer.dumps(opts)
+        opts = self.serializer.dumps(opts)
         cmd = {'action': action, 'req_id': req_id, 'return_type': return_type, 'opts': opts}
-        cmd = self._serializer.dumps(cmd)
+        cmd = self.serializer.dumps(cmd)
         
-        info("RPC send req: %s => %s, %s", self.socket.getsockopt(zmq.IDENTITY), name, cmd)
+        info("RPC send req: %s => %s", self.socket.getsockopt(zmq.IDENTITY), cmd)
         self.socket.send(cmd)
         
         # If using ROUTER, we have to include the name of the endpoint to which
@@ -96,25 +102,25 @@ class RPCClient(object):
         self.futures[req_id] = fut
         return fut
 
-    def _ensure_connection(self, timeout=3):
+    def ensure_connection(self, timeout=1.0):
         """Make sure RPC server is connected and available.
         """
-        if self._establishing_connect:
+        if self.establishing_connect:
             return
-        self._establishing_connect = True
+        self.establishing_connect = True
         try:
             start = time.time()
             while time.time() < start + timeout:
                 fut = self.send('ping')
                 try:
                     result = fut.result(timeout=0.1)
-                    self._connect_established = True
+                    self.connect_established = True
                     return
                 except TimeoutError:
                     continue
             raise TimeoutError("Could not establish connection with RPC server.")
         finally:
-            self._establishing_connect = False
+            self.establishing_connect = False
 
     def process(self):
         """Process all available incoming messages.
@@ -130,7 +136,7 @@ class RPCClient(object):
                 
                 msg = self.socket.recv(zmq.NOBLOCK)
                 msg = self._serializer.loads(msg)
-                self._process_msg(name, msg)
+                self.process_msg(name, msg)
             except zmq.error.Again:
                 break  # no messages left
 
@@ -152,20 +158,20 @@ class RPCClient(object):
                     raise TimeoutError("Timeout waiting for Future result.")
             try:
                 self.socket.setsockopt(zmq.RCVTIMEO, itimeout)
-                name, msg = self.socket.recv_multipart()
-                msg = serializer.loads(msg)
+                msg = self.socket.recv()
+                msg = self.serializer.loads(msg)
             except zmq.error.Again:
                 raise TimeoutError("Timeout waiting for Future result.")
             
-            self._process_msg(name, msg)
+            self.process_msg(msg)
 
-    def _process_msg(self, msg):
+    def process_msg(self, msg):
         """Handle one message received from the remote process.
         
         This takes care of assigning return values or exceptions to existing
         Future instances.
         """
-        info("RPC recv res: %s %s", msg)
+        info("RPC recv res: %s", msg)
         if msg['action'] == 'return':
             req_id = msg['req_id']
             if req_id not in self.futures:

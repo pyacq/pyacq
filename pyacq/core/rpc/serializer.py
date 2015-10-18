@@ -106,7 +106,7 @@ class MsgpackSerializer:
         """
         return msgpack.loads(msg, encoding='utf8', object_hook=self.decode)
 
-    def encode(obj):
+    def encode(self, obj):
         if isinstance(obj, (str, bytes, int, float, list, tuple, dict)):
             return obj
         elif isinstance(obj, np.ndarray):
@@ -133,7 +133,7 @@ class MsgpackSerializer:
             ser.update(obj.save())
             return ser
 
-    def decode(dct):
+    def decode(self, dct):
         if isinstance(dct, dict):
             type_name = dct.pop(encode_key, None)
             if type_name is None:

@@ -4,7 +4,8 @@ import traceback
 import zmq
 from logging import info
 
-from .serializer import serializer
+from .serializer import MsgpackSerializer
+from .proxy import LocalObjectProxy, ObjectProxy
 
 
 class RPCServer(object):
@@ -22,9 +23,19 @@ class RPCServer(object):
         self._socket = zmq.Context.instance().socket(zmq.ROUTER)
         self._socket.setsockopt(zmq.IDENTITY, self._name)
         self._socket.bind(addr)
-        self._addr = self._socket.getsockopt(zmq.LAST_ENDPOINT)
+        self.address = self._socket.getsockopt(zmq.LAST_ENDPOINT)
         self._closed = False
         self._serializer = MsgpackSerializer(self)
+        
+        # Default behavior for creating object proxies
+        self.proxy_options = {
+            'call_sync': 'sync',      ## 'sync', 'async', 'off'
+            'timeout': 10,            ## float
+            'return_type': 'auto',    ## 'proxy', 'value', 'auto'
+            'auto_proxy': False,      ## bool
+            'defer_getattr': False,   ## True, False
+            'no_proxy_types': [ type(None), str, int, float, tuple, list, dict, LocalObjectProxy, ObjectProxy ],
+        }
         
         # Objects that may be retrieved by name using client['obj_name']
         self._namespace = {}
@@ -32,7 +43,7 @@ class RPCServer(object):
         # Objects for which we have sent proxies to other machines.
         self._proxies = {}  # obj_id: proxy
         
-        info("RPC start server: %s@%s", self._name.decode(), self._addr.decode())
+        info("RPC start server: %s@%s", self._name.decode(), self.address.decode())
 
     def __del__(self):
         self._socket.close()
@@ -49,7 +60,7 @@ class RPCServer(object):
         """Create and return a new LocalObjectProxy for *obj*.
         """
         if id(obj) not in self._proxies:
-            proxy = LocalObjectProxy(self.rpc_id, obj)
+            proxy = LocalObjectProxy(self.address, obj)
             self._proxies[id(obj)] = proxy
         return self._proxies[id(obj)]
 
@@ -57,7 +68,7 @@ class RPCServer(object):
         """Return the object referenced by *proxy* if it belongs to this server.
         Otherwise, return the proxy.
         """
-        if proxy.rpc_id == self.rpc_id:
+        if proxy.rpc_id == self.address:
             return self._proxies[proxy.obj_id]
         else:
             return proxy
@@ -89,11 +100,11 @@ class RPCServer(object):
         
         # Attempt to invoke requested action
         try:
-            info("    handleRequest: id=%s opts=%s", req_id, opts)
+            info("    process_one: id=%s opts=%s", req_id, opts)
             
-            if cmd == 'get_obj_attr':
+            if action == 'get_obj_attr':
                 result = getattr(opts['obj'], opts['attr'])
-            elif cmd == 'call_obj':
+            elif action == 'call_obj':
                 obj = opts['obj']
                 fnargs = opts['args']
                 fnkwds = opts['kwds']
@@ -107,13 +118,13 @@ class RPCServer(object):
                 else:
                     result = obj(*fnargs, **fnkwds)
                     
-            elif cmd == 'get_obj_value':
+            elif action == 'get_obj_value':
                 result = opts['obj']  ## has already been unpickled into its local value
                 return_type = 'value'
-            elif cmd == 'transfer':
+            elif action == 'transfer':
                 result = opts['obj']
                 return_type = 'proxy'
-            elif cmd == 'import':
+            elif action == 'import':
                 name = opts['module']
                 fromlist = opts.get('fromlist', [])
                 mod = builtins.__import__(name, fromlist=fromlist)
@@ -125,13 +136,17 @@ class RPCServer(object):
                         result = getattr(result, part)
                 else:
                     result = map(mod.__getattr__, fromlist)
-            elif cmd == 'del':
+            elif action == 'del':
                 LocalObjectProxy.releaseProxyId(opts['proxyId'])
                 #del self.proxiedObjects[opts['objId']]
-            elif cmd == 'close':
+            elif action == 'close':
                 result = True
+            elif action == 'ping':
+                result = 'pong'
+            elif action =='getitem':
+                result = self[opts['name']]
             else:
-                raise ValueError("Invalid RPC action '%s'" % cmd)
+                raise ValueError("Invalid RPC action '%s'" % action)
             exc = None
         except:
             exc = sys.exc_info()
@@ -140,44 +155,43 @@ class RPCServer(object):
         # Send result or error back to client
         if return_type is not None:
             if exc is None:
-                self.debugMsg("    handleRequest: sending return value for %d: %s", req_id, result) 
+                info("    handleRequest: sending return value for %d: %s", req_id, result) 
                 #print "returnValue:", returnValue, result
                 if return_type == 'auto':
-                    with self.optsLock:
-                        noProxyTypes = self.proxyOptions['noProxyTypes']
-                    result = self.autoProxy(result, noProxyTypes)
+                    no_proxy_types = self.proxy_options['no_proxy_types']
+                    result = self.auto_proxy(result, no_proxy_types)
                 elif return_type == 'proxy':
                     result = LocalObjectProxy(result)
                 
                 try:
                     self._send_result(caller, req_id, rval=result)
                 except:
-                    sys.excepthook(*sys.exc_info())
-                    self._send_error(req_id, sys.exc_info())
+                    info("    process_one: Failed to send result for %d", req_id) 
+                    exc = sys.exc_info()
+                    self._send_error(caller, req_id, exc)
             else:
-                info("    handleRequest: returning exception for %d", req_id) 
-                self._send_error(req_id, exc)
+                info("    process_one: returning exception for %d: %s", req_id, exc) 
+                self._send_error(caller, req_id, exc)
                     
         elif exc is not None:
             sys.excepthook(*exc)
     
-        if cmd == 'close':
+        if action == 'close':
             self.close()
     
     def _send_error(self, caller, req_id, exc):
         exc_str = ["Error while processing request %s-%d: " % (caller, req_id)]
         exc_str += traceback.format_stack()
         exc_str += [" < exception caught here >\n"]
-        exc = sys.exc_info()
         exc_str += traceback.format_exception(*exc)
         self._send_result(caller, req_id, error=(exc[0].__name__, exc_str))
     
-    def _send_result(self, name, call_id, rval=None, error=None):
-        result = {'action': 'return', 'call_id': call_id,
+    def _send_result(self, caller, req_id, rval=None, error=None):
+        result = {'action': 'return', 'req_id': req_id,
                   'rval': rval, 'error': error}
-        info("RPC send res: %s %s", name, result)
+        info("RPC send res: %s %s", caller, result)
         data = self._serializer.dumps(result)
-        self._socket.send_multipart([name, data])
+        self._socket.send_multipart([caller, data])
 
     def close(self):
         """Close this RPC server.
@@ -194,3 +208,10 @@ class RPCServer(object):
     def run_forever(self):
         while self.running():
             self._read_and_process_one()
+
+    def auto_proxy(self, obj, no_proxy_types):
+        ## Return object wrapped in LocalObjectProxy _unless_ its type is in noProxyTypes.
+        for typ in no_proxy_types:
+            if isinstance(obj, typ):
+                return obj
+        return LocalObjectProxy(obj)

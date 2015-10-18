@@ -1,3 +1,2 @@
-from .client_socket import RPCClientSocket, RemoteCallException
-from .client import RPCClient
+from .client import RPCClient, RemoteCallException
 from .server import RPCServer

@@ -29,7 +29,6 @@ def test_rpc():
    
         def sleep(self, t):
             time.sleep(t)
-        
     
     server = RPCServer(name='some_server', addr='tcp://*:*')
     server['test_class'] = TestClass
@@ -37,11 +36,11 @@ def test_rpc():
     serve_thread = threading.Thread(target=server.run_forever, daemon=True)
     serve_thread.start()
     
-    client = RPCClient('some_server', 'tcp://localhost:5152')
-    obj = client['my_object1']  # get proxy to TestClass instance
+    client = RPCClient('some_server', server.address)
+    obj = client['my_object']  # get proxy to TestClass instance
     
     # test proxies are cached
-    assert obj is client['my_object1']
+    assert obj is client['my_object']
 
     # test call / sync return
     assert obj.add(7, 5) == 12

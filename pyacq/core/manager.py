@@ -1,6 +1,6 @@
 import atexit
 
-from .rpc import RPCServer, RPCClientSocket, RPCClient
+from .rpc import RPCServer, RPCClient
 from .client import ManagerProxy
 from .processspawner import ProcessSpawner
 from .host import Host
@@ -103,9 +103,6 @@ class Manager(RPCServer):
         # for auto-generated node / nodegroup names
         self._next_nodegroup_name = 0
         self._next_node_name = 0
-        
-        # shared socket for all RPC client connections
-        self._rpc_socket = RPCClientSocket()
     
     def connect_host(self, name, addr):
         """Connect the manager to a Host.
