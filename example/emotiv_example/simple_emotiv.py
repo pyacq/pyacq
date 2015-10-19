@@ -13,15 +13,13 @@ import time
 import multiprocessing as mp
 
 
-
-
 def test_recv_loop(port, stop_recv):
-    print 'start receiver loop' , port
+    print 'start receiver loop', port
     context = zmq.Context()
     socket = context.socket(zmq.SUB)
-    socket.setsockopt(zmq.SUBSCRIBE,'')
+    socket.setsockopt(zmq.SUBSCRIBE, '')
     socket.connect("tcp://localhost:{}".format(port))
-    while stop_recv.value==0:
+    while stop_recv.value == 0:
         message = socket.recv()
         pos = msgpack.loads(message)
         print 'On port {} read pos is {}'.format(port, pos)
@@ -32,8 +30,8 @@ def run_Emotiv():
     streamhandler = StreamHandler()
 
     # Configure and start
-    dev = EmotivMultiSignals(streamhandler = streamhandler)
-    dev.configure(buffer_length = 1800)
+    dev = EmotivMultiSignals(streamhandler=streamhandler)
+    dev.configure(buffer_length=1800)
     dev.initialize()
     dev.start()
 
@@ -42,9 +40,12 @@ def run_Emotiv():
     stream_imp = dev.streams[1]
     stream_gyro = dev.streams[2]
     stop_recv = mp.Value('i', 0)
-    process_chan = mp.Process(target= test_recv_loop, args = (stream_chan['port'],stop_recv))
-    process_imp = mp.Process(target= test_recv_loop, args = (stream_imp['port'],stop_recv))
-    process_gyro = mp.Process(target= test_recv_loop, args = (stream_gyro['port'],stop_recv))
+    process_chan = mp.Process(
+        target=test_recv_loop, args=(stream_chan['port'], stop_recv))
+    process_imp = mp.Process(
+        target=test_recv_loop, args=(stream_imp['port'], stop_recv))
+    process_gyro = mp.Process(
+        target=test_recv_loop, args=(stream_gyro['port'], stop_recv))
 
     process_chan.start()
     process_imp.start()
@@ -60,7 +61,6 @@ def run_Emotiv():
     # Stope and release the device
     dev.stop()
     dev.close()
-
 
 
 if __name__ == '__main__':
