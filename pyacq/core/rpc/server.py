@@ -60,7 +60,7 @@ class RPCServer(object):
         """Create and return a new LocalObjectProxy for *obj*.
         """
         if id(obj) not in self._proxies:
-            proxy = LocalObjectProxy(self.address, obj)
+            proxy = LocalObjectProxy(self, obj)
             self._proxies[id(obj)] = proxy
         return self._proxies[id(obj)]
 
@@ -69,7 +69,11 @@ class RPCServer(object):
         Otherwise, return the proxy.
         """
         if proxy.rpc_id == self.address:
-            return self._proxies[proxy.obj_id]
+            obj = self._proxies[proxy.obj_id]
+            # handle any deferred attribute lookups
+            for attr in obj.attributes:
+                obj = getattr(obj, attr)
+            return obj
         else:
             return proxy
         
@@ -102,10 +106,8 @@ class RPCServer(object):
         try:
             info("    process_one: id=%s opts=%s", req_id, opts)
             
-            if action == 'get_obj_attr':
-                result = getattr(opts['obj'], opts['attr'])
-            elif action == 'call_obj':
-                obj = opts['obj']
+            if action == 'call_obj':
+                obj = self.lookup_proxy(opts['obj_id'])
                 fnargs = opts['args']
                 fnkwds = opts['kwds']
                 
@@ -137,7 +139,8 @@ class RPCServer(object):
                 else:
                     result = map(mod.__getattr__, fromlist)
             elif action == 'del':
-                LocalObjectProxy.releaseProxyId(opts['proxyId'])
+                del self.proxies[opts['obj_id']]
+                #LocalObjectProxy.releaseProxyId(opts['proxyId'])
                 #del self.proxiedObjects[opts['objId']]
             elif action == 'close':
                 result = True
@@ -161,7 +164,7 @@ class RPCServer(object):
                     no_proxy_types = self.proxy_options['no_proxy_types']
                     result = self.auto_proxy(result, no_proxy_types)
                 elif return_type == 'proxy':
-                    result = LocalObjectProxy(result)
+                    result = self.get_proxy(result)
                 
                 try:
                     self._send_result(caller, req_id, rval=result)
@@ -214,4 +217,4 @@ class RPCServer(object):
         for typ in no_proxy_types:
             if isinstance(obj, typ):
                 return obj
-        return LocalObjectProxy(obj)
+        return self.get_proxy(obj)

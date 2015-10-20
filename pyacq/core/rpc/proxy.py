@@ -1,4 +1,62 @@
 import os
+import weakref
+
+
+"""
+ObjectProxy is uniquely identified system-wide by
+    1. rpc_id
+    2. obj_id
+    3. attributes
+    (ObjectProxy does not have parent.)
+
+Each unique ObjectProxy can only exist once per thread.
+
+ObjectProxy manages ref counts for all proxies on a per-thread basis
+    Need a globally unique identifier for threads:
+        GTID = global thread ID     ?
+            HOST+PID+TID
+        Maybe just use a random ID?
+    
+Every time a proxy is created, the rpc server must be informed of the GTID that will own the new proxy
+    - this means all rpc servers and clients must know the GTID of their endpoints.
+        (maybe we should replace `ping` with `ident`)
+          srv_gtid = server.send('ident', cli_gtid)
+
+ALL rpc servers should have a proxy to the manager for sending log messages and thread/process failure messages.
+
+Ony one server per thread, and there can be only one client per PID+TID endpoint per thread. Need singleton
+management like `get_server()` and `get_client(rpc_id)`
+
+
+
+Cases:
+
+    1. server returns locally proxied object to client
+        LocalObjectProxy knows GTID of client, registers reference with server.
+    2. client sends locally proxied object to server (this implies a locally running server)
+        LocalObjectProxy needs to know the GTID of the remote server and register the reference with
+        the local server.
+    3. client sends proxy to server
+        ObjectProxy needs to know the server's GTID and register the reference with the proxy's server.
+        This must happen before the proxy is sent.
+    4. server returns proxy to client
+        ObjectProxy needs to know the client's GTID and register the reference with the proxy's server.
+        This must happen before the proxy is sent.
+        
+    In all of these cases, a proxy that is lost in transit (eg: if there is an unserialization error)
+    will cause a reference leak.
+
+
+
+
+
+
+"""
+
+
+
+
+
 
 
 class LocalObjectProxy(object):
@@ -13,67 +71,34 @@ class LocalObjectProxy(object):
         remotePlot.plot(proxy(data))  ## force the object to be sent by proxy
     
     """
-    next_proxy_id = 0
-    proxied_objects = {}  ## maps {proxyId: object}
-    
-    
-    @classmethod
-    def registerObject(cls, obj):
-        ## assign it a unique ID so we can keep a reference to the local object
-        
-        pid = cls.next_proxy_id
-        cls.next_proxy_id += 1
-        cls.proxied_objects[pid] = obj
-        #print "register:", cls.proxied_objects
-        return pid
-    
-    @classmethod
-    def lookupProxyId(cls, pid):
-        return cls.proxied_objects[pid]
-    
-    @classmethod
-    def releaseProxyId(cls, pid):
-        del cls.proxied_objects[pid]
-        #print "release:", cls.proxied_objects 
-    
-    def __init__(self, obj, **opts):
+    def __init__(self, server, obj, attributes=(), **opts):
         """
         Create a 'local' proxy object that, when sent to a remote host,
         will appear as a normal ObjectProxy to *obj*. 
-        Any extra keyword arguments are passed to proxy._setProxyOptions()
+        Any extra keyword arguments are passed to proxy._set_proxy_options()
         on the remote side.
         """
-        self.processId = os.getpid()
-        #self.objectId = id(obj)
-        self.typeStr = repr(obj)
-        #self.handler = handler
+        self.server = weakref.ref(server)
+        self.type_str = repr(obj)
         self.obj = obj
+        self.attributes = attributes
         self.opts = opts
-        
-    def __reduce__(self):
-        ## a proxy is being pickled and sent to a remote process.
-        ## every time this happens, a new proxy will be generated in the remote process,
-        ## so we keep a new ID so we can track when each is released.
-        pid = LocalObjectProxy.registerObject(self.obj)
-        return (unpickleObjectProxy, (self.processId, pid, self.typeStr, None, self.opts))
+
+    def save(self):
+        """Convert this proxy to a serializable structure.
+        """
+        state = {
+            'rpc_id': self.server().address, 
+            'obj_id': id(self.obj), 
+            'type_str': self.type_str,
+            'attributes': self.attributes,
+        }
+        state.update(self.opts)
+        return state
 
         
 ## alias
 proxy = LocalObjectProxy
-
-
-def unpickleObjectProxy(processId, proxyId, typeStr, attributes=None, opts=None):
-    if processId == os.getpid():
-        obj = LocalObjectProxy.lookupProxyId(proxyId)
-        if attributes is not None:
-            for attr in attributes:
-                obj = getattr(obj, attr)
-        return obj
-    else:
-        proxy = ObjectProxy(processId, proxyId=proxyId, typeStr=typeStr)
-        if opts is not None:
-            proxy._setProxyOptions(**opts)
-        return proxy
 
 
 class ObjectProxy(object):
@@ -101,50 +126,50 @@ class ObjectProxy(object):
         pid = ros.getpid()
         
         ## asynchronous call
-        request = ros.getpid(_callSync='async')
+        request = ros.getpid(_call_sync='async')
         while not request.hasResult():
             time.sleep(0.01)
         pid = request.result()
         
         ## disable return when we know it isn't needed
-        rsys.stdout.write('hello', _callSync='off')
+        rsys.stdout.write('hello', _call_sync='off')
     
     Additionally, values returned from a remote function call are automatically
     returned either by value (must be picklable) or by proxy. 
     This behavior can be forced::
     
         rnp = proc._import('numpy')
-        arrProxy = rnp.array([1,2,3,4], _returnType='proxy')
-        arrValue = rnp.array([1,2,3,4], _returnType='value')
+        arrProxy = rnp.array([1,2,3,4], _return_type='proxy')
+        arrValue = rnp.array([1,2,3,4], _return_type='value')
     
-    The default callSync and returnType behaviors (as well as others) can be set 
-    for each proxy individually using ObjectProxy._setProxyOptions() or globally using 
-    proc.setProxyOptions(). 
+    The default call_sync and return_type behaviors (as well as others) can be set 
+    for each proxy individually using ObjectProxy._set_proxy_options() or globally using 
+    proc.set_proxy_options(). 
     
     """
-    def __init__(self, rpc_id, obj_id, type_str='', parent=None):
+    def __init__(self, rpc_id, obj_id, type_str='', attributes=(), **kwds):
         object.__init__(self)
         ## can't set attributes directly because setattr is overridden.
         self.__dict__['_rpc_id'] = rpc_id
         self.__dict__['_obj_id'] = obj_id
         self.__dict__['_type_str'] = type_str
-        self.__dict__['_attributes'] = ()
+        self.__dict__['_attributes'] = attributes
+        
         ## attributes that affect the behavior of the proxy. 
         ## in all cases, a value of None causes the proxy to ask
         ## its parent event handler to make the decision
         self.__dict__['_proxy_options'] = {
-            'callSync': None,      ## 'sync', 'async', None 
+            'call_sync': None,      ## 'sync', 'async', None 
             'timeout': None,       ## float, None
-            'returnType': None,    ## 'proxy', 'value', 'auto', None
-            'deferGetattr': None,  ## True, False, None
-            'noProxyTypes': None,  ## list of types to send by value instead of by proxy
-            'autoProxy': None,
+            'return_type': None,    ## 'proxy', 'value', 'auto', None
+            'defer_getattr': None,  ## True, False, None
+            'no_proxy_types': None,  ## list of types to send by value instead of by proxy
+            'auto_proxy': None,
         }
         
-        self.__dict__['_handler'] = RemoteEventHandler.getHandler(processId)
-        self.__dict__['_handler'].registerProxy(self)  ## handler will watch proxy; inform remote process when the proxy is deleted.
+        self._set_proxy_options(**kwds)
     
-    def _setProxyOptions(self, **kwds):
+    def _set_proxy_options(self, **kwds):
         """
         Change the behavior of this proxy. For all options, a value of None
         will cause the proxy to instead use the default behavior defined
@@ -153,7 +178,7 @@ class ObjectProxy(object):
         Options are:
         
         =============  =============================================================
-        callSync       'sync', 'async', 'off', or None. 
+        call_sync       'sync', 'async', 'off', or None. 
                        If 'async', then calling methods will return a Request object
                        which can be used to inquire later about the result of the 
                        method call.
@@ -163,21 +188,21 @@ class ObjectProxy(object):
                        is returned instead).
                        If 'off', then the remote process is instructed _not_ to 
                        reply and the method call will return None immediately.
-        returnType     'auto', 'proxy', 'value', or None. 
+        return_type     'auto', 'proxy', 'value', or None. 
                        If 'proxy', then the value returned when calling a method
                        will be a proxy to the object on the remote process.
                        If 'value', then attempt to pickle the returned object and
                        send it back.
                        If 'auto', then the decision is made by consulting the
-                       'noProxyTypes' option.
-        autoProxy      bool or None. If True, arguments to __call__ are 
+                       'no_proxy_types' option.
+        auto_proxy      bool or None. If True, arguments to __call__ are 
                        automatically converted to proxy unless their type is 
-                       listed in noProxyTypes (see below). If False, arguments
+                       listed in no_proxy_types (see below). If False, arguments
                        are left untouched. Use proxy(obj) to manually convert
                        arguments before sending. 
         timeout        float or None. Length of time to wait during synchronous 
                        requests before returning a Request object instead.
-        deferGetattr   True, False, or None. 
+        defer_getattr   True, False, or None. 
                        If False, all attribute requests will be sent to the remote 
                        process immediately and will block until a response is
                        received (or timeout has elapsed).
@@ -188,7 +213,7 @@ class ObjectProxy(object):
                        object. In this case, AttributeError will not be raised
                        until an attempt is made to look up the attribute on the
                        remote process.
-        noProxyTypes   List of object types that should _not_ be proxied when
+        no_proxy_types   List of object types that should _not_ be proxied when
                        sent to the remote process.
         =============  =============================================================
         """
@@ -196,7 +221,7 @@ class ObjectProxy(object):
             if k not in self._proxy_options:
                 raise KeyError("Unrecognized proxy option '%s'" % k)
         self._proxy_options.update(kwds)
-    
+        
     def _getValue(self):
         """
         Return the value of the proxied object
@@ -204,81 +229,97 @@ class ObjectProxy(object):
         """
         return self._handler.getObjValue(self)
         
-    def _getProxyOption(self, opt):
+    def _get_proxy_option(self, opt):
         val = self._proxy_options[opt]
         if val is None:
-            return self._handler.getProxyOption(opt)
+            return self._handler.get_proxy_option(opt)
         return val
     
-    def _getProxyOptions(self):
-        return dict([(k, self._getProxyOption(k)) for k in self._proxy_options])
+    def _get_proxy_options(self):
+        return dict([(k, self._get_proxy_option(k)) for k in self._proxy_options])
     
     def __reduce__(self):
         return (unpickleObjectProxy, (self._processId, self._proxyId, self._typeStr, self._attributes))
     
     def __repr__(self):
-        return "<ObjectProxy for process %d, object 0x%x: %s >" % (self._processId, self._proxyId, self._typeStr)
+        rep = "<ObjectProxy for process %d, object 0x%x: %s >" % (self._processId, self._proxyId, self._typeStr)
+        return '.'.join((rep,) + self._attributes)
+
+    def _undefer(self):
+        """Return a non-deferred proxy to the object referenced by this proxy.        
+        """
+        if len(self._attributes) == 0:
+            return self
+        # Transfer sends this object to the remote process and returns a new proxy.
+        # In the process, this invokes any deferred attributes.
+        return self._client.transfer(self)
         
     def __getattr__(self, attr, **kwds):
         """
         Calls __getattr__ on the remote object and returns the attribute
         by value or by proxy depending on the options set (see
-        ObjectProxy._setProxyOptions and RemoteEventHandler.setProxyOptions)
+        ObjectProxy._set_proxy_options and RemoteEventHandler.set_proxy_options)
         
-        If the option 'deferGetattr' is True for this proxy, then a new proxy object
+        If the option 'defer_getattr' is True for this proxy, then a new proxy object
         is returned _without_ asking the remote object whether the named attribute exists.
         This can save time when making multiple chained attribute requests,
         but may also defer a possible AttributeError until later, making
         them more difficult to debug.
         """
-        opts = self._getProxyOptions()
+        opts = self._get_proxy_options()
         for k in opts:
             if '_'+k in kwds:
                 opts[k] = kwds.pop('_'+k)
-        if opts['deferGetattr'] is True:
-            return self._deferredAttr(attr)
+        if len(kwds) > 0:
+            raise NameError("Invalid keyword argument(s): %s" % list(kwds.keys()))
+        prox = self._deferred_attr(attr, **opts)
+        if opts['defer_getattr'] is True:
+            return prox
         else:
-            return self._handler.getObjAttr(self, attr, **opts)
+            return prox._undefer()
     
-    def _deferredAttr(self, attr):
-        return DeferredObjectProxy(self, attr)
+    def _deferred_attr(self, attr):
+        """Return a proxy to an attribute of this object. The attribute lookup
+        is deferred.
+        """
+        return ObjectProxy(self._rpc_id, self._obj_id, self._type_str, self._attributes + (attr,))
     
     def __call__(self, *args, **kwds):
         """
         Attempts to call the proxied object from the remote process.
         Accepts extra keyword arguments:
         
-            _callSync    'off', 'sync', or 'async'
-            _returnType   'value', 'proxy', or 'auto'
+            _call_sync    'off', 'sync', or 'async'
+            _return_type   'value', 'proxy', or 'auto'
         
         If the remote call raises an exception on the remote process,
         it will be re-raised on the local process.
         
         """
-        opts = self._getProxyOptions()
+        opts = self._get_proxy_options()
         for k in opts:
             if '_'+k in kwds:
                 opts[k] = kwds.pop('_'+k)
-        return self._handler.callObj(obj=self, args=args, kwds=kwds, **opts)
+        return self._client.call_obj(obj=self, args=args, kwds=kwds, **opts)
     
     
     # Explicitly proxy special methods. Is there a better way to do this??
     
     def _getSpecialAttr(self, attr):
         # this just gives us an easy way to change the behavior of the special methods
-        return self._deferredAttr(attr)
+        return self._deferred_attr(attr)
     
     def __getitem__(self, *args):
         return self._getSpecialAttr('__getitem__')(*args)
     
     def __setitem__(self, *args):
-        return self._getSpecialAttr('__setitem__')(*args, _callSync='off')
+        return self._getSpecialAttr('__setitem__')(*args, _call_sync='off')
         
     def __setattr__(self, *args):
-        return self._getSpecialAttr('__setattr__')(*args, _callSync='off')
+        return self._getSpecialAttr('__setattr__')(*args, _call_sync='off')
         
     def __str__(self, *args):
-        return self._getSpecialAttr('__str__')(*args, _returnType='value')
+        return self._getSpecialAttr('__str__')(*args, _return_type='value')
         
     def __len__(self, *args):
         return self._getSpecialAttr('__len__')(*args)
@@ -305,25 +346,25 @@ class ObjectProxy(object):
         return self._getSpecialAttr('__pow__')(*args)
         
     def __iadd__(self, *args):
-        return self._getSpecialAttr('__iadd__')(*args, _callSync='off')
+        return self._getSpecialAttr('__iadd__')(*args, _call_sync='off')
     
     def __isub__(self, *args):
-        return self._getSpecialAttr('__isub__')(*args, _callSync='off')
+        return self._getSpecialAttr('__isub__')(*args, _call_sync='off')
         
     def __idiv__(self, *args):
-        return self._getSpecialAttr('__idiv__')(*args, _callSync='off')
+        return self._getSpecialAttr('__idiv__')(*args, _call_sync='off')
         
     def __itruediv__(self, *args):
-        return self._getSpecialAttr('__itruediv__')(*args, _callSync='off')
+        return self._getSpecialAttr('__itruediv__')(*args, _call_sync='off')
         
     def __ifloordiv__(self, *args):
-        return self._getSpecialAttr('__ifloordiv__')(*args, _callSync='off')
+        return self._getSpecialAttr('__ifloordiv__')(*args, _call_sync='off')
         
     def __imul__(self, *args):
-        return self._getSpecialAttr('__imul__')(*args, _callSync='off')
+        return self._getSpecialAttr('__imul__')(*args, _call_sync='off')
         
     def __ipow__(self, *args):
-        return self._getSpecialAttr('__ipow__')(*args, _callSync='off')
+        return self._getSpecialAttr('__ipow__')(*args, _call_sync='off')
         
     def __rshift__(self, *args):
         return self._getSpecialAttr('__rshift__')(*args)
@@ -332,10 +373,10 @@ class ObjectProxy(object):
         return self._getSpecialAttr('__lshift__')(*args)
         
     def __irshift__(self, *args):
-        return self._getSpecialAttr('__irshift__')(*args, _callSync='off')
+        return self._getSpecialAttr('__irshift__')(*args, _call_sync='off')
         
     def __ilshift__(self, *args):
-        return self._getSpecialAttr('__ilshift__')(*args, _callSync='off')
+        return self._getSpecialAttr('__ilshift__')(*args, _call_sync='off')
         
     def __eq__(self, *args):
         return self._getSpecialAttr('__eq__')(*args)
@@ -365,13 +406,13 @@ class ObjectProxy(object):
         return self._getSpecialAttr('__xor__')(*args)
         
     def __iand__(self, *args):
-        return self._getSpecialAttr('__iand__')(*args, _callSync='off')
+        return self._getSpecialAttr('__iand__')(*args, _call_sync='off')
         
     def __ior__(self, *args):
-        return self._getSpecialAttr('__ior__')(*args, _callSync='off')
+        return self._getSpecialAttr('__ior__')(*args, _call_sync='off')
         
     def __ixor__(self, *args):
-        return self._getSpecialAttr('__ixor__')(*args, _callSync='off')
+        return self._getSpecialAttr('__ixor__')(*args, _call_sync='off')
         
     def __mod__(self, *args):
         return self._getSpecialAttr('__mod__')(*args)
@@ -419,54 +460,5 @@ class ObjectProxy(object):
         ## Required for python3 since __eq__ is defined.
         return id(self)
 
-        
-class DeferredObjectProxy(ObjectProxy):
-    """
-    This class represents an attribute (or sub-attribute) of a proxied object.
-    It is used to speed up attribute requests. Take the following scenario::
-    
-        rsys = proc._import('sys')
-        rsys.stdout.write('hello')
-        
-    For this simple example, a total of 4 synchronous requests are made to 
-    the remote process: 
-    
-    1) import sys
-    2) getattr(sys, 'stdout')
-    3) getattr(stdout, 'write')
-    4) write('hello')
-    
-    This takes a lot longer than running the equivalent code locally. To
-    speed things up, we can 'defer' the two attribute lookups so they are
-    only carried out when neccessary::
-    
-        rsys = proc._import('sys')
-        rsys._setProxyOptions(deferGetattr=True)
-        rsys.stdout.write('hello')
-        
-    This example only makes two requests to the remote process; the two 
-    attribute lookups immediately return DeferredObjectProxy instances 
-    immediately without contacting the remote process. When the call 
-    to write() is made, all attribute requests are processed at the same time.
-    
-    Note that if the attributes requested do not exist on the remote object, 
-    making the call to write() will raise an AttributeError.
-    """
-    def __init__(self, parentProxy, attribute):
-        ## can't set attributes directly because setattr is overridden.
-        for k in ['_processId', '_typeStr', '_proxyId', '_handler']:
-            self.__dict__[k] = getattr(parentProxy, k)
-        self.__dict__['_parent'] = parentProxy  ## make sure parent stays alive
-        self.__dict__['_attributes'] = parentProxy._attributes + (attribute,)
-        self.__dict__['_proxy_options'] = parentProxy._proxy_options.copy()
-    
-    def __repr__(self):
-        return ObjectProxy.__repr__(self) + '.' + '.'.join(self._attributes)
-    
-    def _undefer(self):
-        """
-        Return a non-deferred ObjectProxy referencing the same object
-        """
-        return self._parent.__getattr__(self._attributes[-1], _deferGetattr=False)
 
 

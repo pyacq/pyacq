@@ -58,7 +58,7 @@ class RPCClient(object):
         # For unserializing results returned from servers. This cannot be
         # used to send proxies of local objects unless there is also a server
         # for this thread..
-        self.serializer = MsgpackSerializer()
+        self.serializer = MsgpackSerializer(self)
         
         self.ensure_connection()
 
@@ -101,6 +101,14 @@ class RPCClient(object):
         fut = Future(self, req_id)
         self.futures[req_id] = fut
         return fut
+
+    def call_obj(self, obj_id, args=None, kwargs=None, return_type='auto'):
+        opts = {'obj_id': obj_id, 'args': args, 'kwargs': kwargs} 
+        return self.send('call_obj', return_type=return_type, opts=opts)
+
+    def get_obj_attr(self, obj_id, attributes, return_type='auto'):
+        opts = {'obj_id': obj_id, 'attributes': attributes}
+        return self.send('get_obj_attrs', return_type=return_type, opts=opts)
 
     def ensure_connection(self, timeout=1.0):
         """Make sure RPC server is connected and available.

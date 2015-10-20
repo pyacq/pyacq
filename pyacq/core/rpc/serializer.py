@@ -145,15 +145,8 @@ class MsgpackSerializer:
             elif type_name == 'date':
                 return datetime.datetime.strptime(dct['data'], '%Y-%m-%d').date()
             elif type_name == 'proxy':
-                proxy = create_proxy(**dct)
-                if self.server is None:
-                    # Can't unwrap this proxy; return as-is
-                    return proxy
-                else:
-                    # Ask the proxy server to unwrap this object. If the object
-                    # does not belong to the server, then the proxy is returned
-                    # as-is.
-                    return self.server.lookup_proxy(proxy)
+                proxy = ObjectProxy(**dct)
+                return self.server.lookup_proxy(proxy)
         return dct
     
 #serializer = JsonSerializer()
