@@ -9,4 +9,4 @@ from .viewers import *
 
 import logging
 
-logging.basicConfig(format='[%(process)s] %(message)s')
+logging.basicConfig(format='[%(process)s:%(thread)s] %(message)s')

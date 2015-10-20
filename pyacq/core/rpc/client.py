@@ -2,6 +2,7 @@ import os
 import time
 import weakref
 import concurrent.futures
+import threading
 from logging import info
 import zmq
 
@@ -28,6 +29,18 @@ class RPCClient(object):
         Optional RPCClientSocket with which to connect to the server. This
         allows multiple RPC connections to share a single socket.
     """
+    
+    clients_by_thread = {}  # (thread_id, rpc_addr): client
+    
+    @staticmethod
+    def get_client(address):
+        """Return the RPC client for this thread and a given server address.
+        
+        If no client exists, raise KeyError.
+        """
+        return RPCClient.clients_by_thread[(threading.current_thread().ident, address)]
+        
+    
     def __init__(self, name, addr):
         # ROUTER is fully asynchronous and may connect to multiple endpoints.
         # We can use ROUTER to allow this socket to connect to multiple servers.
@@ -48,6 +61,8 @@ class RPCClient(object):
         self.next_request_id = 0
         self.futures = weakref.WeakValueDictionary()
         
+        RPCClient.clients_by_thread[(threading.current_thread().ident, addr)] = self
+        
         self.name = name.encode()
         self.connect_established = False
         self.establishing_connect = False
@@ -58,7 +73,7 @@ class RPCClient(object):
         # For unserializing results returned from servers. This cannot be
         # used to send proxies of local objects unless there is also a server
         # for this thread..
-        self.serializer = MsgpackSerializer(self)
+        self.serializer = MsgpackSerializer()
         
         self.ensure_connection()
 

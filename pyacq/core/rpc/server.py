@@ -2,10 +2,11 @@ import sys
 import time
 import traceback
 import zmq
+import threading
 from logging import info
 
 from .serializer import MsgpackSerializer
-from .proxy import LocalObjectProxy, ObjectProxy
+from .proxy import ObjectProxy
 
 
 class RPCServer(object):
@@ -18,6 +19,17 @@ class RPCServer(object):
     addr : URL
         Address for RPC server to bind to.
     """
+    
+    servers_by_thread = {}
+    
+    @staticmethod
+    def get_server():
+        """Return the server running in this thread, if any.
+        
+        If no server exists, raise KeyError.
+        """
+        return RPCServer.servers_by_thread[threading.current_thread().ident]
+    
     def __init__(self, name, addr):
         self._name = name.encode()
         self._socket = zmq.Context.instance().socket(zmq.ROUTER)
@@ -27,6 +39,8 @@ class RPCServer(object):
         self._closed = False
         self._serializer = MsgpackSerializer(self)
         
+        RPCServer.servers_by_thread[threading.current_thread().ident] = self
+        
         # Default behavior for creating object proxies
         self.proxy_options = {
             'call_sync': 'sync',      ## 'sync', 'async', 'off'
@@ -34,16 +48,38 @@ class RPCServer(object):
             'return_type': 'auto',    ## 'proxy', 'value', 'auto'
             'auto_proxy': False,      ## bool
             'defer_getattr': False,   ## True, False
-            'no_proxy_types': [ type(None), str, int, float, tuple, list, dict, LocalObjectProxy, ObjectProxy ],
+            'no_proxy_types': [type(None), str, int, float, tuple, list, dict, ObjectProxy],
         }
         
         # Objects that may be retrieved by name using client['obj_name']
-        self._namespace = {}
+        self._namespace = {'self': self}
         
         # Objects for which we have sent proxies to other machines.
-        self._proxies = {}  # obj_id: proxy
+        self.next_object_id = 0
+        self._proxies = {}  # obj_id: object
         
         info("RPC start server: %s@%s", self._name.decode(), self.address.decode())
+
+    def get_proxy(self, obj, **kwds):
+        """Return an ObjectProxy referring to a local object.
+        
+        This proxy can be sent via RPC to any other node.
+        """
+        oid = self.next_object_id
+        self.next_object_id += 1
+        type_str = str(type(obj))
+        proxy = ObjectProxy(self.address, oid, type_str, attributes=(), **kwds)
+        self._proxies[oid] = obj
+        return proxy
+    
+    def unwrap_proxy(self, proxy):
+        """Return the local python object referenced by *proxy*.
+        """
+        try:
+            return ObjectProxy.local_objects_by_proxy[proxy.obj_id]
+        except KeyError:
+            raise KeyError("Invalid proxy object ID %r. The object may have "
+                           "been released already." % proxy.obj_id)
 
     def __del__(self):
         self._socket.close()
@@ -56,26 +92,26 @@ class RPCServer(object):
         """
         self._namespace[key] = value
 
-    def get_proxy(self, obj):
-        """Create and return a new LocalObjectProxy for *obj*.
-        """
-        if id(obj) not in self._proxies:
-            proxy = LocalObjectProxy(self, obj)
-            self._proxies[id(obj)] = proxy
-        return self._proxies[id(obj)]
+    #def get_proxy(self, obj):
+        #"""Create and return a new LocalObjectProxy for *obj*.
+        #"""
+        #if id(obj) not in self._proxies:
+            #proxy = LocalObjectProxy(self, obj)
+            #self._proxies[id(obj)] = proxy
+        #return self._proxies[id(obj)]
 
-    def lookup_proxy(self, proxy):
-        """Return the object referenced by *proxy* if it belongs to this server.
-        Otherwise, return the proxy.
-        """
-        if proxy.rpc_id == self.address:
-            obj = self._proxies[proxy.obj_id]
-            # handle any deferred attribute lookups
-            for attr in obj.attributes:
-                obj = getattr(obj, attr)
-            return obj
-        else:
-            return proxy
+    #def lookup_proxy(self, proxy):
+        #"""Return the object referenced by *proxy* if it belongs to this server.
+        #Otherwise, return the proxy.
+        #"""
+        #if proxy.rpc_id == self.address:
+            #obj = self._proxies[proxy.obj_id]
+            ## handle any deferred attribute lookups
+            #for attr in obj.attributes:
+                #obj = getattr(obj, attr)
+            #return obj
+        #else:
+            #return proxy
         
     def _read_and_process_one(self):
         """Read one message from the rpc socket and invoke the requested

@@ -59,46 +59,47 @@ Cases:
 
 
 
-class LocalObjectProxy(object):
-    """
-    Used for wrapping local objects to ensure that they are send by proxy to a remote host.
-    Note that 'proxy' is just a shorter alias for LocalObjectProxy.
+#class LocalObjectProxy(object):
+    #"""
+    #Used for wrapping local objects to ensure that they are send by proxy to a remote host.
+    #Note that 'proxy' is just a shorter alias for LocalObjectProxy.
     
-    For example::
+    #For example::
     
-        data = [1,2,3,4,5]
-        remotePlot.plot(data)         ## by default, lists are pickled and sent by value
-        remotePlot.plot(proxy(data))  ## force the object to be sent by proxy
+        #data = [1,2,3,4,5]
+        #remotePlot.plot(data)         ## by default, lists are pickled and sent by value
+        #remotePlot.plot(proxy(data))  ## force the object to be sent by proxy
     
-    """
-    def __init__(self, server, obj, attributes=(), **opts):
-        """
-        Create a 'local' proxy object that, when sent to a remote host,
-        will appear as a normal ObjectProxy to *obj*. 
-        Any extra keyword arguments are passed to proxy._set_proxy_options()
-        on the remote side.
-        """
-        self.server = weakref.ref(server)
-        self.type_str = repr(obj)
-        self.obj = obj
-        self.attributes = attributes
-        self.opts = opts
+    #"""
+    #def __init__(self, server, obj, attributes=(), **opts):
+        #"""
+        #Create a 'local' proxy object that, when sent to a remote host,
+        #will appear as a normal ObjectProxy to *obj*. 
+        #Any extra keyword arguments are passed to proxy._set_proxy_options()
+        #on the remote side.
+        #"""
+        #self.server = weakref.ref(server)
+        #self.type_str = repr(obj)
+        #self.obj = obj
+        #self.attributes = attributes
+        #self.opts = opts
 
-    def save(self):
-        """Convert this proxy to a serializable structure.
-        """
-        state = {
-            'rpc_id': self.server().address, 
-            'obj_id': id(self.obj), 
-            'type_str': self.type_str,
-            'attributes': self.attributes,
-        }
-        state.update(self.opts)
-        return state
+    #def save(self):
+        #"""Convert this proxy to a serializable structure.
+        #"""
+        #state = {
+            #'rpc_id': self.server().address, 
+            #'obj_id': id(self.obj), 
+            #'type_str': self.type_str,
+            #'attributes': self.attributes,
+        #}
+        #state.update(self.opts)
+        #return state
 
         
-## alias
-proxy = LocalObjectProxy
+### alias
+#proxy = LocalObjectProxy
+
 
 
 class ObjectProxy(object):
@@ -147,6 +148,7 @@ class ObjectProxy(object):
     proc.set_proxy_options(). 
     
     """
+    
     def __init__(self, rpc_id, obj_id, type_str='', attributes=(), **kwds):
         object.__init__(self)
         ## can't set attributes directly because setattr is overridden.
@@ -221,28 +223,39 @@ class ObjectProxy(object):
             if k not in self._proxy_options:
                 raise KeyError("Unrecognized proxy option '%s'" % k)
         self._proxy_options.update(kwds)
+
+    def save(self):
+        """Convert this proxy to a serializable structure.
+        """
+        state = {
+            'rpc_id': self._rpc_id, 
+            'obj_id': self._obj_id, 
+            'type_str': self._type_str,
+            'attributes': self._attributes,
+        }
+        state.update(self._proxy_options)
+        return state
         
-    def _getValue(self):
+    def _get_value(self):
         """
         Return the value of the proxied object
         (the remote object must be picklable)
         """
-        return self._handler.getObjValue(self)
+        client = Client.get_client(self.rpc_id)
+        return client.get_obj_value(self)
         
-    def _get_proxy_option(self, opt):
-        val = self._proxy_options[opt]
-        if val is None:
-            return self._handler.get_proxy_option(opt)
-        return val
-    
     def _get_proxy_options(self):
-        return dict([(k, self._get_proxy_option(k)) for k in self._proxy_options])
+        opts = self._proxy_options.copy()
+        client = Client.get_client(self.rpc_id)
+        opts.update(client.default_proxy_opts)
+        return opts
     
     def __reduce__(self):
-        return (unpickleObjectProxy, (self._processId, self._proxyId, self._typeStr, self._attributes))
+        return (unpickleObjectProxy, (self._rpc_id, self._obj_id, self._type_str, self._attributes))
     
     def __repr__(self):
-        rep = "<ObjectProxy for process %d, object 0x%x: %s >" % (self._processId, self._proxyId, self._typeStr)
+        rep = "<ObjectProxy for process %s, object %d: %s >" % (self._rpc_id, self._obj_id, self._type_str)
+        print("ATTR:", self._attributes, self._rpc_id, self._obj_id, self._type_str)
         return '.'.join((rep,) + self._attributes)
 
     def _undefer(self):
@@ -282,7 +295,11 @@ class ObjectProxy(object):
         """Return a proxy to an attribute of this object. The attribute lookup
         is deferred.
         """
-        return ObjectProxy(self._rpc_id, self._obj_id, self._type_str, self._attributes + (attr,))
+        proxy = ObjectProxy(self._rpc_id, self._obj_id, self._type_str, self._attributes + (attr,))
+        # Keep a reference to the parent proxy so that the remote object cannot be
+        # released as long as this proxy is alive.
+        proxy._parent_proxy = self
+        return proxy
     
     def __call__(self, *args, **kwds):
         """

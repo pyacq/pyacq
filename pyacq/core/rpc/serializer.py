@@ -88,6 +88,9 @@ class MsgpackSerializer:
     standard list supported by msgpack. All other types are converted to an
     object proxy that can be used to access methods / attributes of the object
     remotely (this requires that the object be owned by an RPC server).
+    
+    Note that lists are converted to tuple in transit. See:
+    https://github.com/msgpack/msgpack-python/issues/98
     """
     def __init__(self, server=None):
         self.server = server
@@ -104,12 +107,18 @@ class MsgpackSerializer:
         Proxies that reference objects owned by the server are converted back
         into the local object. All other proxies are left as-is.
         """
-        return msgpack.loads(msg, encoding='utf8', object_hook=self.decode)
+        # use_list=False because we are more likely to care about transmitting
+        # tuples correctly (because they are used as dict keys).
+        return msgpack.loads(msg, encoding='utf8', use_list=False, object_hook=self.decode)
 
     def encode(self, obj):
-        if isinstance(obj, (str, bytes, int, float, list, tuple, dict)):
-            return obj
-        elif isinstance(obj, np.ndarray):
+        enc = self._encode(obj)
+        return enc
+
+    def _encode(self, obj):
+        # note: encode is only called for types that are not recognized internally
+        # by msgpack. 
+        if isinstance(obj, np.ndarray):
             if not obj.flags['C_CONTIGUOUS']:
                 obj = np.ascontiguousarray(obj)
             assert(obj.flags['C_CONTIGUOUS'])
@@ -139,14 +148,17 @@ class MsgpackSerializer:
             if type_name is None:
                 return dct
             if type_name == 'ndarray':
-                return np.fromstring(data, dtype=dct['dtype']).reshape(dct['shape'])
+                return np.fromstring(dct['data'], dtype=dct['dtype']).reshape(dct['shape'])
             elif type_name == 'datetime':
                 return datetime.datetime.strptime(dct['data'], '%Y-%m-%dT%H:%M:%S.%f')
             elif type_name == 'date':
                 return datetime.datetime.strptime(dct['data'], '%Y-%m-%d').date()
             elif type_name == 'proxy':
                 proxy = ObjectProxy(**dct)
-                return self.server.lookup_proxy(proxy)
+                if self.server is not None and proxy._rpc_id == self.server.address:
+                    return self.server.unwrap_proxy(proxy)
+                else:
+                    return proxy
         return dct
     
 #serializer = JsonSerializer()
