@@ -156,6 +156,9 @@ class RPCClient(object):
         #opts = {'obj_id': obj_id, 'attributes': attributes}
         #return self.send('get_obj_attrs', return_type=return_type, opts=opts)
 
+    def get_obj_value(self, obj, **kwds):
+        return self.send('get_obj_value', opts={'obj': obj}, **kwds)
+
     def transfer(self, obj, **kwds):
         return self.send('transfer', opts={'obj': obj}, **kwds)
 

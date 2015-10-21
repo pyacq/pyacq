@@ -307,7 +307,9 @@ class ObjectProxy(object):
         """Return a proxy to an attribute of this object. The attribute lookup
         is deferred.
         """
-        proxy = ObjectProxy(self._rpc_id, self._obj_id, self._type_str, self._attributes + (attr,), **kwds)
+        opts = self._proxy_options.copy()
+        opts.update(kwds)
+        proxy = ObjectProxy(self._rpc_id, self._obj_id, self._type_str, self._attributes + (attr,), **opts)
         # Keep a reference to the parent proxy so that the remote object cannot be
         # released as long as this proxy is alive.
         proxy.__dict__['_parent_proxy'] = self

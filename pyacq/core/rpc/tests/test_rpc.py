@@ -21,7 +21,7 @@ def test_rpc():
             return x + y
         
         def array(self):
-            return np.arange(20)
+            return np.arange(20).astype('int64')
    
         def sleep(self, t):
             time.sleep(t)
@@ -54,6 +54,10 @@ def test_rpc():
     add = obj.add
     assert isinstance(add, ObjectProxy)
     assert add(7, 5) == 12
+    
+    # NOTE: msgpack converts list to tuple. 
+    # See: https://github.com/msgpack/msgpack-python/issues/98
+    assert obj.get_list() == (0, 'x', 7)
 
     # test async return
     fut = obj.sleep(0.1, _sync='async')
@@ -84,6 +88,21 @@ def test_rpc():
         raise AssertionError('should have raised AttributeError')
     except AttributeError:
         pass
+
+    # test deferred getattr
+    arr = obj.array(_return_type='proxy')
+    dt1 = arr.dtype.name
+    assert isinstance(dt1, ObjectProxy)
+    assert dt1._attributes == ()
+    assert dt1._get_value() == 'int64'
+    arr._set_proxy_options(defer_getattr=True)
+    dt2 = arr.dtype.name
+    assert isinstance(dt2, ObjectProxy)
+    assert dt2._obj_id == arr._obj_id
+    assert dt2._attributes == ('dtype', 'name')
+    dt3 = dt2._undefer()
+    assert dt3._attributes == ()
+    assert dt3._get_value() == 'int64'
 
     # test remote object creation / deletion
     class_proxy = client['test_class']
