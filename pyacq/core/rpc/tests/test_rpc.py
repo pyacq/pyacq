@@ -80,7 +80,7 @@ def test_rpc():
 
     # test proxy access to server
     srv = client['self']
-    assert len(srv._proxies[list_prox._obj_id]) == len(list_prox)
+    assert srv.address == server.address
 
 
     # Test remote exception raising
@@ -101,17 +101,14 @@ def test_rpc():
     # test deferred getattr
     arr = obj.array(_return_type='proxy')
     dt1 = arr.dtype.name
-    assert isinstance(dt1, ObjectProxy)
-    assert dt1._attributes == ()
-    assert dt1._get_value() == 'int64'
+    assert isinstance(dt1, str)
     arr._set_proxy_options(defer_getattr=True)
     dt2 = arr.dtype.name
     assert isinstance(dt2, ObjectProxy)
     assert dt2._obj_id == arr._obj_id
     assert dt2._attributes == ('dtype', 'name')
     dt3 = dt2._undefer()
-    assert dt3._attributes == ()
-    assert dt3._get_value() == 'int64'
+    assert dt3 == dt2
 
     # test remote object creation / deletion
     class_proxy = client['test_class']
@@ -153,6 +150,8 @@ def test_rpc():
 
     # test proxy sharing with a second server
     logger.level = logging.DEBUG
+    obj._set_proxy_options(defer_getattr=True)
+    r1 = obj.test(obj)
     server2 = RPCServer(name='some_server2', addr='tcp://*:*')
     server2['test_class'] = TestClass
     serve_thread2 = threading.Thread(target=server2.run_forever, daemon=True)
@@ -161,8 +160,6 @@ def test_rpc():
     client2 = RPCClient(server2.address)
     client2.default_proxy_options['defer_getattr'] = True
     obj3 = client2['test_class']('obj3')
-    obj._set_proxy_options(defer_getattr=True)
-    r1 = obj.test(obj)
     # send proxy from first server to second server
     r2 = obj3.test(obj)
     # check that we have a new client between the two servers
@@ -170,10 +167,14 @@ def test_rpc():
     # check all communication worked correctly
     assert r1[0] == 'obj1'
     assert r2[0] == 'obj3'
-    assert r1[1] == r2[1] == 'obj3'
+    assert r1[1] == r2[1] == 'obj1'
     assert r1[2] == r2[2] == 12
     assert np.all(r1[3] == r2[3])
     assert r1[4] == r2[4]
+    
+
+    # test proxy options transfer correctly
+    
     
 
 

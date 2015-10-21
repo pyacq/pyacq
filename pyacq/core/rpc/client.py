@@ -74,7 +74,7 @@ class RPCClient(object):
         self.sock_name = self.name
         self.socket.setsockopt(zmq.IDENTITY, self.sock_name)
         
-        info("RPC connect %s => %s", self.sock_name, address)
+        info("RPC connect to %s", address.decode())
         self.socket.connect(address)
         self.next_request_id = 0
         self.futures = weakref.WeakValueDictionary()
@@ -167,11 +167,12 @@ class RPCClient(object):
         #opts = {'obj_id': obj_id, 'attributes': attributes}
         #return self.send('get_obj_attrs', return_type=return_type, opts=opts)
 
-    def get_obj_value(self, obj, **kwds):
-        return self.send('get_obj_value', opts={'obj': obj}, **kwds)
+    def get_obj(self, obj, **kwds):
+        return self.send('get_obj', opts={'obj': obj}, **kwds)
 
     def transfer(self, obj, **kwds):
-        return self.send('transfer', opts={'obj': obj}, **kwds)
+        kwds['return_type'] = 'proxy'
+        return self.send('get_obj', opts={'obj': obj}, **kwds)
 
     def _import(self, module, **kwds):
         return self.send('import', opts={'module': module}, **kwds)
@@ -245,7 +246,7 @@ class RPCClient(object):
         This takes care of assigning return values or exceptions to existing
         Future instances.
         """
-        debug("RPC recv result [req_id=%s]", msg['req_id'])
+        debug("RPC recv result from %s [req_id=%s]", self.server_address.decode(), msg['req_id'])
         debug("    => %s" % msg)
         if msg['action'] == 'return':
             req_id = msg['req_id']

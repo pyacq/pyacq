@@ -4,6 +4,7 @@ import traceback
 import zmq
 import threading
 import builtins
+import numpy as np
 
 from ..log import debug, info, warn, error
 from .serializer import MsgpackSerializer
@@ -49,7 +50,7 @@ class RPCServer(object):
         self._serializer = MsgpackSerializer(server=self)
         
         # types that are sent by value when return_type='auto'
-        self.no_proxy_types = [type(None), str, int, float, tuple, list, dict, ObjectProxy]
+        self.no_proxy_types = [type(None), str, int, float, tuple, list, dict, ObjectProxy, np.ndarray]
         
         # Objects that may be retrieved by name using client['obj_name']
         self._namespace = {'self': self}
@@ -58,7 +59,7 @@ class RPCServer(object):
         self.next_object_id = 0
         self._proxies = {}  # obj_id: object
         
-        info("RPC start server: %s@%s", self._name.decode(), self.address.decode())
+        debug("RPC create server: %s@%s", self._name.decode(), self.address.decode())
 
     def get_proxy(self, obj, **kwds):
         """Return an ObjectProxy referring to a local object.
@@ -163,13 +164,9 @@ class RPCServer(object):
                         raise
                 else:
                     result = obj(*fnargs, **fnkwds)
-                    
-            elif action == 'get_obj_value':
-                result = opts['obj']  ## has already been unpickled into its local value
-                return_type = 'value'
-            elif action == 'transfer':
+                #debug("    => call_obj result: %r", result)
+            elif action == 'get_obj':
                 result = opts['obj']
-                return_type = 'proxy'
             elif action == 'import':
                 name = opts['module']
                 fromlist = opts.get('fromlist', [])
@@ -184,8 +181,6 @@ class RPCServer(object):
                     result = map(mod.__getattr__, fromlist)
             elif action == 'del':
                 del self.proxies[opts['obj_id']]
-                #LocalObjectProxy.releaseProxyId(opts['proxyId'])
-                #del self.proxiedObjects[opts['objId']]
             elif action == 'close':
                 result = True
             elif action == 'ping':
@@ -202,7 +197,6 @@ class RPCServer(object):
         # Send result or error back to client
         if req_id is not None:
             if exc is None:
-                debug("    => sending return value for %d: %s", req_id, result) 
                 #print "returnValue:", returnValue, result
                 if return_type == 'auto':
                     result = self.auto_proxy(result, self.no_proxy_types)
@@ -253,6 +247,7 @@ class RPCServer(object):
         return not self._closed
     
     def run_forever(self):
+        info("RPC start server: %s@%s", self._name.decode(), self.address.decode())
         RPCServer.register_server(self)
         while self.running():
             self._read_and_process_one()

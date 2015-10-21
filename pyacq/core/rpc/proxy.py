@@ -181,7 +181,7 @@ class ObjectProxy(object):
             return self
         # Transfer sends this object to the remote process and returns a new proxy.
         # In the process, this invokes any deferred attributes.
-        return self._client.transfer(self, sync=sync, return_type=return_type)
+        return self._client.get_obj(self, sync=sync, return_type=return_type)
         
     def __getattr__(self, attr):
         """
