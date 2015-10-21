@@ -140,14 +140,13 @@ class RPCServer(object):
         action = msg['action']
         req_id = msg['req_id']
         return_type = msg.get('return_type', 'auto')
-        opts = self._serializer.loads(msg['opts'])
-        
-        msg['opts'] = opts
-        info("RPC recv from %s request: %s", caller, msg)
+        opts = msg.pop('opts')
         
         # Attempt to invoke requested action
         try:
-            info("    process_one: id=%s opts=%s", req_id, opts)
+            info("RPC recv from %s request: %s", caller, msg)
+            opts = self._serializer.loads(opts)
+            info("    request opts: %s", opts)
             
             if action == 'call_obj':
                 obj = opts['obj']
@@ -199,7 +198,7 @@ class RPCServer(object):
 
             
         # Send result or error back to client
-        if return_type is not None:
+        if req_id is not None:
             if exc is None:
                 info("    handleRequest: sending return value for %d: %s", req_id, result) 
                 #print "returnValue:", returnValue, result

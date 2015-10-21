@@ -25,18 +25,17 @@ def test_rpc():
    
         def sleep(self, t):
             time.sleep(t)
+            
+        def get_list(self):
+            return [0, 'x', 7]
     
     server = RPCServer(name='some_server', addr='tcp://*:*')
     server['test_class'] = TestClass
     server['my_object'] = TestClass()
     serve_thread = threading.Thread(target=server.run_forever, daemon=True)
     serve_thread.start()
-    ## wait for server to register itself
-    #while serve_thread.ident not in RPCServer.servers_by_thread:
-        #time.sleep(1e-3)
     
     client = RPCClient.get_client(server.address)
-    assert client is not None
     
     # test clients are cached
     assert client == RPCClient.get_client(server.address)
@@ -60,6 +59,16 @@ def test_rpc():
     fut = obj.sleep(0.1, _sync='async')
     assert not fut.done()
     assert fut.result() is None
+
+    # test no return
+    assert obj.add(1, 2, _sync='off') is None
+
+    # test return by proxy
+    list_prox = obj.get_list(_return_type='proxy')
+    assert isinstance(list_prox, ObjectProxy)
+    assert list_prox._type_str == "<class 'list'>"
+    assert len(list_prox) == 3
+    assert list_prox[2] == 7
 
     # Test remote exception raising
     try:
@@ -99,6 +108,8 @@ def test_rpc():
     assert b.result() == 7
     assert a.result() == 3
 
+
+
     # test multiple clients per server
     #  disabled for now--need to put this in another thread because we don't
     #  allow multiple clients per thread
@@ -111,27 +122,6 @@ def test_rpc():
     #assert b.result() == 7
     #assert a.result() == 3
     #assert c.result() == 11
-
-
-
-    # test multiple clients sharing one socket
-    # skipping this test--clients currently do not support socket sharing
-    #server2 = Server1(name='some_server2', addr='tcp://*:5153')
-    #serve_thread2 = threading.Thread(target=server2.run_forever, daemon=True)
-    #serve_thread2.start()
-    
-    #client3 = RPCClient('some_server2', 'tcp://localhost:5153',
-                        #rpc_socket=client2._rpc_socket)
-    
-    #a = client2.add(1, 2, _sync=False)
-    #b = client3.add(3, 4, _sync=False)
-    #assert b.result() == 7
-    #assert a.result() == 3
-    
-    #client3.close()
-    #serve_thread2.join()
-    
-    
     
     
     client.close_server()

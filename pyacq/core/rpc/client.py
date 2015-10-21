@@ -100,10 +100,9 @@ class RPCClient(object):
         opts : None or dict
             Extra options to be sent with the request. Each action requires a
             different set of options.
-        return_type : 'auto' | 'proxy' | None
+        return_type : 'auto' | 'proxy'
             If 'proxy', then the return value is sent by proxy. If 'auto', then
             the server decides based on the return type whether to send a proxy.
-            If None, then no response will be sent.
         sync : str
             If 'sync', then block and return the result when it becomes available.
             If 'async', then return a Future instance immediately.
@@ -116,10 +115,12 @@ class RPCClient(object):
         
         cmd = {'action': action, 'return_type': return_type, 
                'opts': opts}
-        if sync != 'off':
+        if sync == 'off':
+            req_id = None
+        else:
             req_id = self.next_request_id
             self.next_request_id += 1
-            cmd['req_id'] = req_id
+        cmd['req_id'] = req_id
         info("RPC send req: %s => %s", self.socket.getsockopt(zmq.IDENTITY), cmd)
         
         # double-serialize opts to ensure that cmd can be read even if opts
@@ -134,6 +135,7 @@ class RPCClient(object):
         # If using ROUTER, we have to include the name of the endpoint to which
         # we are sending
         #self.socket.send_multipart([name, cmd])
+        
         if sync == 'off':
             return
         
