@@ -10,47 +10,44 @@ import msgpack
 #~ import gevent
 #~ import zmq.green as zmq
 
-from PyQt4 import QtCore,QtGui
+from PyQt4 import QtCore, QtGui
 
 import zmq
 import msgpack
 import time
 
+
 def emotiv_oscillo():
     streamhandler = StreamHandler()
-    
+
     # Configure and start
-    dev = EmotivMultiSignals(streamhandler = streamhandler)
-    dev.configure(buffer_length = 1800,
-                                device_path = '/dev/hidraw2',)
+    dev = EmotivMultiSignals(streamhandler=streamhandler)
+    dev.configure(buffer_length=1800)
     dev.initialize()
     dev.start()
-    
-    #Chan
+
+    # Chan
     app = QtGui.QApplication([])
-    w1=Oscilloscope(stream = dev.streams[0])
+    w1 = Oscilloscope(stream=dev.streams[0])
     w1.show()
-    
-    #Imp
-    w2=Oscilloscope(stream = dev.streams[1])
+
+    # Imp
+    w2 = Oscilloscope(stream=dev.streams[1])
     w2.show()
-    
-    #Gyro
-    w3=Oscilloscope(stream = dev.streams[2])
+
+    # Gyro
+    w3 = Oscilloscope(stream=dev.streams[2])
     w3.show()
 
-    #Tf chan
-    wTf=TimeFreq(stream = dev.streams[0])
-    wTf.show()    
-    
+    # Tf chan
+    wTf = TimeFreq(stream=dev.streams[0])
+    wTf.show()
+
     app.exec_()
-    
-    
-    
+
     # Stope and release the device
     dev.stop()
     dev.close()
-
 
 
 if __name__ == '__main__':
