@@ -2,6 +2,7 @@
 """
 Example for recording the three emotiv streams.
 """
+
 from pyacq import StreamHandler, EmotivMultiSignals, RawDataRecording
 from pyacq.processing.trigger import AnalogTrigger
 import msgpack
