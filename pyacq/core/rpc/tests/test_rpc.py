@@ -1,17 +1,17 @@
-import threading, atexit, time
-import logging
+import threading, atexit, time, logging
+from pyacq.core.log import logger
 from pyacq.core.rpc import RPCClient, RemoteCallException, RPCServer, ObjectProxy
 import zmq.utils.monitor
 import numpy as np
 
 
 def test_rpc():
-    previous_level = logging.getLogger().level
-    logging.getLogger().level = logging.INFO
+    previous_level = logger.level
     
     class TestClass(object):
         count = 0
-        def __init__(self):
+        def __init__(self, name):
+            self.name = name
             TestClass.count += 1
 
         def __del__(self):
@@ -28,10 +28,14 @@ def test_rpc():
             
         def get_list(self):
             return [0, 'x', 7]
+        
+        def test(self, obj):
+            return self.name, obj.name, obj.add(5, 7), obj.array(), obj.get_list()
+    
     
     server = RPCServer(name='some_server', addr='tcp://*:*')
     server['test_class'] = TestClass
-    server['my_object'] = TestClass()
+    server['my_object'] = TestClass('obj1')
     serve_thread = threading.Thread(target=server.run_forever, daemon=True)
     serve_thread.start()
     
@@ -74,6 +78,11 @@ def test_rpc():
     assert len(list_prox) == 3
     assert list_prox[2] == 7
 
+    # test proxy access to server
+    srv = client['self']
+    assert len(srv._proxies[list_prox._obj_id]) == len(list_prox)
+
+
     # Test remote exception raising
     try:
         obj.add(7, 'x')
@@ -106,9 +115,10 @@ def test_rpc():
 
     # test remote object creation / deletion
     class_proxy = client['test_class']
-    obj2 = class_proxy()
+    obj2 = class_proxy('obj2')
     assert class_proxy.count == 2
     assert obj2.add(3, 4) == 7
+    
     del obj2
     # reference management is temporarily disabled.
     #assert class_proxy.count == 1
@@ -127,6 +137,44 @@ def test_rpc():
     assert b.result() == 7
     assert a.result() == 3
 
+    
+    # test transfer
+    arr = np.ones(10, dtype='float32')
+    arr_prox = client.transfer(arr)
+    assert arr_prox.dtype.name == 'float32'
+    assert arr_prox.shape == (10,)
+
+
+    # test import
+    import os.path as osp
+    rosp = client._import('os.path')
+    assert osp.abspath(osp.dirname(__file__)) == rosp.abspath(rosp.dirname(__file__))
+
+
+    # test proxy sharing with a second server
+    logger.level = logging.DEBUG
+    server2 = RPCServer(name='some_server2', addr='tcp://*:*')
+    server2['test_class'] = TestClass
+    serve_thread2 = threading.Thread(target=server2.run_forever, daemon=True)
+    serve_thread2.start()
+    
+    client2 = RPCClient(server2.address)
+    client2.default_proxy_options['defer_getattr'] = True
+    obj3 = client2['test_class']('obj3')
+    obj._set_proxy_options(defer_getattr=True)
+    r1 = obj.test(obj)
+    # send proxy from first server to second server
+    r2 = obj3.test(obj)
+    # check that we have a new client between the two servers
+    assert (serve_thread2.ident, server.address) in RPCClient.clients_by_thread 
+    # check all communication worked correctly
+    assert r1[0] == 'obj1'
+    assert r2[0] == 'obj3'
+    assert r1[1] == r2[1] == 'obj3'
+    assert r1[2] == r2[2] == 12
+    assert np.all(r1[3] == r2[3])
+    assert r1[4] == r2[4]
+    
 
 
     # test multiple clients per server
@@ -147,7 +195,7 @@ def test_rpc():
     client.close()
     serve_thread.join()
     
-    logging.getLogger().level = previous_level
+    logger.level = previous_level
 
 
 

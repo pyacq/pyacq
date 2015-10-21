@@ -3,8 +3,9 @@ import time
 import traceback
 import zmq
 import threading
-from logging import info
+import builtins
 
+from ..log import debug, info, warn, error
 from .serializer import MsgpackSerializer
 from .proxy import ObjectProxy
 
@@ -45,7 +46,7 @@ class RPCServer(object):
         self._socket.bind(addr)
         self.address = self._socket.getsockopt(zmq.LAST_ENDPOINT)
         self._closed = False
-        self._serializer = MsgpackSerializer(self)
+        self._serializer = MsgpackSerializer(server=self)
         
         # types that are sent by value when return_type='auto'
         self.no_proxy_types = [type(None), str, int, float, tuple, list, dict, ObjectProxy]
@@ -69,7 +70,7 @@ class RPCServer(object):
         type_str = str(type(obj))
         proxy = ObjectProxy(self.address, oid, type_str, attributes=(), **kwds)
         self._proxies[oid] = obj
-        info("server %s add proxy %d: %s", self.address, oid, obj)
+        #debug("server %s add proxy %d: %s", self.address, oid, obj)
         return proxy
     
     def unwrap_proxy(self, proxy):
@@ -80,7 +81,7 @@ class RPCServer(object):
             obj = self._proxies[oid]
             for attr in proxy._attributes:
                 obj = getattr(obj, attr)
-            info("server %s unwrap proxy %d: %s", self.address, oid, obj)
+            #debug("server %s unwrap proxy %d: %s", self.address, oid, obj)
             return obj
         except KeyError:
             raise KeyError("Invalid proxy object ID %r. The object may have "
@@ -144,9 +145,10 @@ class RPCServer(object):
         
         # Attempt to invoke requested action
         try:
-            info("RPC recv from %s request: %s", caller, msg)
+            debug("RPC recv '%s' from %s [req_id=%s]", action, caller.decode(), req_id)
+            debug("    => %s", msg)
             opts = self._serializer.loads(opts)
-            info("    request opts: %s", opts)
+            debug("    => opts: %s", opts)
             
             if action == 'call_obj':
                 obj = opts['obj']
@@ -157,7 +159,7 @@ class RPCServer(object):
                     try:
                         result = obj(*fnargs)
                     except:
-                        info("Failed to call object %s: %d, %s", obj, len(fnargs), fnargs[1:])
+                        warn("Failed to call object %s: %d, %s", obj, len(fnargs), fnargs[1:])
                         raise
                 else:
                     result = obj(*fnargs, **fnkwds)
@@ -200,7 +202,7 @@ class RPCServer(object):
         # Send result or error back to client
         if req_id is not None:
             if exc is None:
-                info("    handleRequest: sending return value for %d: %s", req_id, result) 
+                debug("    => sending return value for %d: %s", req_id, result) 
                 #print "returnValue:", returnValue, result
                 if return_type == 'auto':
                     result = self.auto_proxy(result, self.no_proxy_types)
@@ -210,11 +212,11 @@ class RPCServer(object):
                 try:
                     self._send_result(caller, req_id, rval=result)
                 except:
-                    info("    process_one: Failed to send result for %d", req_id) 
+                    warn("    => Failed to send result for %d", req_id) 
                     exc = sys.exc_info()
                     self._send_error(caller, req_id, exc)
             else:
-                info("    process_one: returning exception for %d: %s", req_id, exc) 
+                warn("    => returning exception for %d: %s", req_id, exc) 
                 self._send_error(caller, req_id, exc)
                     
         elif exc is not None:
@@ -233,7 +235,8 @@ class RPCServer(object):
     def _send_result(self, caller, req_id, rval=None, error=None):
         result = {'action': 'return', 'req_id': req_id,
                   'rval': rval, 'error': error}
-        info("RPC send res: %s %s", caller, result)
+        debug("RPC send result to %s [rpc_id=%s]", caller.decode(), result['req_id'])
+        debug("    => %s", result)
         data = self._serializer.dumps(result)
         self._socket.send_multipart([caller, data])
 

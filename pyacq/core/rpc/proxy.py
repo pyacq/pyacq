@@ -2,131 +2,28 @@ import os
 import weakref
 
 
-
-"""
-proxy options:
-    calls/getattrs are sync/async/off
-    call args are proxied or autoproxied w/type list
-    return values are proxied or autoproxied w/type list
-    
-
-
-
-
-
-
-
-
-
-
-
-ObjectProxy is uniquely identified system-wide by
-    1. rpc_id
-    2. obj_id
-    3. attributes
-    (ObjectProxy does not have parent.)
-
-Each unique ObjectProxy can only exist once per thread.
-
-ObjectProxy manages ref counts for all proxies on a per-thread basis
-    Need a globally unique identifier for threads:
-        GTID = global thread ID     ?
-            HOST+PID+TID
-        Maybe just use a random ID?
-    
-Every time a proxy is created, the rpc server must be informed of the GTID that will own the new proxy
-    - this means all rpc servers and clients must know the GTID of their endpoints.
-        (maybe we should replace `ping` with `ident`)
-          srv_gtid = server.send('ident', cli_gtid)
-
-ALL rpc servers should have a proxy to the manager for sending log messages and thread/process failure messages.
-
-Ony one server per thread, and there can be only one client per PID+TID endpoint per thread. Need singleton
-management like `get_server()` and `get_client(rpc_id)`
-
-
-
-Cases:
-
-    1. server returns locally proxied object to client
-        LocalObjectProxy knows GTID of client, registers reference with server.
-    2. client sends locally proxied object to server (this implies a locally running server)
-        LocalObjectProxy needs to know the GTID of the remote server and register the reference with
-        the local server.
-    3. client sends proxy to server
-        ObjectProxy needs to know the server's GTID and register the reference with the proxy's server.
-        This must happen before the proxy is sent.
-    4. server returns proxy to client
-        ObjectProxy needs to know the client's GTID and register the reference with the proxy's server.
-        This must happen before the proxy is sent.
-        
-    In all of these cases, a proxy that is lost in transit (eg: if there is an unserialization error)
-    will cause a reference leak.
-
-
-
-
-
-
-"""
-
-
-
-
-
-
-
-#class LocalObjectProxy(object):
-    #"""
-    #Used for wrapping local objects to ensure that they are send by proxy to a remote host.
-    #Note that 'proxy' is just a shorter alias for LocalObjectProxy.
-    
-    #For example::
-    
-        #data = [1,2,3,4,5]
-        #remotePlot.plot(data)         ## by default, lists are pickled and sent by value
-        #remotePlot.plot(proxy(data))  ## force the object to be sent by proxy
-    
-    #"""
-    #def __init__(self, server, obj, attributes=(), **opts):
-        #"""
-        #Create a 'local' proxy object that, when sent to a remote host,
-        #will appear as a normal ObjectProxy to *obj*. 
-        #Any extra keyword arguments are passed to proxy._set_proxy_options()
-        #on the remote side.
-        #"""
-        #self.server = weakref.ref(server)
-        #self.type_str = repr(obj)
-        #self.obj = obj
-        #self.attributes = attributes
-        #self.opts = opts
-
-    #def save(self):
-        #"""Convert this proxy to a serializable structure.
-        #"""
-        #state = {
-            #'rpc_id': self.server().address, 
-            #'obj_id': id(self.obj), 
-            #'type_str': self.type_str,
-            #'attributes': self.attributes,
-        #}
-        #state.update(self.opts)
-        #return state
-
-        
-### alias
-#proxy = LocalObjectProxy
-
-
-
 class ObjectProxy(object):
     """
-    Proxy to an object stored by a remote process. Proxies are created
-    by calling Process._import(), Process.transfer(), or by requesting/calling
-    attributes on existing proxy objects.
+    Proxy to an object stored by a remote RPCServer.
     
-    For the most part, this object can be used exactly as if it
-    were a local object::
+    A proxy behaves in most ways like the object that it wraps--you can request
+    the same attributes, call methods, etc. There are a few important
+    differences:
+    
+    * A proxy can be on a different thread, process, or machine than its object,
+      so long as the object's thread has an RPCServer and the proxy's thread has
+      an associated RPCClient.
+    * Attribute lookups and method calls can be slower because the request and
+      response must traverse a socket. These can also be performed asynchronously
+      to avoid blocking the client thread.
+    * Function argument and return types must be serializable or proxyable.
+      Most basic types can be serialized, including numpy arrays. All other
+      objects are automatically proxied, but there are some cases when this will
+      not work well.
+    * `__repr__` is overridden on proxies to allow safe debugging.
+    
+    For the most part, object proxies can be used exactly as if they are
+    local objects::
     
         rsys = proc._import('sys')   # returns proxy to sys module on remote process
         rsys.stdout                  # proxy to remote sys.stdout
@@ -273,8 +170,9 @@ class ObjectProxy(object):
         return (unpickleObjectProxy, (self._rpc_id, self._obj_id, self._type_str, self._attributes))
     
     def __repr__(self):
-        rep = "<ObjectProxy for process %s, object %d: %s >" % (self._rpc_id, self._obj_id, self._type_str)
-        return '.'.join((rep,) + self._attributes)
+        orep = '.'.join((self._type_str,) + self._attributes)
+        rep = '<ObjectProxy for %s[%d] %s >' % (self._rpc_id.decode(), self._obj_id, orep)
+        return rep
 
     def _undefer(self, sync='sync', return_type='auto'):
         """Process any deferred attribute lookups and return the result.

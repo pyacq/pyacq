@@ -92,8 +92,9 @@ class MsgpackSerializer:
     Note that lists are converted to tuple in transit. See:
     https://github.com/msgpack/msgpack-python/issues/98
     """
-    def __init__(self, server=None):
+    def __init__(self, server=None, client=None):
         self.server = server
+        self.client = client
         assert HAVE_MSGPACK
     
     def dumps(self, obj):
@@ -155,6 +156,8 @@ class MsgpackSerializer:
                 return None
             elif type_name == 'proxy':
                 proxy = ObjectProxy(**dct)
+                if self.client is not None:
+                    proxy._set_proxy_options(**self.client.default_proxy_options)
                 if self.server is not None and proxy._rpc_id == self.server.address:
                     return self.server.unwrap_proxy(proxy)
                 else:
