@@ -78,6 +78,8 @@ class RPCServer(object):
         try:
             oid = proxy._obj_id
             obj = self._proxies[oid]
+            for attr in proxy._attributes:
+                obj = getattr(obj, attr)
             info("server %s unwrap proxy %d: %s", self.address, oid, obj)
             return obj
         except KeyError:

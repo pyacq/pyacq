@@ -1,10 +1,8 @@
 import threading, atexit, time
 import logging
-from pyacq.core.rpc import RPCClient, RemoteCallException, RPCServer
+from pyacq.core.rpc import RPCClient, RemoteCallException, RPCServer, ObjectProxy
 import zmq.utils.monitor
 import numpy as np
-
-
 
 
 def test_rpc():
@@ -51,12 +49,15 @@ def test_rpc():
     
     # get proxy to TestClass instance
     obj = client['my_object']
+    assert isinstance(obj, ObjectProxy)
     
     # test call / sync return
-    assert obj.add(7, 5) == 12
+    add = obj.add
+    assert isinstance(add, ObjectProxy)
+    assert add(7, 5) == 12
 
     # test async return
-    fut = obj.sleep(0.1, _sync=False)
+    fut = obj.sleep(0.1, _sync='async')
     assert not fut.done()
     assert fut.result() is None
 
@@ -71,11 +72,9 @@ def test_rpc():
 
     try:
         client.asdffhgk
-    except RemoteCallException as err:
-        if err.type_str != 'AttributeError':
-            raise
-    else:
         raise AssertionError('should have raised AttributeError')
+    except AttributeError:
+        pass
 
     # test remote object creation / deletion
     class_proxy = client['test_class']
@@ -83,7 +82,8 @@ def test_rpc():
     assert class_proxy.count == 2
     assert obj2.add(3, 4) == 7
     del obj2
-    assert class_proxy.count == 1
+    # reference management is temporarily disabled.
+    #assert class_proxy.count == 1
 
     # test timeouts
     try:
@@ -94,21 +94,25 @@ def test_rpc():
         raise AssertionError('should have raised TimeoutError')
 
     # test result order
-    a = obj.add(1, 2, _sync=False)
-    b = obj.add(3, 4, _sync=False)
+    a = obj.add(1, 2, _sync='async')
+    b = obj.add(3, 4, _sync='async')
     assert b.result() == 7
     assert a.result() == 3
 
     # test multiple clients per server
-    client2 = RPCClient('some_server', 'tcp://localhost:5152')
+    #  disabled for now--need to put this in another thread because we don't
+    #  allow multiple clients per thread
+    #client2 = RPCClient('tcp://localhost:5152')
     
-    obj2 = client2['my_object']
-    a = obj2.add(1, 2, _sync=False)
-    b = obj.add(3, 4, _sync=False)
-    c = obj2.add(5, 6, _sync=False)
-    assert b.result() == 7
-    assert a.result() == 3
-    assert c.result() == 11
+    #obj2 = client2['my_object']
+    #a = obj2.add(1, 2, _sync='async')
+    #b = obj.add(3, 4, _sync='async')
+    #c = obj2.add(5, 6, _sync='async')
+    #assert b.result() == 7
+    #assert a.result() == 3
+    #assert c.result() == 11
+
+
 
     # test multiple clients sharing one socket
     # skipping this test--clients currently do not support socket sharing
@@ -127,10 +131,14 @@ def test_rpc():
     #client3.close()
     #serve_thread2.join()
     
+    
+    
+    
+    client.close_server()
     client.close()
     serve_thread.join()
     
-    logging.getLogger().level=previous_level
+    logging.getLogger().level = previous_level
 
 
 

@@ -144,13 +144,13 @@ class ObjectProxy(object):
         pid = ros.getpid()
         
         ## asynchronous call
-        request = ros.getpid(_call_sync='async')
+        request = ros.getpid(_sync='async')
         while not request.hasResult():
             time.sleep(0.01)
         pid = request.result()
         
         ## disable return when we know it isn't needed
-        rsys.stdout.write('hello', _call_sync='off')
+        rsys.stdout.write('hello', _sync='off')
     
     Additionally, values returned from a remote function call are automatically
     returned either by value (must be picklable) or by proxy. 
@@ -160,7 +160,7 @@ class ObjectProxy(object):
         arrProxy = rnp.array([1,2,3,4], _return_type='proxy')
         arrValue = rnp.array([1,2,3,4], _return_type='value')
     
-    The default call_sync and return_type behaviors (as well as others) can be set 
+    The default sync and return_type behaviors (as well as others) can be set 
     for each proxy individually using ObjectProxy._set_proxy_options() or globally using 
     proc.set_proxy_options(). 
     
@@ -183,7 +183,7 @@ class ObjectProxy(object):
         
         ## attributes that affect the behavior of the proxy. 
         self.__dict__['_proxy_options'] = {
-            'call_sync': 'sync',      ## 'sync', 'async', 'off'
+            'sync': 'sync',      ## 'sync', 'async', 'off'
             'timeout': 10,            ## float
             'return_type': 'auto',    ## 'proxy', 'value', 'auto'
             #'auto_proxy_args': False, ## bool
@@ -202,7 +202,7 @@ class ObjectProxy(object):
         Options are:
         
         =============  =============================================================
-        call_sync       'sync', 'async', 'off', or None. 
+        sync       'sync', 'async', 'off', or None. 
                        If 'async', then calling methods will return a Request object
                        which can be used to inquire later about the result of the 
                        method call.
@@ -276,14 +276,14 @@ class ObjectProxy(object):
         rep = "<ObjectProxy for process %s, object %d: %s >" % (self._rpc_id, self._obj_id, self._type_str)
         return '.'.join((rep,) + self._attributes)
 
-    def _undefer(self, call_sync='sync', return_type='auto'):
+    def _undefer(self, sync='sync', return_type='auto'):
         """Process any deferred attribute lookups and return the result.
         """
         if len(self._attributes) == 0:
             return self
         # Transfer sends this object to the remote process and returns a new proxy.
         # In the process, this invokes any deferred attributes.
-        return self._client.transfer(self, call_sync=call_sync, return_type=return_type)
+        return self._client.transfer(self, sync=sync, return_type=return_type)
         
     def __getattr__(self, attr):
         """
@@ -318,16 +318,18 @@ class ObjectProxy(object):
         Attempts to call the proxied object from the remote process.
         Accepts extra keyword arguments:
         
-            _call_sync    'off', 'sync', or 'async'
-            _return_type   'value', 'proxy', or 'auto'
+            _sync    'off', 'sync', or 'async'
+            _return_type  'value', 'proxy', or 'auto'
+            _timeout      float 
         
         If the remote call raises an exception on the remote process,
         it will be re-raised on the local process.
         
         """
         opts = {
-            'call_sync': self._proxy_options['call_sync'],
+            'sync': self._proxy_options['sync'],
             'return_type': self._proxy_options['return_type'],
+            'timeout': self._proxy_options['timeout'],
         }
         for k in opts:
             opts[k] = kwargs.pop('_'+k, opts[k])
@@ -344,10 +346,10 @@ class ObjectProxy(object):
         return self._getSpecialAttr('__getitem__')(*args)
     
     def __setitem__(self, *args):
-        return self._getSpecialAttr('__setitem__')(*args, _call_sync='off')
+        return self._getSpecialAttr('__setitem__')(*args, _sync='off')
         
     def __setattr__(self, *args):
-        return self._getSpecialAttr('__setattr__')(*args, _call_sync='off')
+        return self._getSpecialAttr('__setattr__')(*args, _sync='off')
         
     def __str__(self, *args):
         # for safe printing
@@ -379,25 +381,25 @@ class ObjectProxy(object):
         return self._getSpecialAttr('__pow__')(*args)
         
     def __iadd__(self, *args):
-        return self._getSpecialAttr('__iadd__')(*args, _call_sync='off')
+        return self._getSpecialAttr('__iadd__')(*args, _sync='off')
     
     def __isub__(self, *args):
-        return self._getSpecialAttr('__isub__')(*args, _call_sync='off')
+        return self._getSpecialAttr('__isub__')(*args, _sync='off')
         
     def __idiv__(self, *args):
-        return self._getSpecialAttr('__idiv__')(*args, _call_sync='off')
+        return self._getSpecialAttr('__idiv__')(*args, _sync='off')
         
     def __itruediv__(self, *args):
-        return self._getSpecialAttr('__itruediv__')(*args, _call_sync='off')
+        return self._getSpecialAttr('__itruediv__')(*args, _sync='off')
         
     def __ifloordiv__(self, *args):
-        return self._getSpecialAttr('__ifloordiv__')(*args, _call_sync='off')
+        return self._getSpecialAttr('__ifloordiv__')(*args, _sync='off')
         
     def __imul__(self, *args):
-        return self._getSpecialAttr('__imul__')(*args, _call_sync='off')
+        return self._getSpecialAttr('__imul__')(*args, _sync='off')
         
     def __ipow__(self, *args):
-        return self._getSpecialAttr('__ipow__')(*args, _call_sync='off')
+        return self._getSpecialAttr('__ipow__')(*args, _sync='off')
         
     def __rshift__(self, *args):
         return self._getSpecialAttr('__rshift__')(*args)
@@ -406,10 +408,10 @@ class ObjectProxy(object):
         return self._getSpecialAttr('__lshift__')(*args)
         
     def __irshift__(self, *args):
-        return self._getSpecialAttr('__irshift__')(*args, _call_sync='off')
+        return self._getSpecialAttr('__irshift__')(*args, _sync='off')
         
     def __ilshift__(self, *args):
-        return self._getSpecialAttr('__ilshift__')(*args, _call_sync='off')
+        return self._getSpecialAttr('__ilshift__')(*args, _sync='off')
         
     def __eq__(self, *args):
         return self._getSpecialAttr('__eq__')(*args)
@@ -439,13 +441,13 @@ class ObjectProxy(object):
         return self._getSpecialAttr('__xor__')(*args)
         
     def __iand__(self, *args):
-        return self._getSpecialAttr('__iand__')(*args, _call_sync='off')
+        return self._getSpecialAttr('__iand__')(*args, _sync='off')
         
     def __ior__(self, *args):
-        return self._getSpecialAttr('__ior__')(*args, _call_sync='off')
+        return self._getSpecialAttr('__ior__')(*args, _sync='off')
         
     def __ixor__(self, *args):
-        return self._getSpecialAttr('__ixor__')(*args, _call_sync='off')
+        return self._getSpecialAttr('__ixor__')(*args, _sync='off')
         
     def __mod__(self, *args):
         return self._getSpecialAttr('__mod__')(*args)

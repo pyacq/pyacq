@@ -88,9 +88,9 @@ class RPCClient(object):
         self.ensure_connection()
 
     def __getitem__(self, name):
-        return self.send('getitem', opts={'name': name}, call_sync='sync')
+        return self.send('getitem', opts={'name': name}, sync='sync')
 
-    def send(self, action, opts=None, return_type='auto', call_sync='sync', timeout=10.0):
+    def send(self, action, opts=None, return_type='auto', sync='sync', timeout=10.0):
         """Send a request to the remote process.
         
         Parameters
@@ -104,19 +104,19 @@ class RPCClient(object):
             If 'proxy', then the return value is sent by proxy. If 'auto', then
             the server decides based on the return type whether to send a proxy.
             If None, then no response will be sent.
-        call_sync : str
+        sync : str
             If 'sync', then block and return the result when it becomes available.
             If 'async', then return a Future instance immediately.
             If 'off', then ask the remote server NOT to send a response and
             return None immediately.
         timeout : float
             The amount of time to wait for a response when in synchronous
-            operation (call_sync='sync').
+            operation (sync='sync').
         """
         
         cmd = {'action': action, 'return_type': return_type, 
                'opts': opts}
-        if call_sync != 'off':
+        if sync != 'off':
             req_id = self.next_request_id
             self.next_request_id += 1
             cmd['req_id'] = req_id
@@ -134,17 +134,17 @@ class RPCClient(object):
         # If using ROUTER, we have to include the name of the endpoint to which
         # we are sending
         #self.socket.send_multipart([name, cmd])
-        if call_sync == 'off':
+        if sync == 'off':
             return
         
         fut = Future(self, req_id)
         self.futures[req_id] = fut
-        if call_sync == 'async':
+        if sync == 'async':
             return fut
-        elif call_sync == 'sync':
+        elif sync == 'sync':
             return fut.result(timeout=timeout)
         else:
-            raise ValueError('Invalid call_sync value: %s' % call_sync)
+            raise ValueError('Invalid sync value: %s' % sync)
 
     def call_obj(self, obj, args=None, kwargs=None, **kwds):
         opts = {'obj': obj, 'args': args, 'kwargs': kwargs} 
@@ -166,7 +166,7 @@ class RPCClient(object):
         try:
             start = time.time()
             while time.time() < start + timeout:
-                fut = self.send('ping', call_sync='async')
+                fut = self.send('ping', sync='async')
                 try:
                     result = fut.result(timeout=0.1)
                     self.connect_established = True
@@ -244,6 +244,11 @@ class RPCClient(object):
         # reference management is disabled for now..
         #self.send('release_all', return_type=None) 
         self.socket.close()
+
+    def close_server(self, sync='sync', **kwds):
+        """Ask the server to close.
+        """
+        self.send('close', sync=sync, **kwds)
 
     def __del__(self):
         self.close()
