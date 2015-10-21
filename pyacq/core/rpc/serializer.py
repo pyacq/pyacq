@@ -112,10 +112,6 @@ class MsgpackSerializer:
         return msgpack.loads(msg, encoding='utf8', use_list=False, object_hook=self.decode)
 
     def encode(self, obj):
-        enc = self._encode(obj)
-        return enc
-
-    def _encode(self, obj):
         # note: encode is only called for types that are not recognized internally
         # by msgpack. 
         if isinstance(obj, np.ndarray):
@@ -132,11 +128,13 @@ class MsgpackSerializer:
         elif isinstance(obj, datetime.date):
             return {encode_key: 'date',
                     'data': obj.strftime('%Y-%m-%d')}
+        elif obj is None:
+            return {encode_key: 'none'}
         else:
             # All unrecognized types must be converted to proxy.
-            if self.server is None:
-                raise TypeError("Cannot serialize type %s without proxy server." % type(obj))
             if not isinstance(obj, ObjectProxy):
+                if self.server is None:
+                    raise TypeError("Cannot make proxy to %r without proxy server." % obj)
                 obj = self.server.get_proxy(obj)
             ser = {encode_key: 'proxy'}
             ser.update(obj.save())
@@ -153,6 +151,8 @@ class MsgpackSerializer:
                 return datetime.datetime.strptime(dct['data'], '%Y-%m-%dT%H:%M:%S.%f')
             elif type_name == 'date':
                 return datetime.datetime.strptime(dct['data'], '%Y-%m-%d').date()
+            elif type_name == 'none':
+                return None
             elif type_name == 'proxy':
                 proxy = ObjectProxy(**dct)
                 if self.server is not None and proxy._rpc_id == self.server.address:

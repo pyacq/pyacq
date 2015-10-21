@@ -2,7 +2,24 @@ import os
 import weakref
 
 
+
 """
+proxy options:
+    calls/getattrs are sync/async/off
+    call args are proxied or autoproxied w/type list
+    return values are proxied or autoproxied w/type list
+    
+
+
+
+
+
+
+
+
+
+
+
 ObjectProxy is uniquely identified system-wide by
     1. rpc_id
     2. obj_id
@@ -156,17 +173,22 @@ class ObjectProxy(object):
         self.__dict__['_obj_id'] = obj_id
         self.__dict__['_type_str'] = type_str
         self.__dict__['_attributes'] = attributes
+        self.__dict__['_parent_proxy'] = None
+        
+        # identify local client/server instances this proxy might belong to
+        from .client import RPCClient
+        self.__dict__['_client'] = RPCClient.get_client(self._rpc_id)
+        from .server import RPCServer
+        self.__dict__['_server'] = RPCServer.get_server()
         
         ## attributes that affect the behavior of the proxy. 
-        ## in all cases, a value of None causes the proxy to ask
-        ## its parent event handler to make the decision
         self.__dict__['_proxy_options'] = {
-            'call_sync': None,      ## 'sync', 'async', None 
-            'timeout': None,       ## float, None
-            'return_type': None,    ## 'proxy', 'value', 'auto', None
-            'defer_getattr': None,  ## True, False, None
-            'no_proxy_types': None,  ## list of types to send by value instead of by proxy
-            'auto_proxy': None,
+            'call_sync': 'sync',      ## 'sync', 'async', 'off'
+            'timeout': 10,            ## float
+            'return_type': 'auto',    ## 'proxy', 'value', 'auto'
+            #'auto_proxy_args': False, ## bool
+            'defer_getattr': False,   ## True, False
+            'no_proxy_types': [type(None), str, int, float, tuple, list, dict, ObjectProxy],
         }
         
         self._set_proxy_options(**kwds)
@@ -233,41 +255,37 @@ class ObjectProxy(object):
             'type_str': self._type_str,
             'attributes': self._attributes,
         }
-        state.update(self._proxy_options)
+        # TODO: opts DO need to be sent in some cases, like when sending
+        # callbacks.
+        #state.update(self._proxy_options)
         return state
         
     def _get_value(self):
         """
-        Return the value of the proxied object
-        (the remote object must be picklable)
+        Return the value of the proxied object.
         """
-        client = Client.get_client(self.rpc_id)
-        return client.get_obj_value(self)
+        if self._client is None:
+            return self._server.unwrap_proxy(self)
+        else:
+            return self._client.get_obj_value(self)
         
-    def _get_proxy_options(self):
-        opts = self._proxy_options.copy()
-        client = Client.get_client(self.rpc_id)
-        opts.update(client.default_proxy_opts)
-        return opts
-    
     def __reduce__(self):
         return (unpickleObjectProxy, (self._rpc_id, self._obj_id, self._type_str, self._attributes))
     
     def __repr__(self):
         rep = "<ObjectProxy for process %s, object %d: %s >" % (self._rpc_id, self._obj_id, self._type_str)
-        print("ATTR:", self._attributes, self._rpc_id, self._obj_id, self._type_str)
         return '.'.join((rep,) + self._attributes)
 
-    def _undefer(self):
-        """Return a non-deferred proxy to the object referenced by this proxy.        
+    def _undefer(self, call_sync='sync', return_type='auto'):
+        """Process any deferred attribute lookups and return the result.
         """
         if len(self._attributes) == 0:
             return self
         # Transfer sends this object to the remote process and returns a new proxy.
         # In the process, this invokes any deferred attributes.
-        return self._client.transfer(self)
+        return self._client.transfer(self, call_sync=call_sync, return_type=return_type)
         
-    def __getattr__(self, attr, **kwds):
+    def __getattr__(self, attr):
         """
         Calls __getattr__ on the remote object and returns the attribute
         by value or by proxy depending on the options set (see
@@ -279,29 +297,23 @@ class ObjectProxy(object):
         but may also defer a possible AttributeError until later, making
         them more difficult to debug.
         """
-        opts = self._get_proxy_options()
-        for k in opts:
-            if '_'+k in kwds:
-                opts[k] = kwds.pop('_'+k)
-        if len(kwds) > 0:
-            raise NameError("Invalid keyword argument(s): %s" % list(kwds.keys()))
-        prox = self._deferred_attr(attr, **opts)
-        if opts['defer_getattr'] is True:
+        prox = self._deferred_attr(attr)
+        if self._proxy_options['defer_getattr'] is True:
             return prox
         else:
             return prox._undefer()
     
-    def _deferred_attr(self, attr):
+    def _deferred_attr(self, attr, **kwds):
         """Return a proxy to an attribute of this object. The attribute lookup
         is deferred.
         """
-        proxy = ObjectProxy(self._rpc_id, self._obj_id, self._type_str, self._attributes + (attr,))
+        proxy = ObjectProxy(self._rpc_id, self._obj_id, self._type_str, self._attributes + (attr,), **kwds)
         # Keep a reference to the parent proxy so that the remote object cannot be
         # released as long as this proxy is alive.
-        proxy._parent_proxy = self
+        proxy.__dict__['_parent_proxy'] = self
         return proxy
     
-    def __call__(self, *args, **kwds):
+    def __call__(self, *args, **kwargs):
         """
         Attempts to call the proxied object from the remote process.
         Accepts extra keyword arguments:
@@ -313,12 +325,14 @@ class ObjectProxy(object):
         it will be re-raised on the local process.
         
         """
-        opts = self._get_proxy_options()
+        opts = {
+            'call_sync': self._proxy_options['call_sync'],
+            'return_type': self._proxy_options['return_type'],
+        }
         for k in opts:
-            if '_'+k in kwds:
-                opts[k] = kwds.pop('_'+k)
-        return self._client.call_obj(obj=self, args=args, kwds=kwds, **opts)
-    
+            opts[k] = kwargs.pop('_'+k, opts[k])
+        return self._client.call_obj(obj=self, args=args, kwargs=kwargs, **opts)
+
     
     # Explicitly proxy special methods. Is there a better way to do this??
     
@@ -336,7 +350,9 @@ class ObjectProxy(object):
         return self._getSpecialAttr('__setattr__')(*args, _call_sync='off')
         
     def __str__(self, *args):
-        return self._getSpecialAttr('__str__')(*args, _return_type='value')
+        # for safe printing
+        return repr(self)
+        #return self._getSpecialAttr('__str__')(*args, _return_type='value')
         
     def __len__(self, *args):
         return self._getSpecialAttr('__len__')(*args)

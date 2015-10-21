@@ -7,6 +7,7 @@ from logging import info
 import zmq
 
 from .serializer import MsgpackSerializer
+from .proxy import ObjectProxy
 
 
 class RPCClient(object):
@@ -21,13 +22,8 @@ class RPCClient(object):
         
     Parameters
     ----------
-    name : str
-        The identifier used by the remote server.
-    addr : URL
+    address : URL
         Address of RPC server to connect to.
-    rpc_socket : None or RPCClientSocket
-        Optional RPCClientSocket with which to connect to the server. This
-        allows multiple RPC connections to share a single socket.
     """
     
     clients_by_thread = {}  # (thread_id, rpc_addr): client
@@ -36,12 +32,27 @@ class RPCClient(object):
     def get_client(address):
         """Return the RPC client for this thread and a given server address.
         
-        If no client exists, raise KeyError.
+        If no client exists already, then a new one will be created. If the 
+        server is running in the current thread, then return None.
         """
-        return RPCClient.clients_by_thread[(threading.current_thread().ident, address)]
-        
+        try:
+            return RPCClient.clients_by_thread[(threading.current_thread().ident, address)]
+        except KeyError:
+            from .server import RPCServer
+            server = RPCServer.get_server()
+            if server is not None and server.address == address:
+                # address is for local RPC server; don't need client.
+                return None
+            else:
+                # create a new client!
+                return RPCClient(address)
     
-    def __init__(self, name, addr):
+    def __init__(self, address):
+        key = (threading.current_thread().ident, address)
+        if key in RPCClient.clients_by_thread:
+            raise KeyError("An RPCClient instance already exists for this address."
+                " Use RPCClient.get_client(address) instead.")
+        
         # ROUTER is fully asynchronous and may connect to multiple endpoints.
         # We can use ROUTER to allow this socket to connect to multiple servers.
         # However this adds complexity with little benefit, as we can just use
@@ -53,17 +64,16 @@ class RPCClient(object):
         # DEALER is fully asynchronous--we can send or receive at any time, and
         # unlike ROUTER, it only connects to a single endpoint.
         self.socket = zmq.Context.instance().socket(zmq.DEALER)
-        self.sock_name = ('%d-%x' % (os.getpid(), id(self))).encode()
+        self.sock_name = ('%d-%x:%s' % (os.getpid(), threading.current_thread().ident, address.decode())).encode()
         self.socket.setsockopt(zmq.IDENTITY, self.sock_name)
         
-        info("RPC connect %s => %s@%s", self.sock_name, name, addr)
-        self.socket.connect(addr)
+        info("RPC connect %s => %s", self.sock_name, address)
+        self.socket.connect(address)
         self.next_request_id = 0
         self.futures = weakref.WeakValueDictionary()
         
-        RPCClient.clients_by_thread[(threading.current_thread().ident, addr)] = self
+        RPCClient.clients_by_thread[key] = self
         
-        self.name = name.encode()
         self.connect_established = False
         self.establishing_connect = False
 
@@ -78,52 +88,74 @@ class RPCClient(object):
         self.ensure_connection()
 
     def __getitem__(self, name):
-        fut = self.send('getitem', opts={'name': name})
-        return fut.result()
+        return self.send('getitem', opts={'name': name}, call_sync='sync')
 
-    def send(self, action, return_type='auto', opts=None):
+    def send(self, action, opts=None, return_type='auto', call_sync='sync', timeout=10.0):
         """Send a request to the remote process.
         
         Parameters
         ----------
         action : str
             The action to invoke on the remote process.
+        opts : None or dict
+            Extra options to be sent with the request. Each action requires a
+            different set of options.
         return_type : 'auto' | 'proxy' | None
             If 'proxy', then the return value is sent by proxy. If 'auto', then
             the server decides based on the return type whether to send a proxy.
             If None, then no response will be sent.
-        opts : None or dict
-            Extra options to be sent with the request.
+        call_sync : str
+            If 'sync', then block and return the result when it becomes available.
+            If 'async', then return a Future instance immediately.
+            If 'off', then ask the remote server NOT to send a response and
+            return None immediately.
+        timeout : float
+            The amount of time to wait for a response when in synchronous
+            operation (call_sync='sync').
         """
-        req_id = self.next_request_id
-        self.next_request_id += 1
+        
+        cmd = {'action': action, 'return_type': return_type, 
+               'opts': opts}
+        if call_sync != 'off':
+            req_id = self.next_request_id
+            self.next_request_id += 1
+            cmd['req_id'] = req_id
+        info("RPC send req: %s => %s", self.socket.getsockopt(zmq.IDENTITY), cmd)
         
         # double-serialize opts to ensure that cmd can be read even if opts
         # cannot.
         # TODO: This might be expensive; a better way might be to send opts in
         # a subsequent packet, but this makes the protocol more complicated..
-        opts = self.serializer.dumps(opts)
-        cmd = {'action': action, 'req_id': req_id, 'return_type': return_type, 'opts': opts}
+        cmd['opts'] = self.serializer.dumps(cmd['opts'])
         cmd = self.serializer.dumps(cmd)
         
-        info("RPC send req: %s => %s", self.socket.getsockopt(zmq.IDENTITY), cmd)
         self.socket.send(cmd)
         
         # If using ROUTER, we have to include the name of the endpoint to which
         # we are sending
         #self.socket.send_multipart([name, cmd])
+        if call_sync == 'off':
+            return
         
         fut = Future(self, req_id)
         self.futures[req_id] = fut
-        return fut
+        if call_sync == 'async':
+            return fut
+        elif call_sync == 'sync':
+            return fut.result(timeout=timeout)
+        else:
+            raise ValueError('Invalid call_sync value: %s' % call_sync)
 
-    def call_obj(self, obj_id, args=None, kwargs=None, return_type='auto'):
-        opts = {'obj_id': obj_id, 'args': args, 'kwargs': kwargs} 
-        return self.send('call_obj', return_type=return_type, opts=opts)
+    def call_obj(self, obj, args=None, kwargs=None, **kwds):
+        opts = {'obj': obj, 'args': args, 'kwargs': kwargs} 
+        return self.send('call_obj', opts=opts, **kwds)
 
-    def get_obj_attr(self, obj_id, attributes, return_type='auto'):
-        opts = {'obj_id': obj_id, 'attributes': attributes}
-        return self.send('get_obj_attrs', return_type=return_type, opts=opts)
+    #def get_obj_attr(self, obj_id, attributes, return_type='auto'):
+        #opts = {'obj_id': obj_id, 'attributes': attributes}
+        #return self.send('get_obj_attrs', return_type=return_type, opts=opts)
+
+    def transfer(self, obj, **kwds):
+        return self.send('transfer', opts={'obj': obj}, **kwds)
 
     def ensure_connection(self, timeout=1.0):
         """Make sure RPC server is connected and available.
@@ -134,7 +166,7 @@ class RPCClient(object):
         try:
             start = time.time()
             while time.time() < start + timeout:
-                fut = self.send('ping')
+                fut = self.send('ping', call_sync='async')
                 try:
                     result = fut.result(timeout=0.1)
                     self.connect_established = True
@@ -197,9 +229,9 @@ class RPCClient(object):
         info("RPC recv res: %s", msg)
         if msg['action'] == 'return':
             req_id = msg['req_id']
-            if req_id not in self.futures:
+            fut = self.futures.pop(req_id, None)
+            if fut is None:
                 return
-            fut = self.futures[req_id]
             if msg['error'] is not None:
                 exc = RemoteCallException(*msg['error'])
                 fut.set_exception(exc)
@@ -209,7 +241,8 @@ class RPCClient(object):
             raise ValueError("Invalid action '%s'" % msg['action'])
     
     def close(self):
-        self.send('release_all', return_type=None) 
+        # reference management is disabled for now..
+        #self.send('release_all', return_type=None) 
         self.socket.close()
 
     def __del__(self):
@@ -244,6 +277,11 @@ class Future(concurrent.futures.Future):
         return False
 
     def result(self, timeout=None):
+        """Return the result of this Future.
+        
+        If the result is not yet available, then this call will block until
+        the result has arrived or the timeout elapses.
+        """
         self.socket.process_until_future(self, timeout=timeout)
         return concurrent.futures.Future.result(self)
 

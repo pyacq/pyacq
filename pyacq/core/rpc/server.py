@@ -21,15 +21,23 @@ class RPCServer(object):
     """
     
     servers_by_thread = {}
+    servers_by_thread_lock = threading.Lock()
     
     @staticmethod
     def get_server():
-        """Return the server running in this thread, if any.
-        
-        If no server exists, raise KeyError.
+        """Return the server running in this thread, or None if there is no server.
         """
-        return RPCServer.servers_by_thread[threading.current_thread().ident]
+        with RPCServer.servers_by_thread_lock:
+            return RPCServer.servers_by_thread.get(threading.current_thread().ident, None)
     
+    @staticmethod
+    def register_server(srv):
+        with RPCServer.servers_by_thread_lock:
+            key = threading.current_thread().ident
+            if key in RPCServer.servers_by_thread:
+                raise KeyError("An RPCServer is already running in this thread.")
+            RPCServer.servers_by_thread[key] = srv
+        
     def __init__(self, name, addr):
         self._name = name.encode()
         self._socket = zmq.Context.instance().socket(zmq.ROUTER)
@@ -39,17 +47,8 @@ class RPCServer(object):
         self._closed = False
         self._serializer = MsgpackSerializer(self)
         
-        RPCServer.servers_by_thread[threading.current_thread().ident] = self
-        
-        # Default behavior for creating object proxies
-        self.proxy_options = {
-            'call_sync': 'sync',      ## 'sync', 'async', 'off'
-            'timeout': 10,            ## float
-            'return_type': 'auto',    ## 'proxy', 'value', 'auto'
-            'auto_proxy': False,      ## bool
-            'defer_getattr': False,   ## True, False
-            'no_proxy_types': [type(None), str, int, float, tuple, list, dict, ObjectProxy],
-        }
+        # types that are sent by value when return_type='auto'
+        self.no_proxy_types = [type(None), str, int, float, tuple, list, dict, ObjectProxy]
         
         # Objects that may be retrieved by name using client['obj_name']
         self._namespace = {'self': self}
@@ -70,13 +69,17 @@ class RPCServer(object):
         type_str = str(type(obj))
         proxy = ObjectProxy(self.address, oid, type_str, attributes=(), **kwds)
         self._proxies[oid] = obj
+        info("server %s add proxy %d: %s", self.address, oid, obj)
         return proxy
     
     def unwrap_proxy(self, proxy):
         """Return the local python object referenced by *proxy*.
         """
         try:
-            return ObjectProxy.local_objects_by_proxy[proxy.obj_id]
+            oid = proxy._obj_id
+            obj = self._proxies[oid]
+            info("server %s unwrap proxy %d: %s", self.address, oid, obj)
+            return obj
         except KeyError:
             raise KeyError("Invalid proxy object ID %r. The object may have "
                            "been released already." % proxy.obj_id)
@@ -121,7 +124,6 @@ class RPCServer(object):
             raise RuntimeError("RPC server socket is already closed.")
             
         name, msg = self._socket.recv_multipart()
-        info("RPC recv req: %s %s", name, msg)
         
         self._process_one(name, msg)
         
@@ -138,14 +140,17 @@ class RPCServer(object):
         return_type = msg.get('return_type', 'auto')
         opts = self._serializer.loads(msg['opts'])
         
+        msg['opts'] = opts
+        info("RPC recv from %s request: %s", caller, msg)
+        
         # Attempt to invoke requested action
         try:
             info("    process_one: id=%s opts=%s", req_id, opts)
             
             if action == 'call_obj':
-                obj = self.lookup_proxy(opts['obj_id'])
+                obj = opts['obj']
                 fnargs = opts['args']
-                fnkwds = opts['kwds']
+                fnkwds = opts['kwargs']
                 
                 if len(fnkwds) == 0:  ## need to do this because some functions do not allow keyword arguments.
                     try:
@@ -197,8 +202,7 @@ class RPCServer(object):
                 info("    handleRequest: sending return value for %d: %s", req_id, result) 
                 #print "returnValue:", returnValue, result
                 if return_type == 'auto':
-                    no_proxy_types = self.proxy_options['no_proxy_types']
-                    result = self.auto_proxy(result, no_proxy_types)
+                    result = self.auto_proxy(result, self.no_proxy_types)
                 elif return_type == 'proxy':
                     result = self.get_proxy(result)
                 
@@ -245,6 +249,7 @@ class RPCServer(object):
         return not self._closed
     
     def run_forever(self):
+        RPCServer.register_server(self)
         while self.running():
             self._read_and_process_one()
 

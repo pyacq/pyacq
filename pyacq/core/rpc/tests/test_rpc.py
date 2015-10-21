@@ -33,13 +33,25 @@ def test_rpc():
     server['my_object'] = TestClass()
     serve_thread = threading.Thread(target=server.run_forever, daemon=True)
     serve_thread.start()
+    ## wait for server to register itself
+    #while serve_thread.ident not in RPCServer.servers_by_thread:
+        #time.sleep(1e-3)
     
-    client = RPCClient('some_server', server.address)
-    obj = client['my_object']  # get proxy to TestClass instance
+    client = RPCClient.get_client(server.address)
+    assert client is not None
     
-    # test proxies are cached
-    assert obj is client['my_object']
-
+    # test clients are cached
+    assert client == RPCClient.get_client(server.address)
+    try:
+        # can't manually create client for the same address
+        RPCClient(server.address)
+        assert False, "Should have raised KeyError."
+    except KeyError:
+        pass
+    
+    # get proxy to TestClass instance
+    obj = client['my_object']
+    
     # test call / sync return
     assert obj.add(7, 5) == 12
 
