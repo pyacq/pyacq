@@ -8,124 +8,153 @@ from logging import info
 
 class Node(object):
     """
-    This class:
-        * is a basic element to process data stream
-        * have several input/output streams
-        * can be a device/recorder/processor
-        * instanciated by NodeGroup or in local QApp
-        * remote by NodeGroup (RPC) or in the main QApplication directly (usefull for WidgetNode).
-        * start()/stop() : mean listen on input sockets and write to output sockets
-        * configuration() : done when not running. Set global params, ex: sampling_rate, selected channel, ...
-        * initialize() : open the device or setup memory and checkup output outputs specifications.
-          Must be done before Node.start()
+    A Node is the basic element for generating and processing data streams
+    in pyacq. 
     
-    Usage of a Node, the **order** is important:
-        1 - Instanciate : directly or remotly Node with NodeGroup.creat_node
-        2 - Node.configure(...)
-        3 - Connect Input (if have input) : Node.inputs['input_name'].connect(other_node.outpouts['output_name'])
-        4 - Configure outputs : Node.outputs['output_name'].configure(...)
-        5 - initialize : Node.initialize(), this also check inputs and outputs specifications.
-        6 - Start/Stop many time : Node.start()/Node.stop()
-        7 - Node.close() : done by NodeGroup if the Node is remoted
+    Nodes may be used to interact with devices, generate data, store data, 
+    perform computations, or display user interfaces. Each node may have multiple
+    input and output streams that connect to other nodes. For example::
     
-    Note :
-    For convenience, if a Node have only 1 Input or 1 output:
-       * `Node.inputs['input_name']` can be written `Node.input`
-       * `Node.outputs['output_name']` can be written `Node.output`
-    When there is several outputs or inputs it is not possible.
+       [ data acquisition node ] -> [ processing node ] -> [ display node ]
+                                                        -> [ recording node ]
     
-    States of Node are accessible with method and it is thread safe:
-        * Node.running()
-        * Node.configured()
-        * Node.initialize()
-        
+    An application may directly create and connect the Nodes it needs, or it
+    may use a Manager to create a network of nodes distributed across multiple
+    processes or machines.
     
-        
+    The order of operations when creating and operating a node is very important:
+    
+    1. Instantiate the node directly or remotely using `NodeGroup.create_node`.
+    2. Call `Node.configure(...)` to set global parameters such as sample rate,
+       channel selections, etc.
+    3. Connect inputs to their sources (if applicable):
+       `Node.inputs['input_name'].connect(other_node.outpouts['output_name'])`
+    4. Configure outputs: `Node.outputs['output_name'].configure(...)`
+    5. Call `Node.initialize()`, which will verify input/output settings, 
+       allocate memory, prepare devices, etc.
+    6. Call `Node.start()` and `Node.stop()` to begin/end reading from input 
+       streams and writing to output streams. These may be called multiple times.
+    7. Close the node with `Node.close()`. If the node was created remotely, 
+       this is handled by the NodeGroup to which it belongs.
+    
+    Notes
+    -----
+    
+    For convenience, if a Node has only 1 input or 1 output:
+    
+    * `Node.inputs['input_name']` can be written `Node.input`
+    * `Node.outputs['output_name']` can be written `Node.output`
+    
+    When there are several outputs or inputs, this shorthand is not permitted.
+    
+    The state of a Node can be requested using thread-safe methods:
+    
+    * `Node.running()`
+    * `Node.configured()`
+    * `Node.initialized()`
     """
-    _input_specs = { }
-    _output_specs = { }
+    _input_specs = {}
+    _output_specs = {}
     
-    def __init__(self, name = '', parent = None):
+    def __init__(self, name='', parent=None):
         self.name = name
         
-        self.lock = Mutex() # on lock for all state
+        self.lock = Mutex()  # on lock for all state
         self._running = False
         self._configured = False
         self._initialized = False
         self._closed = False
         
-        self.inputs = { name:InputStream(spec = spec, node = self, name = name) for name, spec in self._input_specs.items() }
-        self.outputs = { name:OutputStream(spec = spec, node = self, name = name) for name, spec in self._output_specs.items() }
+        self.inputs = {name:InputStream(spec=spec, node=self, name=name) for name, spec in self._input_specs.items()}
+        self.outputs = {name:OutputStream(spec=spec, node=self, name=name) for name, spec in self._output_specs.items()}
     
     @property
     def input(self):
-        """Shortcut when only 1 inputs"""
+        """Return the single input for this Node.
+        
+        If the node does not have exactly one input, then raise AssertionError.
+        """
         assert len(self.inputs)==1, 'Node.input is a shortcut when Node have only 1 input ({} here)'.format(len(self.inputs))
         return list(self.inputs.values())[0]
     
     @property
     def output(self):
-        """Shortcut when only 1 output"""
+        """Return the single output for this Node.
+        
+        If the node does not have exactly one put, then raise AssertionError.
+        """
         assert len(self.outputs)==1, 'Node.output is a shortcut when Node have only 1 output ({} here)'.format(len(self.outputs))
         return list(self.outputs.values())[0]
     
     def get_input_names(self):
-        """This is usefull for the InputStreamProxy only : remove if better rpc
+        """This is useful for the InputStreamProxy only : remove if better rpc
         """
         return list(self.inputs.keys())
     
     def get_output_names(self):
-        """This is usefull for the OutputStreamProxy only : remove if better rpc
+        """This is useful for the OutputStreamProxy only : remove if better rpc
         """
         return list(self.outputs.keys())
     
     def connect_input(self, name, stream_spec):
-        """This is usefull for the InputStreamProxy only : remove if better rpc
+        """This is useful for the InputStreamProxy only : remove if better rpc
         """
         self.inputs[name].connect(stream_spec)
     
     def configure_output(self, name, **stream_spec):
-        """This is usefull for the OutputStreamProxy  only : remove if better rpc
+        """This is useful for the OutputStreamProxy  only : remove if better rpc
         """
         self.outputs[name].configure(**stream_spec)
     
-    def  get_output(self, name):
-        """This is usefull for the OutputStreamProxy  only : remove if better rpc
+    def get_output(self, name):
+        """This is useful for the OutputStreamProxy  only : remove if better rpc
         """
         return self.outputs[name].params
 
-    def  get_input(self, name):
-        """This is usefull for the InputStreamProxy  only : remove if better rpc
+    def get_input(self, name):
+        """This is useful for the InputStreamProxy  only : remove if better rpc
         """
         return self.inputs[name].params
 
 
     def running(self):
-        """get the running state of the Node (thread safe)
+        """Return True if the Node is running.
+        
+        This method is thread-safe.
         """
         with self.lock:
             return self._running
     
     def configured(self):
-        """get the configured state of the Node (thread safe)
+        """Return True if the Node has already been configured.
+        
+        This method is thread-safe.
         """
         with self.lock:
             return self._configured
 
     def initialized(self):
-        """get the initialized state of the Node (thread safe)
+        """Return True if the Node has already been initialized.
+        
+        This method is thread-safe.
         """
         with self.lock:
             return self._initialized
     
     def closed(self):
-        """get the closed state of the Node (thread safe)
+        """Return True if the Node has already been closed.
+        
+        This method is thread-safe.
         """
         with self.lock:
             return self._closed
     
     def configure(self, **kargs):
-        """Configure the Node
+        """Configure the Node.
+        
+        This method is used to set global parameters such as sample rate,
+        channel selections, etc. Each Node subclass determines the allowed
+        arguments to this method by reimplementing `Node._configure()`.
         """
         assert not self.running(),\
                 'Cannot configure Node {} : the Node is running'.format(self.name)
@@ -135,7 +164,11 @@ class Node(object):
     
     def initialize(self):
         """Initialize the Node.
-        This also check inputs and outputs specifications.
+        
+        This method prepares the node for operation by allocating memory, 
+        preparing devices, checking input and output specifications, etc.
+        Node subclasses determine the behavior of this method by reimplementing
+        `Node._initialize()`.
         """
         self.check_input_specs()
         self.check_output_specs()
@@ -145,7 +178,12 @@ class Node(object):
 
 
     def start(self):
-        """This start the Node.
+        """Start the Node.
+        
+        When the node is running it will read from its input streams and write
+        to its output streams (if any). Nodes must be configured and initialized
+        before they are started, and can be stopped and restarted any number of
+        times.
         """
         assert self.configured(),\
             'Cannot start Node {} : the Node is not configured'.format(self.name)
@@ -159,7 +197,7 @@ class Node(object):
             self._running = True
 
     def stop(self):
-        """This stop the Node
+        """Stop the Node (see `start()`).
         """
         assert self.running(),\
             'Cannot stop Node {} : the Node is not running'.format(self.name)
@@ -169,7 +207,10 @@ class Node(object):
             self._running = False
     
     def close(self):
-        """Close the Node
+        """Close the Node.
+        
+        This causes all input/output connections to be closed. Nodes must
+        be stopped before they can be closed.
         """
         assert not self.running(),\
                 'Cannot close Node {} : the Node is running'.format(self.name)
@@ -186,58 +227,84 @@ class Node(object):
             self._initialized = False
             self._closed = True
     
-    #That method MUST be overwritten
     def _configure(self, **kargs):
+        """This method is called during `Node.configure()` and must be
+        reimplemented by subclasses.
+        """
         raise(NotImplementedError)
 
-    #That method MUST be overwritten
     def _initialize(self, **kargs):
+        """This method is called during `Node.initialize()` and must be
+        reimplemented by subclasses.
+        """
         raise(NotImplementedError)
     
-    #That method MUST be overwritten
     def _start(self):
+        """This method is called during `Node.start()` and must be
+        reimplemented by subclasses.
+        """
         raise(NotImplementedError)
     
-    #That method MUST be overwritten
     def _stop(self):
+        """This method is called during `Node.stop()` and must be
+        reimplemented by subclasses.
+        """
         raise(NotImplementedError)
 
-    #That method MUST be overwritten
     def _close(self, **kargs):
+        """This method is called during `Node.close()` and must be
+        reimplemented by subclasses.
+        """
         raise(NotImplementedError)
     
-    #That method SHOULD be overwritten
     def check_input_specs(self):
-        #call at the beginning of Node.initialize()
+        """This method is called during `Node.initialize()` and may be
+        reimplemented by subclasses to ensure that inputs are correctly
+        configured before the node is started.
+        
+        In case of misconfiguration, this method must raise an exception.
+        """
         pass
     
-    #That method SHOULD be overwritten
     def check_output_specs(self):
-        #call at the beginning of Node.initialize()
+        """This method is called during `Node.initialize()` and may be
+        reimplemented by subclasses to ensure that outputs are correctly
+        configured before the node is started.
+        
+        In case of misconfiguration, this method must raise an exception.
+        """
         pass
     
-    #That method SHOULD be overwritten
     def after_input_connect(self, inputname):
-        #call after one input of the Node have been connected
+        """This method is called when one of the Node's inputs has been
+        connected.
+        
+        It may be reimplemented by subclasses.
+        """
         pass
     
-    #That method SHOULD be overwritten
     def after_output_configure(self, outputname):
-        #call after one output of the Node have been configured
+        """This method is called when one of the Node's outputs has been
+        configured.
+        
+        It may be reimplemented by subclasses.
+        """
         pass
     
 
 
-class WidgetNode(QtGui.QWidget, Node, ):
-    def __init__(self, parent = None, **kargs):
-        QtGui.QWidget.__init__(self, parent = parent)
+class WidgetNode(QtGui.QWidget, Node):
+    """Base class for Nodes that implement a QWidget user interface.
+    """
+    def __init__(self, parent=None, **kargs):
+        QtGui.QWidget.__init__(self, parent=parent)
         Node.__init__(self, **kargs)
     
     def close(self):
         Node.close(self)
         QtGui.QWidget.close(self)
 
-    def closeEvent(self,event ):
+    def closeEvent(self,event):
         if self.running():
             self.stop()
         if not self.closed():
@@ -247,7 +314,7 @@ class WidgetNode(QtGui.QWidget, Node, ):
         
 
 
-# For test purpos only
+# For test purposes only
 class _MyTest:
     def _initialize(self): pass
         
@@ -263,6 +330,7 @@ class _MyTest:
 class _MyTestNode(_MyTest, Node):
     pass
 register_node_type(_MyTestNode)
+
 
 class _MyTestNodeQWidget(_MyTest, WidgetNode):
     pass

@@ -16,7 +16,7 @@ from pyacq import create_manager
 
 def test_nodegroup0():
     name, addr = 'nodegroup', 'tcp://127.0.0.1:*'
-    process_nodegroup0  = ProcessSpawner(NodeGroup,  name, addr)
+    process_nodegroup0 = ProcessSpawner(NodeGroup, name, addr)
     client0 = RPCClient(name, process_nodegroup0.addr)
     
     n = 5
@@ -41,11 +41,12 @@ def test_nodegroup0():
     
     process_nodegroup0.stop()
 
+
 def bench_ping_pong_nodegroup():
     # compare Qt4 mainloop of NodeGroup vs Host main loop which is infinite loop (fastest possible)
-    for name, class_ in [ ('Host', Host), ('NodeGroup', NodeGroup)]:
+    for name, class_ in [('Host', Host), ('NodeGroup', NodeGroup)]:
         addr = 'tcp://127.0.0.1:*'
-        process  = ProcessSpawner(class_,  name, addr)
+        process = ProcessSpawner(class_, name, addr)
         client = RPCClient(name, process.addr)
         
         N =1000
@@ -70,7 +71,7 @@ def bench_ping_pong_nodegroup():
 
 def test_cannot_delete_node_while_running():
     name, addr = 'nodegroup', 'tcp://127.0.0.1:*'
-    process_nodegroup0  = ProcessSpawner(NodeGroup,  name, addr)
+    process_nodegroup0 = ProcessSpawner(NodeGroup, name, addr)
     client0 = RPCClient(name, process_nodegroup0.addr)
     
     client0.create_node('mynode', '_MyTestNode')
@@ -90,13 +91,13 @@ def test_cannot_delete_node_while_running():
 
 def test_remotly_show_qwidget_node():
     name, addr = 'nodegroup0', 'tcp://127.0.0.1:*'
-    process_nodegroup0  = ProcessSpawner(NodeGroup,  name, addr)
+    process_nodegroup0 = ProcessSpawner(NodeGroup, name, addr)
     client0 = RPCClient(name, process_nodegroup0.addr)
     client0.create_node('mynode', '_MyTestNodeQWidget')
     client0.control_node('mynode', 'show')
     
     name, addr = 'nodegroup1', 'tcp://127.0.0.1:*'
-    process_nodegroup1  = ProcessSpawner(NodeGroup,  name, addr)
+    process_nodegroup1 = ProcessSpawner(NodeGroup, name, addr)
     client1 = RPCClient(name, process_nodegroup1.addr)
     client1.create_node('mynode', '_MyTestNodeQWidget')
     client1.control_node('mynode', 'show')
@@ -108,11 +109,11 @@ def test_remotly_show_qwidget_node():
 
 
 def test_register_node_type_from_module():
-    man = create_manager(auto_close_at_exit = False)
+    man = create_manager(auto_close_at_exit=False)
     nodegroup = man.create_nodegroup()
     
-    nodegroup.register_node_type_from_module('pyacq.core.tests.fakenodes', 'NoneRegisteredClass' )
-    node = nodegroup.create_node( 'NoneRegisteredClass')
+    nodegroup.register_node_type_from_module('pyacq.core.tests.fakenodes', 'NoneRegisteredClass')
+    node = nodegroup.create_node('NoneRegisteredClass')
     
     man.close()
     
@@ -136,5 +137,5 @@ if __name__ == '__main__':
     test_cannot_delete_node_while_running()
     test_remotly_show_qwidget_node()
     test_register_node_type_from_module()
-    #test_register_node_with_pickle()  ### not working at the moment
+    # test_register_node_with_pickle()  ### not working at the moment
 
