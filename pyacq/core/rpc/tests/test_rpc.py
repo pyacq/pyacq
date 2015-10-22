@@ -1,12 +1,17 @@
 import threading, atexit, time, logging
 from pyacq.core.log import logger
-from pyacq.core.rpc import RPCClient, RemoteCallException, RPCServer, ObjectProxy
+from pyacq.core.rpc import RPCClient, RemoteCallException, RPCServer, QtRPCServer, ObjectProxy
 import zmq.utils.monitor
 import numpy as np
+import pyqtgraph as pg
+from pyqtgraph.Qt import QtCore, QtGui
+
+qapp = pg.mkQApp()
 
 
 def test_rpc():
     previous_level = logger.level
+    logger.level = logging.DEBUG
     
     class TestClass(object):
         count = 0
@@ -149,7 +154,6 @@ def test_rpc():
 
 
     # test proxy sharing with a second server
-    logger.level = logging.DEBUG
     obj._set_proxy_options(defer_getattr=True)
     r1 = obj.test(obj)
     server2 = RPCServer(name='some_server2', addr='tcp://*:*')
@@ -183,6 +187,38 @@ def test_rpc():
     
     logger.level = previous_level
 
+
+def test_qt_rpc():
+    previous_level = logger.level
+    logger.level = logging.DEBUG
+    
+    server = QtRPCServer("qt_server", "tcp://*:*")
+    server.run_forever()
+    
+    # Start a thread that will remotely request a widget to be created in the 
+    # GUI thread.
+    class TestThread(QtCore.QThread):
+        def __init__(self, addr):
+            QtCore.QThread.__init__(self)
+            self.addr = addr
+        
+        def run(self):
+            client = RPCClient(self.addr)
+            qt = client._import('pyqtgraph.Qt')
+            self.l = qt.QtGui.QLabel('remote-controlled label')
+            self.l.show()
+            time.sleep(0.3)
+            self.l.hide()
+    
+    thread = TestThread(server.address)
+    thread.start()
+    
+    start = time.time()
+    while time.time() < start + 1.0:
+        qapp.processEvents()
+
+    assert 'QLabel' in thread.l._type_str
+    logger.level = previous_level
 
 
 if __name__ == '__main__':

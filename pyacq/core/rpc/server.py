@@ -5,6 +5,7 @@ import zmq
 import threading
 import builtins
 import numpy as np
+from pyqtgraph.Qt import QtCore
 
 from ..log import debug, info, warn, error
 from .serializer import MsgpackSerializer
@@ -47,6 +48,7 @@ class RPCServer(object):
         self._socket.bind(addr)
         self.address = self._socket.getsockopt(zmq.LAST_ENDPOINT)
         self._closed = False
+        self._closed_lock = threading.Lock()
         self._serializer = MsgpackSerializer(server=self)
         
         # types that are sent by value when return_type='auto'
@@ -88,8 +90,8 @@ class RPCServer(object):
             raise KeyError("Invalid proxy object ID %r. The object may have "
                            "been released already." % proxy.obj_id)
 
-    def __del__(self):
-        self._socket.close()
+    #def __del__(self):
+        #self._socket.close()
         
     def __getitem__(self, key):
         return self._namespace[key]
@@ -220,7 +222,7 @@ class RPCServer(object):
             self.close()
     
     def _send_error(self, caller, req_id, exc):
-        exc_str = ["Error while processing request %s-%d: " % (caller, req_id)]
+        exc_str = ["Error while processing request %s [%d]: " % (caller.decode(), req_id)]
         exc_str += traceback.format_stack()
         exc_str += [" < exception caught here >\n"]
         exc_str += traceback.format_exception(*exc)
@@ -237,14 +239,16 @@ class RPCServer(object):
     def close(self):
         """Close this RPC server.
         """
-        self._closed = True
+        with self._closed_lock:
+            self._closed = True
         # keep the socket open just long enough to send a confirmation of
         # closure.
 
     def running(self):
         """Boolean indicating whether the server is still running.
         """
-        return not self._closed
+        with self._closed_lock:
+            return not self._closed
     
     def run_forever(self):
         info("RPC start server: %s@%s", self._name.decode(), self.address.decode())
@@ -258,3 +262,73 @@ class RPCServer(object):
             if isinstance(obj, typ):
                 return obj
         return self.get_proxy(obj)
+
+
+
+class QtRPCServer(RPCServer):
+    def __init__(self, name, addr):
+        RPCServer.__init__(self, name, addr)
+        self.poll_thread = QtPollThread(self)
+        
+    def run_forever(self):
+        info("RPC start server: %s@%s", self._name.decode(), self.address.decode())
+        RPCServer.register_server(self)
+        self.poll_thread.start()
+
+    def _read_and_process_one(self):
+        raise NotImplementedError('Socket reading is handled by poller thread.')
+
+
+class QtPollThread(QtCore.QThread):
+    """Thread that polls an RPCServer socket and sends incoming messages to the
+    server by Qt signal.
+    
+    This allows the RPC actions to be executed in a Qt GUI thread without using
+    a timer to poll the RPC socket. Responses are sent back to the poller
+    thread by a secondary socket.
+    """
+    new_request = QtCore.Signal(object, object)  # client, msg
+    
+    def __init__(self, server):
+        QtCore.QThread.__init__(self)
+        self.server = server
+        
+        # Steal RPC socket from the server; it should not be touched outside the
+        # polling thread.
+        self.rpc_socket = server._socket
+        
+        # Create a socket for the Qt thread to send results back to the poller
+        # thread
+        return_addr = 'inproc://%x' % id(self)
+        context = zmq.Context.instance()
+        self.return_socket = context.socket(zmq.PAIR)
+        self.return_socket.bind(return_addr)
+        
+        server._socket = context.socket(zmq.PAIR)
+        server._socket.connect(return_addr)
+
+        self.new_request.connect(server._process_one)
+        
+    def run(self):
+        poller = zmq.Poller()
+        poller.register(self.rpc_socket, zmq.POLLIN)
+        poller.register(self.return_socket, zmq.POLLIN)
+        
+        while self.server.running():
+            #with self.lock:
+                #if not self.running:
+                    ## do a last poll
+                    #socks = dict(self.poller.poll(timeout=500))
+                    #if len(socks)==0:
+                        #self.local_socket.close()
+                        #break
+            
+            socks = dict(poller.poll(timeout=100))
+            
+            if self.return_socket in socks:
+                name, data = self.return_socket.recv_multipart()
+                self.rpc_socket.send_multipart([name, data])
+                
+            if self.rpc_socket in socks:
+                name, msg = self.rpc_socket.recv_multipart()
+                self.new_request.emit(name, msg)

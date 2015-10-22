@@ -1,3 +1,3 @@
 from .client import RPCClient, RemoteCallException
-from .server import RPCServer
+from .server import RPCServer, QtRPCServer
 from .proxy import ObjectProxy
