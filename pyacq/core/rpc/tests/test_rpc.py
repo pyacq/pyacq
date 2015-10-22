@@ -172,24 +172,9 @@ def test_rpc():
     assert np.all(r1[3] == r2[3])
     assert r1[4] == r2[4]
     
-
-    # test proxy options transfer correctly
+    client2.close_server()
+    serve_thread2.join()
     
-    
-
-
-    # test multiple clients per server
-    #  disabled for now--need to put this in another thread because we don't
-    #  allow multiple clients per thread
-    #client2 = RPCClient('tcp://localhost:5152')
-    
-    #obj2 = client2['my_object']
-    #a = obj2.add(1, 2, _sync='async')
-    #b = obj.add(3, 4, _sync='async')
-    #c = obj2.add(5, 6, _sync='async')
-    #assert b.result() == 7
-    #assert a.result() == 3
-    #assert c.result() == 11
     
     
     client.close_server()

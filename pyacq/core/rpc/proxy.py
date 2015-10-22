@@ -25,8 +25,8 @@ class ObjectProxy(object):
     For the most part, object proxies can be used exactly as if they are
     local objects::
     
-        rsys = proc._import('sys')   # returns proxy to sys module on remote process
-        rsys.stdout                  # proxy to remote sys.stdout
+        client = RPCClient(address)  # connect to RPCServer
+        rsys = client._import('sys') # returns proxy to sys module on remote process
         rsys.stdout.write            # proxy to remote sys.stdout.write
         rsys.stdout.write('hello')   # calls sys.stdout.write('hello') on remote machine
                                      # and returns the result (None)
