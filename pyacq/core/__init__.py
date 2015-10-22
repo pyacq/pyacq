@@ -1,5 +1,4 @@
-from .processspawner import ProcessSpawner
-from .rpc import RPCServer
+from .rpc import *
 from .host import Host
 from .nodegroup import NodeGroup
 from .node import Node, WidgetNode

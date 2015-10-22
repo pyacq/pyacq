@@ -1,13 +1,12 @@
-from .processspawner import ProcessSpawner
-from .rpc import RPCServer, RPCClient
+from .rpc import RPCServer, RPCClient, ProcessSpawner
 from .nodegroup import NodeGroup
 
 from logging import info
 
 
-class Host(RPCServer):
+class Host(object):
     """
-    RPC server class that serves as a pre-existing contact point for spawning
+    Host serves as a pre-existing contact point for spawning
     new processes on a remote machine. 
     
     One Host instance must be running on each machine that will be connected
@@ -22,16 +21,8 @@ class Host(RPCServer):
         Address of RPC server to connect to.
     """
     def __init__(self, name, addr):
-        RPCServer.__init__(self, name, addr)
         self.nodegroup_process = {}
 
-    def close(self):
-        """
-        Close the Host and all of its NodeGroups.
-        """
-        self.close_all_nodegroups(force=True)
-        RPCServer.close(self)
-    
     def create_nodegroup(self, name, addr):
         """Create a new NodeGroup in a new process.
         

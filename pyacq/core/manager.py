@@ -1,8 +1,7 @@
 import atexit
 
-from .rpc import RPCServer, RPCClient
+from .rpc import RPCServer, RPCClient, ProcessSpawner
 from .client import ManagerProxy
-from .processspawner import ProcessSpawner
 from .host import Host
 
 import logging

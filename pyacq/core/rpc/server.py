@@ -41,7 +41,7 @@ class RPCServer(object):
                 raise KeyError("An RPCServer is already running in this thread.")
             RPCServer.servers_by_thread[key] = srv
         
-    def __init__(self, name, addr):
+    def __init__(self, name, addr="tcp://*:*"):
         self._name = name.encode()
         self._socket = zmq.Context.instance().socket(zmq.ROUTER)
         self._socket.setsockopt(zmq.IDENTITY, self._name)
@@ -90,9 +90,6 @@ class RPCServer(object):
             raise KeyError("Invalid proxy object ID %r. The object may have "
                            "been released already." % proxy.obj_id)
 
-    #def __del__(self):
-        #self._socket.close()
-        
     def __getitem__(self, key):
         return self._namespace[key]
 
@@ -100,27 +97,6 @@ class RPCServer(object):
         """Define an object that may be retrieved by name from the client.
         """
         self._namespace[key] = value
-
-    #def get_proxy(self, obj):
-        #"""Create and return a new LocalObjectProxy for *obj*.
-        #"""
-        #if id(obj) not in self._proxies:
-            #proxy = LocalObjectProxy(self, obj)
-            #self._proxies[id(obj)] = proxy
-        #return self._proxies[id(obj)]
-
-    #def lookup_proxy(self, proxy):
-        #"""Return the object referenced by *proxy* if it belongs to this server.
-        #Otherwise, return the proxy.
-        #"""
-        #if proxy.rpc_id == self.address:
-            #obj = self._proxies[proxy.obj_id]
-            ## handle any deferred attribute lookups
-            #for attr in obj.attributes:
-                #obj = getattr(obj, attr)
-            #return obj
-        #else:
-            #return proxy
         
     def _read_and_process_one(self):
         """Read one message from the rpc socket and invoke the requested
@@ -153,47 +129,7 @@ class RPCServer(object):
             opts = self._serializer.loads(opts)
             debug("    => opts: %s", opts)
             
-            if action == 'call_obj':
-                obj = opts['obj']
-                fnargs = opts['args']
-                fnkwds = opts['kwargs']
-                
-                if len(fnkwds) == 0:  ## need to do this because some functions do not allow keyword arguments.
-                    try:
-                        result = obj(*fnargs)
-                    except:
-                        warn("Failed to call object %s: %d, %s", obj, len(fnargs), fnargs[1:])
-                        raise
-                else:
-                    result = obj(*fnargs, **fnkwds)
-                #debug("    => call_obj result: %r", result)
-            elif action == 'get_obj':
-                result = opts['obj']
-            elif action == 'import':
-                name = opts['module']
-                fromlist = opts.get('fromlist', [])
-                mod = builtins.__import__(name, fromlist=fromlist)
-                
-                if len(fromlist) == 0:
-                    parts = name.lstrip('.').split('.')
-                    result = mod
-                    for part in parts[1:]:
-                        result = getattr(result, part)
-                else:
-                    result = map(mod.__getattr__, fromlist)
-            elif action == 'del':
-                del self.proxies[opts['obj_id']]
-            elif action == 'close':
-                result = True
-            elif action == 'ping':
-                result = 'pong'
-            elif action =='getitem':
-                result = self[opts['name']]
-            elif action =='setitem':
-                self[opts['name']] = opts['obj']
-                result = None
-            else:
-                raise ValueError("Invalid RPC action '%s'" % action)
+            result = self.process_action(action, opts, return_type)
             exc = None
         except:
             exc = sys.exc_info()
@@ -239,6 +175,53 @@ class RPCServer(object):
         data = self._serializer.dumps(result)
         self._socket.send_multipart([caller, data])
 
+    def process_action(self, action, opts, return_type):
+        """Invoke a single action and return the result.
+        """
+        if action == 'call_obj':
+            obj = opts['obj']
+            fnargs = opts['args']
+            fnkwds = opts['kwargs']
+            
+            if len(fnkwds) == 0:  ## need to do this because some functions do not allow keyword arguments.
+                try:
+                    result = obj(*fnargs)
+                except:
+                    warn("Failed to call object %s: %d, %s", obj, len(fnargs), fnargs[1:])
+                    raise
+            else:
+                result = obj(*fnargs, **fnkwds)
+            #debug("    => call_obj result: %r", result)
+        elif action == 'get_obj':
+            result = opts['obj']
+        elif action == 'del':
+            del self.proxies[opts['obj_id']]
+        elif action =='getitem':
+            result = self[opts['name']]
+        elif action =='setitem':
+            self[opts['name']] = opts['obj']
+            result = None
+        elif action == 'import':
+            name = opts['module']
+            fromlist = opts.get('fromlist', [])
+            mod = builtins.__import__(name, fromlist=fromlist)
+            
+            if len(fromlist) == 0:
+                parts = name.lstrip('.').split('.')
+                result = mod
+                for part in parts[1:]:
+                    result = getattr(result, part)
+            else:
+                result = map(mod.__getattr__, fromlist)
+        elif action == 'ping':
+            result = 'pong'
+        elif action == 'close':
+            result = True
+        else:
+            raise ValueError("Invalid RPC action '%s'" % action)
+        
+        return result
+
     def close(self):
         """Close this RPC server.
         """
@@ -267,9 +250,14 @@ class RPCServer(object):
         return self.get_proxy(obj)
 
 
-
 class QtRPCServer(RPCServer):
-    def __init__(self, name, addr):
+    """RPCServer that lives in a Qt GUI thread.
+    
+    This server may be used to create and manage QObjects, QWidgets, etc. It
+    uses a separate thread to poll for RPC requests, which are then sent to the
+    Qt event loop using by signal (see QtPollThread).
+    """
+    def __init__(self, name, addr="tcp://*:*"):
         RPCServer.__init__(self, name, addr)
         self.poll_thread = QtPollThread(self)
         
@@ -277,6 +265,12 @@ class QtRPCServer(RPCServer):
         info("RPC start server: %s@%s", self._name.decode(), self.address.decode())
         RPCServer.register_server(self)
         self.poll_thread.start()
+
+    def process_action(self, action, opts, return_type):
+        if action == 'quit_qapp':
+            QtGui.QApplication.instance().quit()
+        else:
+            return RPCServer.process_action(self, action, opts, return_type)
 
     def _read_and_process_one(self):
         raise NotImplementedError('Socket reading is handled by poller thread.')

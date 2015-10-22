@@ -160,10 +160,6 @@ class RPCClient(object):
         opts = {'obj': obj, 'args': args, 'kwargs': kwargs} 
         return self.send('call_obj', opts=opts, **kwds)
 
-    #def get_obj_attr(self, obj_id, attributes, return_type='auto'):
-        #opts = {'obj_id': obj_id, 'attributes': attributes}
-        #return self.send('get_obj_attrs', return_type=return_type, opts=opts)
-
     def get_obj(self, obj, **kwds):
         return self.send('get_obj', opts={'obj': obj}, **kwds)
 
@@ -178,6 +174,8 @@ class RPCClient(object):
         return self.send('getitem', opts={'name': name}, sync='sync')
 
     def __setitem__(self, name, obj):
+        # We could make this sync='off', but probably it's safer to block until
+        # the transaction is complete.
         return self.send('setitem', opts={'name': name, 'obj': obj}, sync='sync')
 
     def ensure_connection(self, timeout=1.0):
@@ -273,6 +271,13 @@ class RPCClient(object):
         """Ask the server to close.
         """
         self.send('close', sync=sync, **kwds)
+
+    def quit_qapplication(self):
+        """Ask the server to quit its QApplication.
+        
+        This may only be used when connected to a QtRPCServer.
+        """
+        self.send('quit_qapp', sync='sync')
 
     def __del__(self):
         if hasattr(self, 'socket'):
