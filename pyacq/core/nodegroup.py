@@ -15,56 +15,7 @@ import zmq
 import logging
 
 
-class RpcThreadSocket(QtCore.QThread):
-    # Thread to poll RPC socket and relay requests as `new_message` signal.
-    # Return values are delivered back to the thread via self.local_socket.
-    new_message = QtCore.Signal(QtCore.QByteArray, QtCore.QByteArray)
-    def __init__(self, rpc_server, local_addr, parent=None):
-        QtCore.QThread.__init__(self, parent)
-        self.rpc_socket = weakref.ref(rpc_server._socket)
-        
-        context = zmq.Context.instance()
-        self.local_socket = context.socket(zmq.PAIR)
-        self.local_socket.connect(local_addr)
-        
-        self.poller = zmq.Poller()
-        self.poller.register(self.rpc_socket(), zmq.POLLIN)
-        self.poller.register(self.local_socket, zmq.POLLIN)
-        
-        
-        self.running = False
-        self.lock = Mutex()
-    
-    def run(self):
-        with self.lock:
-            self.running = True
-        
-        while True:
-            
-            with self.lock:
-                if not self.running:
-                    # do a last poll
-                    socks = dict(self.poller.poll(timeout=500))
-                    if len(socks)==0:
-                        self.local_socket.close()
-                        break
-            
-            socks = dict(self.poller.poll(timeout=100))
-            
-            if self.rpc_socket() in socks:
-                name, msg = self.rpc_socket().recv_multipart()
-                self.new_message.emit(name, msg)
-            
-            if self.local_socket in socks:
-                name, data = self.local_socket.recv_multipart()
-                self.rpc_socket().send_multipart([name, data])
-
-    def stop(self):
-        with self.lock:
-            self.running = False
-
-
-class NodeGroup(RPCServer):
+class NodeGroup(object):
     """
     NodeGroup is responsible for managing a collection of Nodes within a single
     process.
@@ -80,7 +31,6 @@ class NodeGroup(RPCServer):
     NodeGroups on a particular machine.
     """
     def __init__(self, name, addr):
-        RPCServer.__init__(self, name, addr)
         self.app = QtGui.QApplication([])
         self.nodes = {}
 

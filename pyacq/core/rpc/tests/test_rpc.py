@@ -38,19 +38,19 @@ def test_rpc():
             return self.name, obj.name, obj.add(5, 7), obj.array(), obj.get_list()
     
     
-    server = RPCServer(name='some_server', addr='tcp://*:*')
-    server['test_class'] = TestClass
-    server['my_object'] = TestClass('obj1')
-    serve_thread = threading.Thread(target=server.run_forever, daemon=True)
+    server1 = RPCServer(name='some_server', addr='tcp://*:*')
+    server1['test_class'] = TestClass
+    server1['my_object'] = TestClass('obj1')
+    serve_thread = threading.Thread(target=server1.run_forever, daemon=True)
     serve_thread.start()
     
-    client = RPCClient.get_client(server.address)
+    client = RPCClient.get_client(server1.address)
     
     # test clients are cached
-    assert client == RPCClient.get_client(server.address)
+    assert client == RPCClient.get_client(server1.address)
     try:
         # can't manually create client for the same address
-        RPCClient(server.address)
+        RPCClient(server1.address)
         assert False, "Should have raised KeyError."
     except KeyError:
         pass
@@ -83,9 +83,9 @@ def test_rpc():
     assert len(list_prox) == 3
     assert list_prox[2] == 7
 
-    # test proxy access to server
+    # test proxy access to server1
     srv = client['self']
-    assert srv.address == server.address
+    assert srv.address == server1.address
 
 
     # Test remote exception raising
@@ -164,10 +164,10 @@ def test_rpc():
     client2 = RPCClient(server2.address)
     client2.default_proxy_options['defer_getattr'] = True
     obj3 = client2['test_class']('obj3')
-    # send proxy from first server to second server
+    # send proxy from server1 to server2
     r2 = obj3.test(obj)
     # check that we have a new client between the two servers
-    assert (serve_thread2.ident, server.address) in RPCClient.clients_by_thread 
+    assert (serve_thread2.ident, server1.address) in RPCClient.clients_by_thread 
     # check all communication worked correctly
     assert r1[0] == 'obj1'
     assert r2[0] == 'obj3'
@@ -176,9 +176,16 @@ def test_rpc():
     assert np.all(r1[3] == r2[3])
     assert r1[4] == r2[4]
     
+    # Test publishing objects
+    arr = np.arange(5, 10)
+    client['arr'] = arr  # publish to server1
+    s2rpc = client2._import('pyacq.core.rpc')
+    s2cli = s2rpc.RPCClient.get_client(client.server_address)  # server2's client for server1
+    assert np.all(s2cli['arr'] == arr)  # retrieve via server2
+    
+    
     client2.close_server()
     serve_thread2.join()
-    
     
     
     client.close_server()

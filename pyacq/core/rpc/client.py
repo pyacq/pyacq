@@ -97,9 +97,6 @@ class RPCClient(object):
         
         self.ensure_connection()
 
-    def __getitem__(self, name):
-        return self.send('getitem', opts={'name': name}, sync='sync')
-
     def send(self, action, opts=None, return_type='auto', sync='sync', timeout=10.0):
         """Send a request to the remote process.
         
@@ -176,6 +173,12 @@ class RPCClient(object):
 
     def _import(self, module, **kwds):
         return self.send('import', opts={'module': module}, **kwds)
+
+    def __getitem__(self, name):
+        return self.send('getitem', opts={'name': name}, sync='sync')
+
+    def __setitem__(self, name, obj):
+        return self.send('setitem', opts={'name': name, 'obj': obj}, sync='sync')
 
     def ensure_connection(self, timeout=1.0):
         """Make sure RPC server is connected and available.

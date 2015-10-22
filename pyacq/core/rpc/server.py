@@ -189,6 +189,9 @@ class RPCServer(object):
                 result = 'pong'
             elif action =='getitem':
                 result = self[opts['name']]
+            elif action =='setitem':
+                self[opts['name']] = opts['obj']
+                result = None
             else:
                 raise ValueError("Invalid RPC action '%s'" % action)
             exc = None
