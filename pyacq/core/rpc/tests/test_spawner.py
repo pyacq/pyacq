@@ -20,6 +20,6 @@ def test_spawner():
     rqt = cli._import('pyqtgraph.Qt')
     assert rqt.QtGui.QApplication.instance() is not None
 
-    # test kill
-    proc.kill()
+    # test closing Qt process
+    proc.stop()
     

@@ -272,12 +272,12 @@ class RPCClient(object):
         """
         self.send('close', sync=sync, **kwds)
 
-    def quit_qapplication(self):
+    def quit_qapplication(self, sync='sync', **kwds):
         """Ask the server to quit its QApplication.
         
         This may only be used when connected to a QtRPCServer.
         """
-        self.send('quit_qapp', sync='sync')
+        self.send('quit_qapp', sync=sync, **kwds)
 
     def __del__(self):
         if hasattr(self, 'socket'):

@@ -5,7 +5,7 @@ import zmq
 import threading
 import builtins
 import numpy as np
-from pyqtgraph.Qt import QtCore
+from pyqtgraph.Qt import QtCore, QtGui
 
 from ..log import debug, info, warn, error
 from .serializer import MsgpackSerializer
