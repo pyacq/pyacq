@@ -10,12 +10,12 @@ import pyqtgraph as pg
 from pyacq.viewers import QOscilloscope
 import pyacq.core.rpc as rpc
 
-pg.mkQApp()
+app = pg.mkQApp()
 
 
 # Create PyAudio device node in remote process
 dev_proc = rpc.ProcessSpawner()
-dev = dev_proc._import('pyacq.devices.audio_pyaudio').PyAudio()
+dev = dev_proc.client._import('pyacq.devices.audio_pyaudio').PyAudio()
 
 # Print a list of available input devices (but ultimately we will just use the 
 # default device).
@@ -48,3 +48,5 @@ viewer.by_channel_params['Signal0', 'gain'] = 0.001
 # Start both nodes
 dev.start()
 viewer.start()
+
+app.exec_()
