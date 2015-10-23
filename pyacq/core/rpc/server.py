@@ -130,7 +130,8 @@ class RPCServer(object):
         try:
             debug("RPC recv '%s' from %s [req_id=%s]", action, caller.decode(), req_id)
             debug("    => %s", msg)
-            opts = self._serializer.loads(opts)
+            if opts is not None:
+                opts = self._serializer.loads(opts)
             debug("    => opts: %s", opts)
             
             result = self.process_action(action, opts, return_type)

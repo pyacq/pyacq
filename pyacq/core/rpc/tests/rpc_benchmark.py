@@ -35,34 +35,34 @@ thread.start()
 
 cli = rpc.RPCClient(server.address)
 test_poingrate(cli)
-#test_async_poingrate(cli)
+test_async_poingrate(cli)
 
-#cli.close()
-
-
-## thread, tcp
-#print("=========== tcp to thread ============")
-#server = rpc.RPCServer('tcp://*:*')
-#thread = threading.Thread(target=server.run_forever, daemon=True)
-#thread.start()
-
-#cli = rpc.RPCClient(server.address)
-#test_poingrate(cli)
-#test_async_poingrate(cli)
-
-#cli.close()
+cli.close()
 
 
-## process
-#print("=========== TCP to spawned process ============")
-#proc = rpc.ProcessSpawner()
-#test_poingrate(proc.client)
-#test_async_poingrate(proc.client)
+# thread, tcp
+print("=========== tcp to thread ============")
+server = rpc.RPCServer('tcp://*:*')
+thread = threading.Thread(target=server.run_forever, daemon=True)
+thread.start()
+
+cli = rpc.RPCClient(server.address)
+test_poingrate(cli)
+test_async_poingrate(cli)
+
+cli.close()
 
 
-## process
-#print("=========== TCP to spawned Qt process ============")
-#proc = rpc.ProcessSpawner(qt=True)
-#test_poingrate(proc.client)
-#test_async_poingrate(proc.client)
+# process
+print("=========== TCP to spawned process ============")
+proc = rpc.ProcessSpawner()
+test_poingrate(proc.client)
+test_async_poingrate(proc.client)
+
+
+# process
+print("=========== TCP to spawned Qt process ============")
+proc = rpc.ProcessSpawner(qt=True)
+test_poingrate(proc.client)
+test_async_poingrate(proc.client)
 

@@ -135,7 +135,8 @@ class RPCClient(object):
         # cannot.
         # TODO: This might be expensive; a better way might be to send opts in
         # a subsequent packet, but this makes the protocol more complicated..
-        cmd['opts'] = self.serializer.dumps(cmd['opts'])
+        if cmd['opts'] is not None:
+            cmd['opts'] = self.serializer.dumps(cmd['opts'])
         cmd = self.serializer.dumps(cmd)
         
         self.socket.send(cmd)
