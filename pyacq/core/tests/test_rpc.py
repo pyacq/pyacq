@@ -1,6 +1,7 @@
 import threading, atexit, time
 import logging
-from pyacq.core.rpc import RPCClient, RemoteCallException, RPCServer, JsonSerializer, MsgpackSerializer, HAVE_MSGPACK
+from pyacq.core.rpc import RPCClient, RemoteCallException, RPCServer
+from pyacq.core.rpc.serializer import JsonSerializer, MsgpackSerializer, HAVE_MSGPACK
 import zmq.utils.monitor
 import numpy as np
 import datetime
