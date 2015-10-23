@@ -198,24 +198,6 @@ class RPCClient(object):
         finally:
             self.establishing_connect = False
 
-    def process(self):
-        """Process all available incoming messages.
-        
-        Return immediately if no messages are available.
-        """
-        while True:
-            try:
-                # if using ROUTER, then we receive the name of the endpoint
-                # followed by the message
-                #name = self.socket.recv(zmq.NOBLOCK)
-                #msg = self.socket.recv()
-                
-                msg = self.socket.recv(zmq.NOBLOCK)
-                msg = self._serializer.loads(msg)
-                self.process_msg(name, msg)
-            except zmq.error.Again:
-                break  # no messages left
-
     def process_until_future(self, future, timeout=None):
         """Process all incoming messages until receiving a result for *future*.
         

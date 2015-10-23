@@ -170,9 +170,6 @@ class ObjectProxy(object):
         else:
             return self._client.get_obj(self, return_type='value')
         
-    def __reduce__(self):
-        return (unpickleObjectProxy, (self._rpc_id, self._obj_id, self._type_str, self._attributes))
-    
     def __repr__(self):
         orep = '.'.join((self._type_str,) + self._attributes)
         rep = '<ObjectProxy for %s[%d] %s >' % (self._rpc_id.decode(), self._obj_id, orep)
@@ -248,155 +245,151 @@ class ObjectProxy(object):
     
     # Explicitly proxy special methods. Is there a better way to do this??
     
-    def _getSpecialAttr(self, attr):
-        # this just gives us an easy way to change the behavior of the special methods
-        return self._deferred_attr(attr)
-    
     def __getitem__(self, *args):
-        return self._getSpecialAttr('__getitem__')(*args)
+        return self._deferred_attr('__getitem__')(*args)
     
     def __setitem__(self, *args):
-        return self._getSpecialAttr('__setitem__')(*args, _sync='off')
+        return self._deferred_attr('__setitem__')(*args, _sync='off')
         
     def __setattr__(self, *args):
-        return self._getSpecialAttr('__setattr__')(*args, _sync='off')
+        return self._deferred_attr('__setattr__')(*args, _sync='off')
         
     def __str__(self, *args):
         # for safe printing
         return repr(self)
-        #return self._getSpecialAttr('__str__')(*args, _return_type='value')
+        #return self._deferred_attr('__str__')(*args, _return_type='value')
         
     def __len__(self, *args):
-        return self._getSpecialAttr('__len__')(*args)
+        return self._deferred_attr('__len__')(*args)
     
     def __add__(self, *args):
-        return self._getSpecialAttr('__add__')(*args)
+        return self._deferred_attr('__add__')(*args)
     
     def __sub__(self, *args):
-        return self._getSpecialAttr('__sub__')(*args)
+        return self._deferred_attr('__sub__')(*args)
         
     def __div__(self, *args):
-        return self._getSpecialAttr('__div__')(*args)
+        return self._deferred_attr('__div__')(*args)
         
     def __truediv__(self, *args):
-        return self._getSpecialAttr('__truediv__')(*args)
+        return self._deferred_attr('__truediv__')(*args)
         
     def __floordiv__(self, *args):
-        return self._getSpecialAttr('__floordiv__')(*args)
+        return self._deferred_attr('__floordiv__')(*args)
         
     def __mul__(self, *args):
-        return self._getSpecialAttr('__mul__')(*args)
+        return self._deferred_attr('__mul__')(*args)
         
     def __pow__(self, *args):
-        return self._getSpecialAttr('__pow__')(*args)
+        return self._deferred_attr('__pow__')(*args)
         
     def __iadd__(self, *args):
-        return self._getSpecialAttr('__iadd__')(*args, _sync='off')
+        return self._deferred_attr('__iadd__')(*args, _sync='off')
     
     def __isub__(self, *args):
-        return self._getSpecialAttr('__isub__')(*args, _sync='off')
+        return self._deferred_attr('__isub__')(*args, _sync='off')
         
     def __idiv__(self, *args):
-        return self._getSpecialAttr('__idiv__')(*args, _sync='off')
+        return self._deferred_attr('__idiv__')(*args, _sync='off')
         
     def __itruediv__(self, *args):
-        return self._getSpecialAttr('__itruediv__')(*args, _sync='off')
+        return self._deferred_attr('__itruediv__')(*args, _sync='off')
         
     def __ifloordiv__(self, *args):
-        return self._getSpecialAttr('__ifloordiv__')(*args, _sync='off')
+        return self._deferred_attr('__ifloordiv__')(*args, _sync='off')
         
     def __imul__(self, *args):
-        return self._getSpecialAttr('__imul__')(*args, _sync='off')
+        return self._deferred_attr('__imul__')(*args, _sync='off')
         
     def __ipow__(self, *args):
-        return self._getSpecialAttr('__ipow__')(*args, _sync='off')
+        return self._deferred_attr('__ipow__')(*args, _sync='off')
         
     def __rshift__(self, *args):
-        return self._getSpecialAttr('__rshift__')(*args)
+        return self._deferred_attr('__rshift__')(*args)
         
     def __lshift__(self, *args):
-        return self._getSpecialAttr('__lshift__')(*args)
+        return self._deferred_attr('__lshift__')(*args)
         
     def __irshift__(self, *args):
-        return self._getSpecialAttr('__irshift__')(*args, _sync='off')
+        return self._deferred_attr('__irshift__')(*args, _sync='off')
         
     def __ilshift__(self, *args):
-        return self._getSpecialAttr('__ilshift__')(*args, _sync='off')
+        return self._deferred_attr('__ilshift__')(*args, _sync='off')
         
     def __eq__(self, *args):
-        return self._getSpecialAttr('__eq__')(*args)
+        return self._deferred_attr('__eq__')(*args)
     
     def __ne__(self, *args):
-        return self._getSpecialAttr('__ne__')(*args)
+        return self._deferred_attr('__ne__')(*args)
         
     def __lt__(self, *args):
-        return self._getSpecialAttr('__lt__')(*args)
+        return self._deferred_attr('__lt__')(*args)
     
     def __gt__(self, *args):
-        return self._getSpecialAttr('__gt__')(*args)
+        return self._deferred_attr('__gt__')(*args)
         
     def __le__(self, *args):
-        return self._getSpecialAttr('__le__')(*args)
+        return self._deferred_attr('__le__')(*args)
     
     def __ge__(self, *args):
-        return self._getSpecialAttr('__ge__')(*args)
+        return self._deferred_attr('__ge__')(*args)
         
     def __and__(self, *args):
-        return self._getSpecialAttr('__and__')(*args)
+        return self._deferred_attr('__and__')(*args)
         
     def __or__(self, *args):
-        return self._getSpecialAttr('__or__')(*args)
+        return self._deferred_attr('__or__')(*args)
         
     def __xor__(self, *args):
-        return self._getSpecialAttr('__xor__')(*args)
+        return self._deferred_attr('__xor__')(*args)
         
     def __iand__(self, *args):
-        return self._getSpecialAttr('__iand__')(*args, _sync='off')
+        return self._deferred_attr('__iand__')(*args, _sync='off')
         
     def __ior__(self, *args):
-        return self._getSpecialAttr('__ior__')(*args, _sync='off')
+        return self._deferred_attr('__ior__')(*args, _sync='off')
         
     def __ixor__(self, *args):
-        return self._getSpecialAttr('__ixor__')(*args, _sync='off')
+        return self._deferred_attr('__ixor__')(*args, _sync='off')
         
     def __mod__(self, *args):
-        return self._getSpecialAttr('__mod__')(*args)
+        return self._deferred_attr('__mod__')(*args)
         
     def __radd__(self, *args):
-        return self._getSpecialAttr('__radd__')(*args)
+        return self._deferred_attr('__radd__')(*args)
     
     def __rsub__(self, *args):
-        return self._getSpecialAttr('__rsub__')(*args)
+        return self._deferred_attr('__rsub__')(*args)
         
     def __rdiv__(self, *args):
-        return self._getSpecialAttr('__rdiv__')(*args)
+        return self._deferred_attr('__rdiv__')(*args)
         
     def __rfloordiv__(self, *args):
-        return self._getSpecialAttr('__rfloordiv__')(*args)
+        return self._deferred_attr('__rfloordiv__')(*args)
         
     def __rtruediv__(self, *args):
-        return self._getSpecialAttr('__rtruediv__')(*args)
+        return self._deferred_attr('__rtruediv__')(*args)
         
     def __rmul__(self, *args):
-        return self._getSpecialAttr('__rmul__')(*args)
+        return self._deferred_attr('__rmul__')(*args)
         
     def __rpow__(self, *args):
-        return self._getSpecialAttr('__rpow__')(*args)
+        return self._deferred_attr('__rpow__')(*args)
         
     def __rrshift__(self, *args):
-        return self._getSpecialAttr('__rrshift__')(*args)
+        return self._deferred_attr('__rrshift__')(*args)
         
     def __rlshift__(self, *args):
-        return self._getSpecialAttr('__rlshift__')(*args)
+        return self._deferred_attr('__rlshift__')(*args)
         
     def __rand__(self, *args):
-        return self._getSpecialAttr('__rand__')(*args)
+        return self._deferred_attr('__rand__')(*args)
         
     def __ror__(self, *args):
-        return self._getSpecialAttr('__ror__')(*args)
+        return self._deferred_attr('__ror__')(*args)
         
     def __rxor__(self, *args):
-        return self._getSpecialAttr('__ror__')(*args)
+        return self._deferred_attr('__ror__')(*args)
         
     def __rmod__(self, *args):
-        return self._getSpecialAttr('__rmod__')(*args)
+        return self._deferred_attr('__rmod__')(*args)
