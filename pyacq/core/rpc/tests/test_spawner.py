@@ -2,7 +2,7 @@ from pyacq.core.rpc import ProcessSpawner
 import os
 
 def test_spawner():
-    proc = ProcessSpawner("my_server")
+    proc = ProcessSpawner()
     cli = proc.client
     
     # check spawned RPC server has a different PID
@@ -14,7 +14,7 @@ def test_spawner():
     
     
     # start process with QtRPCServer
-    proc = ProcessSpawner("my_server", qt=True)
+    proc = ProcessSpawner(qt=True)
     cli = proc.client
 
     rqt = cli._import('pyqtgraph.Qt')

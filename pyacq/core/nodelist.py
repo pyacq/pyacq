@@ -1,4 +1,4 @@
-# TODO find something fancy do resgister in another Host/Process
+# TODO find something fancy do register in another Host/Process
 
 all_nodes = {}
 

@@ -38,7 +38,7 @@ def test_rpc():
             return self.name, obj.name, obj.add(5, 7), obj.array(), obj.get_list()
     
     
-    server1 = RPCServer(name='some_server')
+    server1 = RPCServer()
     server1['test_class'] = TestClass
     server1['my_object'] = TestClass('obj1')
     serve_thread = threading.Thread(target=server1.run_forever, daemon=True)
@@ -105,7 +105,7 @@ def test_rpc():
 
     # test deferred getattr
     arr = obj.array(_return_type='proxy')
-    dt1 = arr.dtype.name
+    dt1 = arr.dtype.name._get_value()
     assert isinstance(dt1, str)
     arr._set_proxy_options(defer_getattr=True)
     dt2 = arr.dtype.name
@@ -156,7 +156,7 @@ def test_rpc():
     # test proxy sharing with a second server
     obj._set_proxy_options(defer_getattr=True)
     r1 = obj.test(obj)
-    server2 = RPCServer(name='some_server2')
+    server2 = RPCServer()
     server2['test_class'] = TestClass
     serve_thread2 = threading.Thread(target=server2.run_forever, daemon=True)
     serve_thread2.start()
@@ -199,7 +199,7 @@ def test_qt_rpc():
     previous_level = logger.level
     logger.level = logging.DEBUG
     
-    server = QtRPCServer("qt_server")
+    server = QtRPCServer()
     server.run_forever()
     
     # Start a thread that will remotely request a widget to be created in the 

@@ -1,44 +1,30 @@
 import time
 import logging
 
-from pyacq.core.host import Host
-from pyacq.core.processspawner import ProcessSpawner
-from pyacq.core.rpc import RPCClient
+from pyacq.core.rpc import RPCClient, ProcessSpawner
 
 #~ logging.getLogger().level=logging.INFO
 
 
 def test_host1():
     
-    process_host0 = ProcessSpawner(Host, 'host0', 'tcp://127.0.0.1:*')
-    process_host1 = ProcessSpawner(Host, 'host1', 'tcp://127.0.0.1:*')
+    proc1 = ProcessSpawner()
+    host1 = proc1.client._import('pyacq').Host('host1')
+    proc2 = ProcessSpawner()
+    host2 = proc1.client._import('pyacq').Host('host1')
     
-    client0 = RPCClient('host0', process_host0.addr)
-    print('on ping: ', client0.ping())
-    
-    time.sleep(1.)
-    
-    process_host0.stop()
-    process_host1.stop()
+    ng11 = host1.create_nodegroup()
+    ng12 = host1.create_nodegroup()
+    ng21 = host2.create_nodegroup()
+    ng22 = host2.create_nodegroup()
 
+    host1.close_all_nodegroups()
+    ng22.stop_all_nodes()
+    host2.close_all_nodegroups()
+    
+    proc1.stop()
+    proc2.stop()
 
-def test_host2():
-    
-    process_host0 = ProcessSpawner(Host, 'host0', 'tcp://127.0.0.1:*')
-    
-    client0 = RPCClient('host0', process_host0.addr)
-    
-    client0.create_nodegroup('nodegroup 0.1', 'tcp://127.0.0.1:*')
-    client0.create_nodegroup('nodegroup 0.2', 'tcp://127.0.0.1:*')
-    
-    time.sleep(2.)
-    
-    client0.close_nodegroup('nodegroup 0.1')
-    client0.close_nodegroup('nodegroup 0.2')
-    
-    time.sleep(1.)
-    
-    process_host0.stop()
 
 
 

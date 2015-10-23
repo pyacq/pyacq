@@ -61,8 +61,8 @@ if {qt}:
 class ProcessSpawner(object):
     """Utility for spawning and bootstrapping a new process with an RPC server.
     """
-    def __init__(self, name, addr="tcp://*:*", qt=False):
-        self.name = name
+    def __init__(self, addr="tcp://*:*", qt=False):
+        assert qt in (True, False)
         self.qt = qt
         
         # temporary socket to allow the remote process to report its status.
@@ -73,7 +73,7 @@ class ProcessSpawner(object):
         
         # Spawn new process
         class_name = 'QtRPCServer' if qt else 'RPCServer'
-        args = "name='%s', addr='%s'" % (name, addr)
+        args = "addr='%s'" % addr
         loglevel = str(logger.getEffectiveLevel())
         bootstrap = bootstrap_template.format(class_name=class_name, args=args,
                                               bootstrap_addr=bootstrap_addr,

@@ -1,7 +1,6 @@
 import atexit
 
 from .rpc import RPCServer, RPCClient, ProcessSpawner
-from .client import ManagerProxy
 from .host import Host
 
 import logging
@@ -31,7 +30,7 @@ def create_manager(mode='rpc', auto_close_at_exit=True):
         return man
         
 
-class Manager(RPCServer):
+class Manager(object):
     """Manager is a central point of control for connecting to hosts, creating
     Nodegroups and Nodes, and interacting with Nodes.
     
@@ -46,49 +45,6 @@ class Manager(RPCServer):
     addr : str
         The address for the manager's RPC server.
     """
-    
-    # Classes used internally for bookkeeping
-    class _Host(object):
-        def __init__(self, name, addr):
-            self.rpc_address = addr
-            self.rpc_name = name
-            self.client = RPCClient(name, addr)
-            self.nodegroups = {}
-            self.rpc_hostname = addr.partition('//')[2].rpartition(':')[0]
-
-        def add_nodegroup(self, ng):
-            self.nodegroups[ng.rpc_name] = ng
-        
-        def list_nodegroups(self):
-            return list(self.nodegroups.keys())
-
-
-    class _NodeGroup(object):
-        def __init__(self, host, name, addr):
-            self.host = host
-            self.rpc_address = addr
-            self.rpc_name = name
-            self.client = RPCClient(name, addr)
-            self.nodes = {}
-
-        def add_node(self, name, node):
-            self.nodes[name] = node
-
-        def list_nodes(self):
-            return list(self.nodes.keys())
-
-        def delete_node(self, name):
-            del self.nodes[name]
-        
-            
-    class _Node(object):
-        def __init__(self, nodegroup, name, classname):
-            self.nodegroup = nodegroup
-            self.name = name
-            self.classname = classname
-            self.outputs = []  # list of StreamDef
-    
-    
     def __init__(self, name, addr, manager_process=None):
         RPCServer.__init__(self, name, addr)
         

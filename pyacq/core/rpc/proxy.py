@@ -84,9 +84,11 @@ class ObjectProxy(object):
             'timeout': 10,            ## float
             'return_type': 'auto',    ## 'proxy', 'value', 'auto'
             #'auto_proxy_args': False, ## bool
-            'defer_getattr': False,   ## True, False
+            'defer_getattr': True,   ## True, False
             'no_proxy_types': [type(None), str, int, float, tuple, list, dict, ObjectProxy],
         }
+        
+        self.__dict__['_hash'] = (rpc_id, obj_id, attributes)
         
         self._set_proxy_options(**kwds)
     
@@ -160,11 +162,13 @@ class ObjectProxy(object):
     def _get_value(self):
         """
         Return the value of the proxied object.
+        
+        If the object is not serializable, then raise an exception.
         """
         if self._client is None:
             return self._server.unwrap_proxy(self)
         else:
-            return self._client.get_obj_value(self)
+            return self._client.get_obj(self, return_type='value')
         
     def __reduce__(self):
         return (unpickleObjectProxy, (self._rpc_id, self._obj_id, self._type_str, self._attributes))
@@ -234,6 +238,12 @@ class ObjectProxy(object):
         for k in opts:
             opts[k] = kwargs.pop('_'+k, opts[k])
         return self._client.call_obj(obj=self, args=args, kwargs=kwargs, **opts)
+
+    def __hash__(self):
+        """Override __hash__ because we need to avoid comparing remote and local
+        hashes.
+        """
+        return id(self)
 
     
     # Explicitly proxy special methods. Is there a better way to do this??
@@ -390,10 +400,3 @@ class ObjectProxy(object):
         
     def __rmod__(self, *args):
         return self._getSpecialAttr('__rmod__')(*args)
-        
-    def __hash__(self):
-        ## Required for python3 since __eq__ is defined.
-        return id(self)
-
-
-

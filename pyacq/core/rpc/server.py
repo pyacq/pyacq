@@ -1,9 +1,11 @@
 import sys
 import time
+import os
 import traceback
-import zmq
+import socket
 import threading
 import builtins
+import zmq
 import numpy as np
 from pyqtgraph.Qt import QtCore, QtGui
 
@@ -41,8 +43,10 @@ class RPCServer(object):
                 raise KeyError("An RPCServer is already running in this thread.")
             RPCServer.servers_by_thread[key] = srv
         
-    def __init__(self, name, addr="tcp://*:*"):
-        self._name = name.encode()
+    def __init__(self, addr="tcp://*:*"):
+        # pick a unique name: host:pid.tid
+        self._name = ('%s:%d.%x' % (socket.gethostname(), os.getpid(), 
+                                    threading.current_thread().ident)).encode()
         self._socket = zmq.Context.instance().socket(zmq.ROUTER)
         self._socket.setsockopt(zmq.IDENTITY, self._name)
         self._socket.bind(addr)
@@ -257,8 +261,8 @@ class QtRPCServer(RPCServer):
     uses a separate thread to poll for RPC requests, which are then sent to the
     Qt event loop using by signal (see QtPollThread).
     """
-    def __init__(self, name, addr="tcp://*:*"):
-        RPCServer.__init__(self, name, addr)
+    def __init__(self, addr="tcp://*:*"):
+        RPCServer.__init__(self, addr)
         self.poll_thread = QtPollThread(self)
         
     def run_forever(self):
