@@ -6,7 +6,6 @@ import zmq
 from .client import RPCClient
 from ..log import logger
 
-logger.level = 1
 
 bootstrap_template = """
 import zmq
@@ -68,6 +67,7 @@ class ProcessSpawner(object):
         # temporary socket to allow the remote process to report its status.
         bootstrap_addr = 'tcp://127.0.0.1:*'
         bootstrap_sock = zmq.Context.instance().socket(zmq.PAIR)
+        bootstrap_sock.setsockopt(zmq.RCVTIMEO, 1000)
         bootstrap_sock.bind(bootstrap_addr)
         bootstrap_addr = bootstrap_sock.getsockopt(zmq.LAST_ENDPOINT)
         
@@ -87,7 +87,6 @@ class ProcessSpawner(object):
         atexit.register(self.kill)
         
         # Receive status information (especially the final RPC address)
-        bootstrap_sock.setsockopt(zmq.RCVTIMEO, 1000)
         status = bootstrap_sock.recv_json()
         logger.debug("recv status %s", status)
         bootstrap_sock.send(b'OK')

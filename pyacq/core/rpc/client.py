@@ -215,7 +215,8 @@ class RPCClient(object):
                 if itimeout < 0:
                     raise TimeoutError("Timeout waiting for Future result.")
             try:
-                self.socket.setsockopt(zmq.RCVTIMEO, itimeout)
+                # NOTE: timeout can only be set before bind.
+                #self.socket.setsockopt(zmq.RCVTIMEO, itimeout)
                 msg = self.socket.recv()
                 msg = self.serializer.loads(msg)
             except zmq.error.Again:
