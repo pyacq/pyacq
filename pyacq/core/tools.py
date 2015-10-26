@@ -6,7 +6,7 @@ from collections import OrderedDict
 import logging
 
 from .node import Node, register_node_type
-from .stream import OutputStream
+from .stream import OutputStream, InputStream
 
 import time
 
@@ -58,7 +58,16 @@ class ThreadPollInput(QtCore.QThread):
     def pos(self):
         return self._pos
 
-
+class ThreadPollOuput(ThreadPollInput):
+    """
+    Similar than `ThreadPollInput`.
+    This is a convenient class also create internally its own `InputStream` (socket).
+    And pull it the same way than ThreadPollInput.
+    """
+    def __init__(self, output_stream, **kargs):
+        self.instream = InputStream()
+        self.instream.connect(output_stream)
+        ThreadPollInput.__init__(self, self.instream, **kargs)
 
 
 class ThreadStreamConverter(ThreadPollInput):

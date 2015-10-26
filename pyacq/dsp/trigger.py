@@ -7,7 +7,6 @@ from ..core import (Node, register_node_type, ThreadPollInput, StreamConverter)
 
 
 
-
 class TriggerThread(ThreadPollInput):
     def __init__(self, input_stream, output_stream, timeout = 200, parent = None):
         ThreadPollInput.__init__(self, input_stream, timeout = timeout, parent = parent)
@@ -18,63 +17,70 @@ class TriggerThread(ThreadPollInput):
         self.n = 0
     
     def process_data(self, pos, data):
-            if self.last_pos is None:
-                self.last_pos = pos
-            
-            db = int(self.debounce_time*self.sample_rate)
-            
-            if self.debounce_mode == 'no-debounce':
-                pass
-            elif self.debounce_mode == 'after-stable':
-                pos -= db
-            elif self.debounce_mode == 'before-stable':
-                pos -= db*2
-            new = pos - self.last_pos
-            if new<2: return
+        if self.last_pos is None:
+            self.last_pos = pos
+        
+        db = int(self.debounce_time*self.sample_rate)
+        
+        new = pos - self.last_pos
+        if new<2: return
+        
+        if self.debounce_mode == 'no-debounce':
             newbuf = self.get_buffer_from_channel(pos, new)
-            
+            if newbuf is None: return
             sig1 = newbuf[:-1]
             sig2 = newbuf[1:]
-            
+        elif self.debounce_mode == 'after-stable':
+            if new-db<2: return
+            newbuf = self.get_buffer_from_channel(pos, new)
+            if newbuf is None: return
+            sig1 = newbuf[:-1-db]
+            sig2 = newbuf[1:-db]
+            pos -= db
+        elif self.debounce_mode == 'before-stable':
+            if new-2*db<2: return
+            newbuf = self.get_buffer_from_channel(pos, new+db)
+            if newbuf is None: return
+            sig1 = newbuf[db:-1-2*db]
+            sig2 = newbuf[db+1:-2*db]
+            pos -= db*2
+        
+        if self.front == '+':
+            crossings,  = np.where( (sig1 <= self.threshold) & ( sig2>self.threshold) )
+        elif self.front == '-':
+            crossings,  = np.where( (sig1 >= self.threshold) & ( sig2<self.threshold) )
+        crossings +=1
+        
+        if self.debounce_mode == 'no-debounce':
+            pass
+        elif self.debounce_mode == 'after-stable':
             if self.front == '+':
-                crossings,  = np.where( (sig1 <= self.threshold) & ( sig2>self.threshold) )
+                for i, crossing in enumerate(crossings):
+                    if np.any(newbuf[crossing:crossing+db]<self.threshold):
+                        crossings[i] = -1
             elif self.front == '-':
-                crossings,  = np.where( (sig1 >= self.threshold) & ( sig2<self.threshold) )
-            crossings +=1
-            if self.debounce_mode == 'no-debounce':
-                pass
-            elif self.debounce_mode == 'after-stable':
-                if self.front == '+':
-                    for i, crossing in enumerate(crossings):
-                        if np.any(newbuf[crossing:crossing+db]<self.threshold):
-                            crossings[i] = -1
-                elif self.front == '-':
-                    for i, crossing in enumerate(crossings):
-                        if np.any(newbuf[crossing:crossing+db]>self.threshold):
-                            crossings[i] = -1
-                crossings = crossings[crossings != -1]
-            elif self.debounce_mode == 'before-stable':
-                if self.front == '+':
-                    for i, crossing in enumerate(crossings):
-                        if crossing == -1: continue
-                        if np.any(newbuf[crossing+db:crossing+db*2]<self.threshold):
-                            crossings[i] = -1
-                        else:
-                            crossings[i+1:][(crossings[i+1:]-crossing)<db] = -1
-                elif self.front == '-':
-                    for i, crossing in enumerate(crossings):
-                        if crossing == -1: continue
-                        if np.any(newbuf[crossing+db:crossing+db*2]>self.threshold):
-                            crossings[i] = -1
-                        else:
-                            crossings[i+1:][(crossings[i+1:]-crossing)<db] = -1
-                crossings = crossings[crossings != -1]
-            if crossings.size>0:
-                self.n += crossings.size
-                crossings += self.last_pos
-                self.output_stream().send(self.n, crossings.astype('int64'))
-            
-            self.last_pos = pos-1
+                for i, crossing in enumerate(crossings):
+                    if np.any(newbuf[crossing:crossing+db]>self.threshold):
+                        crossings[i] = -1
+            crossings = crossings[crossings != -1]
+        elif self.debounce_mode == 'before-stable':
+            if self.front == '+':
+                for i, crossing in enumerate(crossings+db):
+                    if crossing == -1: continue
+                    if np.any(newbuf[crossing+db:crossing+db*2]<self.threshold) or np.any(newbuf[crossing-db:crossing]>self.threshold):
+                        crossings[i] = -1
+            elif self.front == '-':
+                for i, crossing in enumerate(crossings+db):
+                    if crossing == -1: continue
+                    if np.any(newbuf[crossing+db:crossing+db*2]>self.threshold) or np.any(newbuf[crossing-db:crossing]<self.threshold):
+                        crossings[i] = -1
+            crossings = crossings[crossings != -1]
+        if crossings.size>0:
+            self.n += crossings.size
+            crossings += self.last_pos
+            self.output_stream().send(self.n, crossings.astype('int64'))
+        
+        self.last_pos = pos-1
     
     def change_params(self, params):
         for p in  params.children():
@@ -99,7 +105,6 @@ class DigitalTriggerThread(TriggerThread):
 
 class TriggerBase(Node,  QtCore.QObject):
     _input_specs = {'signals' : dict(streamtype = 'signals', transfermode='sharedarray', timeaxis = 1)}
-    #~ _output_specs = {'events' : dict(streamtype = 'events', dtype = [('pos', 'int64'), ], shape = (-1, ))}
     _output_specs = {'events' : dict(streamtype = 'events', dtype ='int64', shape = (-1, ))}
     
     _default_params = [
