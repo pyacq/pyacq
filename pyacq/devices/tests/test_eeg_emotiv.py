@@ -1,7 +1,7 @@
 import time
 import pytest
 
-from pyacq.devices.eeg_emotiv import Emotiv, HAVE_PYCRYPTO, HAVE_PYWINUSB
+from pyacq.devices.eeg_emotiv import Emotiv, HAVE_PYCRYPTO
 from pyacq.viewers.qoscilloscope import QOscilloscope
 from pyqtgraph.Qt import QtCore, QtGui
 import pyqtgraph as pg
