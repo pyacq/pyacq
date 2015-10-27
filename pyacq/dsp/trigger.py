@@ -128,12 +128,8 @@ class TriggerBase(Node,  QtCore.QObject):
         self.params.sigTreeStateChanged.connect(self.on_params_change)
 
     def after_input_connect(self, inputname):
-        d0, d1 = self.input.params['shape']
-        if self.input.params['timeaxis']==0:
-            self.nb_channel  = d1
-        else:
-            self.nb_channel  = d0
-        self.params.param('channel').setLimits(self.nb_channel)
+        self.nb_channel, _ = self.input.params['shape']
+        self.params.param('channel').setLimits([0, self.nb_channel])
 
     def _initialize(self):
         self.thread = self._TriggerThread(self.input, self.output)
