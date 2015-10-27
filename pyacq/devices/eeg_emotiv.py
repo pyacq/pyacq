@@ -81,7 +81,7 @@ def get_level(data, bits):
 class Unix_EmotivThread(QtCore.QThread):
 
     def __init__(self, dev_handle, parent=None):
-        QtCore.QThread.__init__(self, parent)
+        QtCore.QThread.__init__(self, parent=parent)
         self.lock = Mutex()
         self.running = False
         self.dev_handle = dev_handle
@@ -102,7 +102,7 @@ class Unix_EmotivThread(QtCore.QThread):
             self.running = False
 
 
-class Emotiv(Node):
+class Emotiv(Node, QtCore.QObject):
 
     """
     Simple eeg emotiv device to access eeg, impedances and gyro data in a Node.
@@ -132,6 +132,7 @@ class Emotiv(Node):
 
     def __init__(self, **kargs):
         Node.__init__(self, **kargs)
+        QtCore.QObject.__init__(self)
         assert HAVE_PYCRYPTO, "Emotiv node depends on the `pycrypto` package, but it could not be imported."
         if WINDOWS:
             assert HAVE_PYWINUSB, "Emotiv node on Windows depends on the `pywinusb` package, but it could not be imported."
