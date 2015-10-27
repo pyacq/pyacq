@@ -80,12 +80,11 @@ def get_level(data, bits):
 
 class Unix_EmotivThread(QtCore.QThread):
 
-    def __init__(self, parent, dev_handle):
-        QtCore.QThread.__init__(self)
+    def __init__(self, dev_handle, parent=None):
+        QtCore.QThread.__init__(self, parent)
         self.lock = Mutex()
         self.running = False
         self.dev_handle = dev_handle
-        self.parent = parent
 
     def run(self):
         with self.lock:
@@ -96,7 +95,7 @@ class Unix_EmotivThread(QtCore.QThread):
                     break
 
             crypted_buffer = self.dev_handle.read(32)        
-            self.parent.process_data(crypted_buffer)
+            self.parent().process_data(crypted_buffer)
         
     def stop(self):
         with self.lock:
@@ -169,7 +168,7 @@ class Emotiv(Node):
             self.dev_handle.open()
             self.dev_handle.set_raw_data_handler(self.win_emotiv_process)
         else:
-            self._thread = Unix_EmotivThread(self, self.dev_handle)
+            self._thread = Unix_EmotivThread(self.dev_handle, parent=self)
             self._thread.start()
 
     def _stop(self):
@@ -183,7 +182,6 @@ class Emotiv(Node):
         self.dev_handle.close()
         
     def process_data(self, crypted_buffer):
-        
         data = self.cipher.decrypt(crypted_buffer[:16]) + self.cipher.decrypt(crypted_buffer[16:])
         
         # impedance value
