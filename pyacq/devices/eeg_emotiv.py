@@ -78,60 +78,27 @@ def get_level(data, bits):
     return level
 
 
-class EmotivIOThread_Unix(QtCore.QThread):
+class Unix_EmotivThread(QtCore.QThread):
 
-    def __init__(self, dev_handle, cipher, outputs, parent=None):
+    def __init__(self, dev_handle, parent=None):
         QtCore.QThread.__init__(self)
-        self.outputs = outputs
-        self.dev_handle = dev_or_task_handle
-        self.cipher = cipher
         self.lock = Mutex()
         self.running = False
 
     def run(self):
         with self.lock:
             self.running = True
-        n=0
         while True:
             with self.lock:
                 if not self.running:
                     break
 
-            crypted_buffer = self.dev_or_task_handle.read(32)        
-            values, imp, gyro = process_data(crypted_buffer, self.cipher)
-            n += 1
-            self.outputs['signals'].send(n, values)
-            self.outputs['impedances'].send(n, imp)
-            self.outputs['gyro'].send(n, gyro)
-
+            crypted_buffer = self.dev_handle.read(32)        
+            self.parent().process_data(crypted_buffer)
+        
     def stop(self):
         with self.lock:
             self.running = False
-
-def process_data(crypted_buffer, cipher):
-    
-    values = np.zeros(len(_channel_names), dtype=np.int64)
-    imp = np.zeros(len(_channel_names), dtype=np.float64)
-    gyro = np.zeros(2, dtype=np.int64)
-
-    data = cipher.decrypt(crypted_buffer[:16]) + cipher.decrypt(crypted_buffer[16:])
-    
-    # impedance value
-    sensor_num = data[0]
-    if sensor_num in _quality_num_to_name:
-        sensor_name = _quality_num_to_name[sensor_num]
-        if sensor_name in _channel_names:
-            channel_index = _channel_names.index(sensor_name)
-            imp[channel_index] = get_level(data, _quality_bits) / 540
-    # channel signals value
-    for c, channel_name in enumerate(_channel_names):
-        bits = _sensorBits[channel_name]
-        values[c] = get_level(data, bits)
-    # gyro value
-    gyro[0] = data[29] - 106  # X
-    gyro[1] = data[30] - 105  # Y
-    
-    return values, imp, gyro
 
 
 class Emotiv(Node):
@@ -187,10 +154,12 @@ class Emotiv(Node):
                 self.serial = f.readline().strip()
 
     def _initialize(self):
+        self.values = np.zeros(len(_channel_names), dtype=np.int64)
+        self.imp = np.zeros(len(_channel_names), dtype=np.float64)
+        self.gyro = np.zeros(2, dtype=np.int64)
+        self.n = 0
         self.cipher = setupCrypto(self.serial)
-        if WINDOWS:
-            self.n = 0
-        else:
+        if not WINDOWS:
             self.dev_handle = open(self.device_path, mode='rb')
 
     def _start(self):
@@ -198,7 +167,7 @@ class Emotiv(Node):
             self.dev_handle.open()
             self.dev_handle.set_raw_data_handler(self.win_emotiv_process)
         else:
-            self._thread = EmotivIOThread_Unix(
+            self._thread = Unix_EmotivThread(
                 self.dev_handle, self.cipher, self.outputs)
             self._thread.start()
 
@@ -212,18 +181,34 @@ class Emotiv(Node):
     def _close(self):
         self.dev_handle.close()
         
-    # Windows handler
+    def process_data(self, crypted_buffer):
+        
+        data = self.cipher.decrypt(crypted_buffer[:16]) + self.cipher.decrypt(crypted_buffer[16:])
+        
+        # impedance value
+        sensor_num = data[0]
+        if sensor_num in _quality_num_to_name:
+            sensor_name = _quality_num_to_name[sensor_num]
+            if sensor_name in _channel_names:
+                channel_index = _channel_names.index(sensor_name)
+                self.imp[channel_index] = get_level(data, _quality_bits) / 540
+        # channel signals value
+        for c, channel_name in enumerate(_channel_names):
+            bits = _sensorBits[channel_name]
+            self.values[c] = get_level(data, bits)
+        # gyro value
+        self.gyro[0] = data[29] - 106  # X
+        self.gyro[1] = data[30] - 105  # Y
+        
+        self.n += 1
+        self.outputs['signals'].send(self.n, self.values)
+        self.outputs['impedances'].send(self.n, self.imp)
+        self.outputs['gyro'].send(self.n, self.gyro)
+
     def win_emotiv_process(self, data):
-        """
-        Receives packets from headset for Windows, process in crypto and send to outputs
-        """
         #assert data[0] == 0
         crypted_buffer = bytes(data[1:])
-        values, imp, gyro = process_data(crypted_buffer, self.cipher)
-        self.n += 1
-        self.outputs['signals'].send(self.n, values)
-        self.outputs['impedances'].send(self.n, imp)
-        self.outputs['gyro'].send(self.n, gyro)
+        self.process_data(crypted_buffer)
         
 
 register_node_type(Emotiv)
