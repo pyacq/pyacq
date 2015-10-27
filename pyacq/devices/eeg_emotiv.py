@@ -2,7 +2,6 @@ from ..core import Node, register_node_type
 from pyqtgraph.Qt import QtCore, QtGui
 from pyqtgraph.util.mutex import Mutex
 import os
-
 import numpy as np
 
 try:
@@ -12,6 +11,14 @@ try:
 except ImportError:
     HAVE_PYCRYPTO = False
 
+import platform
+WINDOWS = (platform.system() == "Windows")
+if WINDOWS: 
+    try:
+        import pywinusb.hid as hid
+        HAVE_PYWINUSB = True
+    except ImportError:
+        HAVE_PYWINUSB = False
 
 _channel_names = ['F3', 'F4', 'P7', 'FC6', 'F7', 'F8',
                   'T7', 'P8', 'FC5', 'AF4', 'T8', 'O2', 'O1', 'AF3']
@@ -62,7 +69,6 @@ def setupCrypto(serial):
     cipher = AES.new(key, AES.MODE_ECB, iv)
     return cipher
 
-
 def get_level(data, bits):
     level = 0
     for i in range(13, -1, -1):
@@ -72,52 +78,27 @@ def get_level(data, bits):
     return level
 
 
-class EmotivIOThread(QtCore.QThread):
+class EmotivIOThread_Unix(QtCore.QThread):
 
     def __init__(self, dev_handle, cipher, outputs, parent=None):
         QtCore.QThread.__init__(self)
         self.outputs = outputs
-        self.dev_handle = dev_handle
+        self.dev_handle = dev_or_task_handle
         self.cipher = cipher
-
         self.lock = Mutex()
         self.running = False
 
     def run(self):
         with self.lock:
             self.running = True
-
-        n = 0
-        values = np.zeros(len(_channel_names), dtype=np.int64)
-        imp = np.zeros(len(_channel_names), dtype=np.float64)
-        gyro = np.zeros(2, dtype=np.int64)
-
+        n=0
         while True:
             with self.lock:
                 if not self.running:
                     break
 
-            crypted_buffer = self.dev_handle.read(32)
-            data = self.cipher.decrypt(
-                crypted_buffer[:16]) + self.cipher.decrypt(crypted_buffer[16:])
-
-            # impedance value
-            sensor_num = data[0]
-            if sensor_num in _quality_num_to_name:
-                sensor_name = _quality_num_to_name[sensor_num]
-                if sensor_name in _channel_names:
-                    channel_index = _channel_names.index(sensor_name)
-                    imp[channel_index] = get_level(data, _quality_bits) / 540
-
-            # channel signals value
-            for c, channel_name in enumerate(_channel_names):
-                bits = _sensorBits[channel_name]
-                values[c] = get_level(data, bits)
-
-            # gyro value
-            gyro[0] = data[29] - 106  # X
-            gyro[1] = data[30] - 105  # Y
-
+            crypted_buffer = self.dev_or_task_handle.read(32)        
+            values, imp, gyro = process_data(crypted_buffer, self.cipher)
             n += 1
             self.outputs['signals'].send(n, values)
             self.outputs['impedances'].send(n, imp)
@@ -126,6 +107,31 @@ class EmotivIOThread(QtCore.QThread):
     def stop(self):
         with self.lock:
             self.running = False
+
+def process_data(crypted_buffer, cipher):
+    
+    values = np.zeros(len(_channel_names), dtype=np.int64)
+    imp = np.zeros(len(_channel_names), dtype=np.float64)
+    gyro = np.zeros(2, dtype=np.int64)
+
+    data = cipher.decrypt(crypted_buffer[:16]) + cipher.decrypt(crypted_buffer[16:])
+    
+    # impedance value
+    sensor_num = data[0]
+    if sensor_num in _quality_num_to_name:
+        sensor_name = _quality_num_to_name[sensor_num]
+        if sensor_name in _channel_names:
+            channel_index = _channel_names.index(sensor_name)
+            imp[channel_index] = get_level(data, _quality_bits) / 540
+    # channel signals value
+    for c, channel_name in enumerate(_channel_names):
+        bits = _sensorBits[channel_name]
+        values[c] = get_level(data, bits)
+    # gyro value
+    gyro[0] = data[29] - 106  # X
+    gyro[1] = data[30] - 105  # Y
+    
+    return values, imp, gyro
 
 
 class Emotiv(Node):
@@ -144,9 +150,9 @@ class Emotiv(Node):
 
     Parameters for configure():
     ----
-    device_info :  dict containing :
-        - Path to the usb hidraw used
-        - Serial number of USB key
+    device :
+        - For Linux, it's the path to the usb hidraw used
+        - For Windows, it's the hid object associated with the USB key
     """
     _output_specs = {'signals': dict(streamtype='analogsignal', dtype='int64',
                                      shape=(-1, 14), sample_rate=128., timeaxis=0),
@@ -159,32 +165,65 @@ class Emotiv(Node):
     def __init__(self, **kargs):
         Node.__init__(self, **kargs)
         assert HAVE_PYCRYPTO, "Emotiv node depends on the `pycrypto` package, but it could not be imported."
+        if WINDOWS:
+            assert HAVE_PYWINUSB, "Emotiv node on Windows depends on the `pywinusb` package, but it could not be imported."
+            
         self.device_info = dict()
 
-    def _configure(self, device_path='/dev/hidraw0'):
-        self.device_path = device_path
-        self.name = self.device_path.strip('/dev/')
-        real_input_path = os.path.realpath("/sys/class/hidraw/" + self.name)
-        path = '/'.join(real_input_path.split('/')[:-4])
-        with open(path + "/manufacturer", 'r') as f:
-            self.manufacturer = f.readline()
-        with open(path + "/serial", 'r') as f:
-            self.serial = f.readline().strip()
+    def _configure(self, device_handle='/dev/hidraw0'):
+        
+        self.device_path = device_handle
+        
+        if WINDOWS:
+            self.dev_handle = hid.core.HidDevice(device_handle)
+            self.serial = self.dev_handle.serial_number
+        else:
+            self.name = self.device_handle.strip('/dev/')
+            real_input_path = os.path.realpath("/sys/class/hidraw/" + self.name)
+            path = '/'.join(real_input_path.split('/')[:-4])
+            with open(path + "/manufacturer", 'r') as f:
+                self.manufacturer = f.readline()
+            with open(path + "/serial", 'r') as f:
+                self.serial = f.readline().strip()
 
     def _initialize(self):
         self.cipher = setupCrypto(self.serial)
-        self.dev_handle = open(self.device_path,  mode='rb')
+        if WINDOWS:
+            self.n = 0
+        else:
+            self.dev_handle = open(self.device_path, mode='rb')
 
     def _start(self):
-        self._thread = EmotivIOThread(
-            self.dev_handle, self.cipher, self.outputs)
-        self._thread.start()
+        if WINDOWS:
+            self.dev_handle.open()
+            self.dev_handle.set_raw_data_handler(self.win_emotiv_process)
+        else:
+            self._thread = EmotivIOThread_Unix(
+                self.dev_handle, self.cipher, self.outputs)
+            self._thread.start()
 
     def _stop(self):
-        self._thread.stop()
-        self._thread.wait()
+        if WINDOWS:
+            self.dev_handle.set_raw_data_handler(None)
+        else:
+            self._thread.stop()
+            self._thread.wait()
 
     def _close(self):
         self.dev_handle.close()
+        
+    # Windows handler
+    def win_emotiv_process(self, data):
+        """
+        Receives packets from headset for Windows, process in crypto and send to outputs
+        """
+        #assert data[0] == 0
+        crypted_buffer = bytes(data[1:])
+        values, imp, gyro = process_data(crypted_buffer, self.cipher)
+        self.n += 1
+        self.outputs['signals'].send(self.n, values)
+        self.outputs['impedances'].send(self.n, imp)
+        self.outputs['gyro'].send(self.n, gyro)
+        
 
 register_node_type(Emotiv)
