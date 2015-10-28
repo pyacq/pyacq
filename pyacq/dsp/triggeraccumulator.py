@@ -41,9 +41,9 @@ class ThreadPollInputUntilPosLimit(ThreadPollInput):
 
 class TriggerAccumulator(Node,  QtCore.QObject):
     """
-    Node that accumulate in a ring buffer chunk of a multi signals stream of trigger events.
+    Node that accumulate in a ring buffer chunk of a multi signals on trigger events.
     
-    This Node have no output because the stack  size of signals chunks is online configurable via, so
+    This Node have no output because the stack  size of signals chunks is online configurable.
     sharred memory is difficult because shape can change.
     
     The internal self.stack have 3 dims:
@@ -54,7 +54,7 @@ class TriggerAccumulator(Node,  QtCore.QObject):
     The self.total_trig indicate the number of triggers since the last reset_stack().
     
     TriggerAccumulator.params['stask_size'] control the number of event in the stack.
-    Note the it behave have a ring buffer along the axis 0.
+    Note the stask behave as a ring buffer along the axis 0.
     So if  self.total_trig>stask_size you need to play with modulo to acces the last event.
     
     On each new chunk this new_chunk is emmited.

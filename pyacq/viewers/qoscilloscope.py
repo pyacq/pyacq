@@ -165,32 +165,6 @@ class BaseOscilloscope(WidgetNode):
     def refresh(self):
         self._refresh()
 
-    def on_param_change(self, params, changes):
-        for param, change, data in changes:
-            if change != 'value': continue
-            if param.name()=='visible':
-                c = self.by_channel_params.children().index(param.parent())
-                if data:
-                    self.curves[c].show()
-                else:
-                    self.curves[c].hide()
-            if param.name()=='background_color':
-                self.graphicsview.setBackground(data)
-            if param.name()=='xsize':
-                if self.params['auto_decimate']:
-                    self.estimate_decimate()
-                self.reset_curves_data()
-            if param.name()=='decimate':
-                self.reset_curves_data()
-            if param.name()=='auto_decimate':
-                if data:
-                    self.estimate_decimate()
-                self.reset_curves_data()
-            if param.name()=='refresh_interval':
-                self.timer.setInterval(data)
-            if param.name()=='mode':
-                self.reset_curves_data()
-
     def reset_curves_data(self):
         xsize = self.params['xsize']
         decimate = self.params['decimate']
@@ -333,6 +307,32 @@ class QOscilloscope(BaseOscilloscope):
             else:
                 label.setVisible(False)
 
+    def on_param_change(self, params, changes):
+        for param, change, data in changes:
+            if change != 'value': continue
+            if param.name()=='visible':
+                c = self.by_channel_params.children().index(param.parent())
+                if data:
+                    self.curves[c].show()
+                else:
+                    self.curves[c].hide()
+            if param.name()=='background_color':
+                self.graphicsview.setBackground(data)
+            if param.name()=='xsize':
+                if self.params['auto_decimate']:
+                    self.estimate_decimate()
+                self.reset_curves_data()
+            if param.name()=='decimate':
+                self.reset_curves_data()
+            if param.name()=='auto_decimate':
+                if data:
+                    self.estimate_decimate()
+                self.reset_curves_data()
+            if param.name()=='refresh_interval':
+                self.timer.setInterval(data)
+            if param.name()=='mode':
+                self.reset_curves_data()
+    
     def gain_zoom(self, factor, selected=None):
         for i, p in enumerate(self.by_channel_params.children()):
             if selected is not None and not selected[i]: continue
