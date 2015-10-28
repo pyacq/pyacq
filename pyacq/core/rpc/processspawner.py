@@ -2,6 +2,7 @@ import sys
 import subprocess
 import atexit
 import zmq
+from pyqtgraph.Qt import QtCore
 
 from .client import RPCClient
 from ..log import logger
@@ -81,6 +82,8 @@ class ProcessSpawner(object):
         executable = sys.executable
         self.proc = subprocess.Popen((executable, '-c', bootstrap), 
                                      stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+        #self.stdout_poller = PipePoller(self.proc.stdout)
+        #self.stderr_poller = PipePoller(self.proc.stderr)
         logger.info("Spawned process: %d", self.proc.pid)
         
         # Automatically shut down process when we exit. 
@@ -116,4 +119,22 @@ class ProcessSpawner(object):
         else:
             self.client.close_server()
         self.proc.wait()
+
+
+#class PipePoller(QtCore.QThread):
+    
+    #new_line = QtCore.Signal(object)
+    
+    #def __init__(self, pipe):
+        #QThread.__init__(self)
+        #self.pipe = pipe
+        
+    #def run(self):
+        #while True:
+            #line = self.pipe.readline()
+            #if line == '':
+                #break
+            #self.new_line.emit(line)
+        
+    
 

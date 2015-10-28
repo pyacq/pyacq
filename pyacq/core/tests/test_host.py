@@ -1,17 +1,15 @@
 import time
 import logging
 
-from pyacq.core.rpc import RPCClient, ProcessSpawner
+from pyacq.core.host import HostSpawner
 
 #~ logging.getLogger().level=logging.INFO
 
 
 def test_host1():
     
-    proc1 = ProcessSpawner()
-    host1 = proc1.client._import('pyacq').Host('host1')
-    proc2 = ProcessSpawner()
-    host2 = proc1.client._import('pyacq').Host('host1')
+    host1 = HostSpawner('host1')
+    host2 = HostSpawner('host2')
     
     ng11 = host1.create_nodegroup()
     ng12 = host1.create_nodegroup()
@@ -22,8 +20,8 @@ def test_host1():
     ng22.stop_all_nodes()
     host2.close_all_nodegroups()
     
-    proc1.stop()
-    proc2.stop()
+    host1.stop()
+    host2.stop()
 
 
 
