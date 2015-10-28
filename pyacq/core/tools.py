@@ -28,15 +28,15 @@ class ThreadPollInput(QtCore.QThread):
         self.timeout = timeout
         
         self.running = False
-        self.lock = Mutex()
+        self.running_lock = Mutex()
         self._pos = None
     
     def run(self):
-        with self.lock:
+        with self.running_lock:
             self.running = True
         
         while True:
-            with self.lock:
+            with self.running_lock:
                 if not self.running:
                     break
                 if self.input_stream() is None:
@@ -52,7 +52,7 @@ class ThreadPollInput(QtCore.QThread):
         self.new_data.emit(self._pos, data)
     
     def stop(self):
-        with self.lock:
+        with self.running_lock:
             self.running = False
     
     def pos(self):
