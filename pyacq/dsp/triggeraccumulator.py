@@ -78,10 +78,10 @@ class TriggerAccumulator(Node,  QtCore.QObject):
     def __init__(self, parent = None, **kargs):
         QtCore.QObject.__init__(self, parent)
         Node.__init__(self, **kargs)
-    
-    def _configure(self, max_stack_size = 10):
         self.params = pg.parametertree.Parameter.create( name='Accumulator options',
                                                     type='group', children =self._default_params)
+    
+    def _configure(self, max_stack_size = 10):
         self.params.sigTreeStateChanged.connect(self.on_params_change)
         self.max_stack_size = max_stack_size
         self.params.param('stack_size').setLimits([1, self.max_stack_size])
@@ -148,7 +148,6 @@ class TriggerAccumulator(Node,  QtCore.QObject):
         self.total_trig = 0
         self.limit_poller.reset()
         
-
     def reset_stack(self):
         self.stack[:] = 0
         self.stack_pos = 0

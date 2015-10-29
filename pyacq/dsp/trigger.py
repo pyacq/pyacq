@@ -121,10 +121,10 @@ class TriggerBase(Node,  QtCore.QObject):
     def __init__(self, parent = None, **kargs):
         QtCore.QObject.__init__(self, parent)
         Node.__init__(self, **kargs)
-    
-    def _configure(self):
         self.params = pg.parametertree.Parameter.create( name='Trigger options',
                                                     type='group', children =self._default_params)
+    
+    def _configure(self):
         self.params.sigTreeStateChanged.connect(self.on_params_change)
 
     def after_input_connect(self, inputname):

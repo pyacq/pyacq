@@ -4,17 +4,37 @@ import pyqtgraph as pg
 import numpy as np
 
 
-from .qoscilloscope import MyViewBox, BaseOscilloscope
+from .qoscilloscope import BaseOscilloscope, OscilloscopeControler
 from ..core import (register_node_type,  StreamConverter)
+from ..dsp import AnalogTrigger, TriggerAccumulator
 
+
+
+class TriggeredOscilloscopeControler(OscilloscopeControler):
+    def __init__(self, parent=None, viewer=None):
+        OscilloscopeControler.__init__(self, parent=parent, viewer=viewer)
+
+
+        self.tree_params2 = pg.parametertree.ParameterTree()
+        self.tree_params2.setParameters(self.viewer.trigger.params, showTop=True)
+        self.tree_params2.header().hide()
+        self.v1.addWidget(self.tree_params2)
+
+        self.tree_params3 = pg.parametertree.ParameterTree()
+        self.tree_params3.setParameters(self.viewer.triggeraccumulator.params, showTop=True)
+        self.tree_params3.header().hide()
+        self.v1.addWidget(self.tree_params3)
+        
 
 class QTriggeredOscilloscope(BaseOscilloscope):
     _input_specs = {'signals': dict(streamtype='signals')}
     
     _default_params =  [
-                    {'name': 'ylims', 'type': 'range', 'value': [-10., 10.] },
+                    {'name': 'ylim_max', 'type': 'float', 'value': 10.},
+                    {'name': 'ylim_min', 'type': 'float', 'value': -10.},
                     {'name': 'background_color', 'type': 'color', 'value': 'k' },
                     {'name': 'refresh_interval', 'type': 'int', 'value': 100 , 'limits':[5, 1000]},
+                    {'name': 'display_labels', 'type': 'bool', 'value': False},
                 ]
     
     _default_by_channel_params =  [ 
@@ -22,6 +42,8 @@ class QTriggeredOscilloscope(BaseOscilloscope):
                     {'name': 'offset', 'type': 'float', 'value': 0., 'step': 0.1},
                     {'name': 'visible', 'type': 'bool', 'value': True},
                 ]
+    
+    _ControlerClass = TriggeredOscilloscopeControler
     
     def __init__(self, **kargs):
         BaseOscilloscope.__init__(self, **kargs)
@@ -39,21 +61,24 @@ class QTriggeredOscilloscope(BaseOscilloscope):
         h.addStretch()
         
         self.viewBox.gain_zoom.connect(self.gain_zoom)
+        
+        self.trigger = AnalogTrigger()
+        self.triggeraccumulator = TriggerAccumulator()
 
     def _initialize(self):
         BaseOscilloscope._initialize(self)
         
         #create a trigger
-        self.trigger = AnalogTrigger()
+        
         self.trigger.configure()
-        self.trigger.input.connect(self.input_proxy.params)
+        self.trigger.input.connect(self.proxy_input.params)
         self.trigger.output.configure(protocol='inproc', transfermode='plaindata')
         self.trigger.initialize()
         
         #create a triggeraccumulator
-        self.triggeraccumulator = TriggerAccumulator()
+        
         self.triggeraccumulator.configure(max_stack_size = np.inf)
-        self.triggeraccumulator.inputs['signals'].connect(self.input_proxy.params)
+        self.triggeraccumulator.inputs['signals'].connect(self.proxy_input.params)
         self.triggeraccumulator.inputs['events'].connect(self.trigger.output)
         self.triggeraccumulator.initialize()
         
@@ -73,6 +98,8 @@ class QTriggeredOscilloscope(BaseOscilloscope):
         
         self.vline = pg.InfiniteLine(pos=0, angle=90, pen='r')
         self.plot.addItem(self.vline)
+        
+        self.list_curves = [ [ ] for i in range(self.nb_channel) ]
         
         self.recreate_stack()
         self.reset_curves_data()
@@ -109,15 +136,72 @@ class QTriggeredOscilloscope(BaseOscilloscope):
         stack_size = self.triggeraccumulator.params['stack_size']
         for c in range(self.nb_channel):
             for pos in range(stack_size):
-                self.list_curves[c][pos].setData(self.stackedchunk.t_vect, np.zeros(self.stackedchunk.t_vect.shape), antialias = False)
+                self.list_curves[c][pos].setData(self.triggeraccumulator.t_vect, np.zeros(self.triggeraccumulator.t_vect.shape), antialias = False)
         self._refresh()
     
     def _refresh(self):
-        pass
+        stack_size = self.triggeraccumulator.params['stack_size'] 
+        
+        gains = np.array([p['gain'] for p in self.by_channel_params.children()])
+        offsets = np.array([p['offset'] for p in self.by_channel_params.children()])
+        visibles = np.array([p['visible'] for p in self.by_channel_params.children()], dtype=bool)
+        
+        if self.plotted_trig<self.triggeraccumulator.total_trig-stack_size:
+            self.plotted_trig = self.triggeraccumulator.total_trig-stack_size
+        
+        while self.plotted_trig<self.triggeraccumulator.total_trig:
+            pos = self.plotted_trig%stack_size
+            for c in range(self.nb_channel):
+                data = self.triggeraccumulator.stack[pos, c, :]*gains[c]+offsets[c]
+                if visibles[c]:
+                    self.list_curves[c][pos].setData(self.triggeraccumulator.t_vect, data, antialias = False)
+            self.plotted_trig += 1
+        
+        self.plot.setXRange( self.triggeraccumulator.t_vect[0], self.triggeraccumulator.t_vect[-1])
+        self.plot.setYRange(self.params['ylim_min'], self.params['ylim_max'])
+        
+        self.label_count.setText('Nb events: {}'.format(self.triggeraccumulator.total_trig))
+
+        for c, visible in enumerate(visibles):
+            label = self.channel_labels[c]
+            if visible and self.params['display_labels']:
+                if self.all_mean is not None:
+                    label.setPos(self.triggeraccumulator.params['left_sweep'], self.all_mean[c]*gains[c]+offsets[c])
+                else:
+                    label.setPos(self.triggeraccumulator.params['left_sweep'], offsets[c])
+                label.setVisible(True)
+            else:
+                label.setVisible(False)
+    
     
     def on_param_change(self, params, changes):
-        #TODO
-        pass
+        for param, change, data in changes:
+            if change != 'value': continue
+            #~ print param.name()
+            if param.name() in ['gain', 'offset']: 
+                self.redraw_stack()
+            if param.name()=='ylims':
+                continue
+            if param.name()=='visible':
+                c = self.by_channel_params.children().index(param.parent())
+                for curve in self.list_curves[c]:
+                    if data:
+                        curve.show()
+                    else:
+                        curve.hide()
+            if param.name()=='background_color':
+                self.graphicsview.setBackground(data)
+            if param.name()=='refresh_interval':
+                self.timer.setInterval(data)
+            if param.name() in ['left_sweep', 'right_sweep', 'stack_size']:
+                self.plotted_trig = -1
+                self.reset_curves_data()
+            if param.name() in [ 'channel','threshold','debounce_time','debounce_mode', 'front']:
+                continue
+
+    def redraw_stack(self):
+        self.plotted_trig = max(self.triggeraccumulator.total_trig - self.triggeraccumulator.params['stack_size'], 0)
+
 
     def reset_curves_data(self):
         stack_size = self.triggeraccumulator.params['stack_size']
@@ -130,7 +214,8 @@ class QTriggeredOscilloscope(BaseOscilloscope):
         for i in range(self.nb_channel):
             curves = [ ]
             for j in range(stack_size):
-                color = self.paramChannels.children()[i]['color']
+                #~ color = self.by_channel_params.children()[i]['color'] #TODO
+                color = '#7FFF00'  # TODO
                 curve = pg.PlotCurveItem(pen = color)
                 self.plot.addItem(curve)
                 curves.append(curve)
@@ -143,19 +228,14 @@ class QTriggeredOscilloscope(BaseOscilloscope):
                 p['offset'] = p['offset'] + self.all_mean[i]*p['gain'] - self.all_mean[i]*p['gain']*factor
             p['gain'] = p['gain']*factor
     
-    
-    def autoestimate_scales(self):
-        if self._head is None:
-            return None, None
-        head = self._head
-        sr = self.input.params['sample_rate']
-        xsize = self.params['xsize'] 
-        np_arr = self.proxy_input.get_array_slice(head,self.full_size)
-        self.all_sd = np.std(np_arr, axis=1)
-        # self.all_mean = np.mean(np_arr, axis = 1)
-        self.all_mean = np.median(np_arr, axis=1)
-        return self.all_mean, self.all_sd
+    def estimate_decimate(self, nb_point=4000):
+        pass
 
+    def autoestimate_scales(self):
+        self.all_sd = np.array([np.std(self.triggeraccumulator.stack[:,i,:]) for i in range(self.nb_channel)])
+        self.all_mean = np.array([np.median(self.triggeraccumulator.stack[:,i,:]) for i in range(self.nb_channel)])
+        return self.all_mean, self.all_sd
+    
     def auto_gain_and_offset(self, mode=0, visibles=None):
         """
         mode = 0, 1, 2

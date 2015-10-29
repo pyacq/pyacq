@@ -52,7 +52,7 @@ class BaseOscilloscope(WidgetNode):
     def __init__(self, **kargs):
         WidgetNode.__init__(self, **kargs)
         
-        self.layout = QtGui.QHBoxLayout()
+        self.layout = QtGui.QVBoxLayout()
         self.setLayout(self.layout)
         
         self.graphicsview = pg.GraphicsView()
@@ -73,9 +73,8 @@ class BaseOscilloscope(WidgetNode):
         self.params_controler.show()
         # TODO deal with modality
     
-    def _configure(self, with_user_dialog=True, max_xsize=60.):
+    def _configure(self, with_user_dialog=True):
         self.with_user_dialog = with_user_dialog
-        self.max_xsize = max_xsize
     
     def _initialize(self):
         assert len(self.input.params['shape']) == 2, 'Are you joking ?'
@@ -121,10 +120,10 @@ class BaseOscilloscope(WidgetNode):
         self.all_params = pg.parametertree.Parameter.create(name='all param',
                                     type='group', children=[self.params,self.by_channel_params])
         self.all_params.sigTreeStateChanged.connect(self.on_param_change)
-        self.params.param('xsize').setLimits([2./sr, self.max_xsize*.95])
         
-        if self.with_user_dialog:
-            self.params_controler = OscilloscopeControler(parent=self, viewer=self)
+        
+        if self.with_user_dialog and self._ControlerClass:
+            self.params_controler = self._ControlerClass(parent=self, viewer=self)
             self.params_controler.setWindowFlags(QtCore.Qt.Window)
             self.viewBox.doubleclicked.connect(self.show_params_controler)
         else:
@@ -190,6 +189,103 @@ class BaseOscilloscope(WidgetNode):
         if newsize>limits[0] and newsize<limits[1]:
             self.params['xsize'] = newsize
 
+class OscilloscopeControler(QtGui.QWidget):
+    def __init__(self, parent=None, viewer=None):
+        QtGui.QWidget.__init__(self, parent)
+        
+        self._viewer = weakref.ref(viewer)
+        
+        # layout
+        self.mainlayout = QtGui.QVBoxLayout()
+        self.setLayout(self.mainlayout)
+        t = 'Options for {}'.format(self.viewer.name)
+        self.setWindowTitle(t)
+        self.mainlayout.addWidget(QtGui.QLabel('<b>'+t+'<\b>'))
+        
+        h = QtGui.QHBoxLayout()
+        self.mainlayout.addLayout(h)
+        
+        self.v1 = QtGui.QVBoxLayout()
+        h.addLayout(self.v1)
+        self.tree_params = pg.parametertree.ParameterTree()
+        self.tree_params.setParameters(self.viewer.params, showTop=True)
+        self.tree_params.header().hide()
+        self.v1.addWidget(self.tree_params)
+
+        self.tree_by_channel_params = pg.parametertree.ParameterTree()
+        self.tree_by_channel_params.header().hide()
+        h.addWidget(self.tree_by_channel_params)
+        self.tree_by_channel_params.setParameters(self.viewer.by_channel_params, showTop=True)
+
+        v = QtGui.QVBoxLayout()
+        h.addLayout(v)
+        
+        
+        
+        if self.viewer.nb_channel>1:
+            v.addWidget(QtGui.QLabel('<b>Select channel...</b>'))
+            names = [p.name() for p in self.viewer.by_channel_params]
+            self.qlist = QtGui.QListWidget()
+            v.addWidget(self.qlist, 2)
+            self.qlist.addItems(names)
+            self.qlist.setSelectionMode(QtGui.QAbstractItemView.ExtendedSelection)
+            
+            for i in range(len(names)):
+                self.qlist.item(i).setSelected(True)            
+            v.addWidget(QtGui.QLabel('<b>and apply...<\b>'))
+             
+            
+            
+        
+        # Gain and offset
+        but = QtGui.QPushButton('set visble')
+        v.addWidget(but)
+        but.clicked.connect(self.on_set_visible)
+        
+        for i,text in enumerate(['Real scale (gain = 1, offset = 0)',
+                            'Fake scale (same gain for all)',
+                            'Fake scale (gain per channel)',]):
+            but = QtGui.QPushButton(text)
+            v.addWidget(but)
+            but.mode = i
+            but.clicked.connect(self.on_auto_gain_and_offset)
+        
+        
+        v.addWidget(QtGui.QLabel(self.tr('<b>Gain zoom (mouse wheel on graph):</b>'),self))
+        h = QtGui.QHBoxLayout()
+        v.addLayout(h)
+        for label, factor in [('--', 1./10.), ('-', 1./1.3), ('+', 1.3), ('++', 10.),]:
+            but = QtGui.QPushButton(label)
+            but.factor = factor
+            but.clicked.connect(self.on_gain_zoom)
+            h.addWidget(but)
+    
+    @property
+    def viewer(self):
+        return self._viewer()
+
+    @property
+    def selected(self):
+        selected = np.ones(self.viewer.nb_channel, dtype=bool)
+        if self.viewer.nb_channel>1:
+            selected[:] = False
+            selected[[ind.row() for ind in self.qlist.selectedIndexes()]] = True
+        return selected
+    
+    def on_set_visible(self):
+        # apply
+        visibles = self.selected
+        for i,param in enumerate(self.viewer.by_channel_params.children()):
+            param['visible'] = visibles[i]
+    
+    def on_auto_gain_and_offset(self):
+        mode = self.sender().mode
+        self.viewer.auto_gain_and_offset(mode=mode, visibles=self.selected)
+    
+    def on_gain_zoom(self):
+        factor = self.sender().factor
+        self.viewer.gain_zoom(factor, selected=self.selected)
+
 
 default_params = [
     {'name': 'xsize', 'type': 'float', 'value': 3., 'step': 0.1},
@@ -220,14 +316,21 @@ class QOscilloscope(BaseOscilloscope):
     _default_params = default_params
     _default_by_channel_params = default_by_channel_params
     
+    _ControlerClass = OscilloscopeControler
+    
     def __init__(self, **kargs):
         BaseOscilloscope.__init__(self, **kargs)
         
         self.viewBox.gain_zoom.connect(self.gain_zoom)
         self.viewBox.xsize_zoom.connect(self.xsize_zoom)
-        
+    
+    def _configure(self, with_user_dialog=True, max_xsize=60.):
+        BaseOscilloscope._configure(self, with_user_dialog = with_user_dialog)
+        self.max_xsize = max_xsize
+
     def _initialize(self):
         BaseOscilloscope._initialize(self)
+        self.params.param('xsize').setLimits([2./self.input.params['sample_rate'], self.max_xsize*.95])
         
         self.curves = []
         self.channel_labels = []
@@ -394,97 +497,3 @@ register_node_type(QOscilloscope)
 
 
 
-class OscilloscopeControler(QtGui.QWidget):
-    def __init__(self, parent=None, viewer=None):
-        QtGui.QWidget.__init__(self, parent)
-        
-        self._viewer = weakref.ref(viewer)
-        
-        # layout
-        self.mainlayout = QtGui.QVBoxLayout()
-        self.setLayout(self.mainlayout)
-        t = 'Options for {}'.format(self.viewer.name)
-        self.setWindowTitle(t)
-        self.mainlayout.addWidget(QtGui.QLabel('<b>'+t+'<\b>'))
-        
-        h = QtGui.QHBoxLayout()
-        self.mainlayout.addLayout(h)
-
-        self.tree_params = pg.parametertree.ParameterTree()
-        self.tree_params.setParameters(self.viewer.params, showTop=True)
-        self.tree_params.header().hide()
-        h.addWidget(self.tree_params)
-
-        self.tree_by_channel_params = pg.parametertree.ParameterTree()
-        self.tree_by_channel_params.header().hide()
-        h.addWidget(self.tree_by_channel_params)
-        self.tree_by_channel_params.setParameters(self.viewer.by_channel_params, showTop=True)
-
-        v = QtGui.QVBoxLayout()
-        h.addLayout(v)
-        
-        
-        
-        if self.viewer.nb_channel>1:
-            v.addWidget(QtGui.QLabel('<b>Select channel...</b>'))
-            names = [p.name() for p in self.viewer.by_channel_params]
-            self.qlist = QtGui.QListWidget()
-            v.addWidget(self.qlist, 2)
-            self.qlist.addItems(names)
-            self.qlist.setSelectionMode(QtGui.QAbstractItemView.ExtendedSelection)
-            
-            for i in range(len(names)):
-                self.qlist.item(i).setSelected(True)            
-            v.addWidget(QtGui.QLabel('<b>and apply...<\b>'))
-             
-            
-            
-        
-        # Gain and offset
-        but = QtGui.QPushButton('set visble')
-        v.addWidget(but)
-        but.clicked.connect(self.on_set_visible)
-        
-        for i,text in enumerate(['Real scale (gain = 1, offset = 0)',
-                            'Fake scale (same gain for all)',
-                            'Fake scale (gain per channel)',]):
-            but = QtGui.QPushButton(text)
-            v.addWidget(but)
-            but.mode = i
-            but.clicked.connect(self.on_auto_gain_and_offset)
-        
-        
-        v.addWidget(QtGui.QLabel(self.tr('<b>Gain zoom (mouse wheel on graph):</b>'),self))
-        h = QtGui.QHBoxLayout()
-        v.addLayout(h)
-        for label, factor in [('--', 1./10.), ('-', 1./1.3), ('+', 1.3), ('++', 10.),]:
-            but = QtGui.QPushButton(label)
-            but.factor = factor
-            but.clicked.connect(self.on_gain_zoom)
-            h.addWidget(but)
-    
-    @property
-    def viewer(self):
-        return self._viewer()
-
-    @property
-    def selected(self):
-        selected = np.ones(self.viewer.nb_channel, dtype=bool)
-        if self.viewer.nb_channel>1:
-            selected[:] = False
-            selected[[ind.row() for ind in self.qlist.selectedIndexes()]] = True
-        return selected
-    
-    def on_set_visible(self):
-        # apply
-        visibles = self.selected
-        for i,param in enumerate(self.viewer.by_channel_params.children()):
-            param['visible'] = visibles[i]
-    
-    def on_auto_gain_and_offset(self):
-        mode = self.sender().mode
-        self.viewer.auto_gain_and_offset(mode=mode, visibles=self.selected)
-    
-    def on_gain_zoom(self):
-        factor = self.sender().factor
-        self.viewer.gain_zoom(factor, selected=self.selected)

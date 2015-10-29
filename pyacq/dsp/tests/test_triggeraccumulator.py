@@ -47,6 +47,7 @@ def test_TriggerAccumulator():
     trigger.params['threshold'] = 1.
     trigger.params['debounce_mode'] = 'no-debounce'
     trigger.params['front'] = '+'
+    trigger.params['debounce_time'] = 0.1
     
     triggeraccumulator = TriggerAccumulator()
     triggeraccumulator.configure(max_stack_size = 5)
