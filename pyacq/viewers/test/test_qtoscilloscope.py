@@ -15,7 +15,7 @@ chunksize = 100
 
 def test_qoscilloscope():
     
-    man = create_manager(auto_close_at_exit=True)
+    man = create_manager(auto_close_at_exit=False)
     ng = man.create_nodegroup()
     
     app = pg.mkQApp()
