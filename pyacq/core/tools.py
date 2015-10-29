@@ -58,10 +58,18 @@ class ThreadPollInput(QtCore.QThread):
     def pos(self):
         return self._pos
 
-class ThreadPollOuput(ThreadPollInput):
-    """
-    Similar than `ThreadPollInput`.
-    This is a convenient class also create internally its own `InputStream` (socket).
+class ThreadPollOutput(ThreadPollInput):
+    """    
+    Thread that monitors an OutputStream in the background and emits a Qt signal
+    when data is sent.
+
+    Like ThreadPollInput, this class can be used where low-latency response to data
+    is needed within a Qt main thread (because polling from the main thread with
+    QTimer either introduces too much latency or consumes too much CPU).
+
+    The `process_data()` method may be reimplemented to define other behaviors.
+    
+    This is class also create internally its own `InputStream`.
     And pull it the same way than ThreadPollInput.
     """
     def __init__(self, output_stream, **kargs):
