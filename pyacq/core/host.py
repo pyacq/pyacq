@@ -12,7 +12,7 @@ class HostSpawner(ProcessSpawner):
         Host.
         """
         ProcessSpawner.__init__(self)
-        self.host = self.client._import('pyacq').Host(name)
+        self.host = self.client._import('pyacq.core.host').Host(name)
 
     def create_nodegroup(self, **kwds):
         return self.host.create_nodegroup(**kwds)
@@ -51,7 +51,7 @@ class Host(object):
     def close_all_nodegroups(self, force=False):
         """Close all NodeGroups belonging to this host.
         """
-            for sp in self.spawners:
+        for sp in self.spawners:
             if force:
                 sp.kill()
             else:

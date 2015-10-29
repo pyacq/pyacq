@@ -1,5 +1,4 @@
 from .rpc import *
-from .host import Host
 from .nodegroup import NodeGroup
 from .node import Node, WidgetNode
 from .nodelist import register_node_type
