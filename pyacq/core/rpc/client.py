@@ -216,8 +216,9 @@ class RPCClient(object):
                 if itimeout < 0:
                     raise TimeoutError("Timeout waiting for Future result.")
             try:
-                # NOTE: timeout can only be set before bind.
-                #self.socket.setsockopt(zmq.RCVTIMEO, itimeout)
+                # NOTE: docs say timeout can only be set before bind, but this
+                # seems to work for now.
+                self.socket.setsockopt(zmq.RCVTIMEO, itimeout)
                 msg = self.socket.recv()
                 msg = self.serializer.loads(msg)
             except zmq.error.Again:
@@ -287,9 +288,9 @@ class Future(concurrent.futures.Future):
     has arrived, and `result()` to get the return value (or raise an
     exception).
     """
-    def __init__(self, socket, call_id):
+    def __init__(self, client, call_id):
         concurrent.futures.Future.__init__(self)
-        self.socket = socket
+        self.client = client
         self.call_id = call_id
     
     def cancel(self):
@@ -301,6 +302,6 @@ class Future(concurrent.futures.Future):
         If the result is not yet available, then this call will block until
         the result has arrived or the timeout elapses.
         """
-        self.socket.process_until_future(self, timeout=timeout)
+        self.client.process_until_future(self, timeout=timeout)
         return concurrent.futures.Future.result(self)
 

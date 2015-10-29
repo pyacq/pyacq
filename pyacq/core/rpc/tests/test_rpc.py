@@ -132,6 +132,7 @@ def test_rpc():
         pass
     else:
         raise AssertionError('should have raised TimeoutError')
+    obj.sleep(0.2, _timeout=0.5)
 
     # test result order
     a = obj.add(1, 2, _sync='async')
