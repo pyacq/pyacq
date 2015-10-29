@@ -16,7 +16,7 @@ chunksize = 100
 length = int(sample_rate*20)
 t = np.arange(length)/sample_rate
 buffer = np.random.rand(nb_channel, length)*.3
-
+buffer[0,:] = 0
 for i in range(1,20):
     buffer[0, (t>i)&(t<i+.4)] = 2.
     if i%3==0:
