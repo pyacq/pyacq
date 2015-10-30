@@ -9,7 +9,7 @@ import zmq
 from ..log import debug, info
 from .serializer import MsgpackSerializer
 from .proxy import ObjectProxy
-from .server import RPCServer
+from .server import RPCServer, QtRPCServer
 
 
 class RPCClient(object):
@@ -24,7 +24,8 @@ class RPCClient(object):
         thread (if any) to process requests whenever the client is waiting
         for a response. This is necessary to avoid deadlocks in case of 
         reentrant RPC requests (eg, server A calls server B, which then calls
-        server A again).
+        server A again). By default, clients are reentrant if the server 
+        supports it.
     """
     
     clients_by_thread = {}  # (thread_id, rpc_addr): client
@@ -50,7 +51,7 @@ class RPCClient(object):
                 # create a new client!
                 return RPCClient(address)
     
-    def __init__(self, address, reentrant=True):
+    def __init__(self, address, reentrant=None):
         # pick a unique name: host:pid.tid:rpc_addr
         self.name = ('%s:%d.%x:%s' % (socket.gethostname(), os.getpid(), 
                                       threading.current_thread().ident, 
@@ -79,14 +80,22 @@ class RPCClient(object):
         
         # If this thread is running a server, then we need to allow the 
         # server to process requests when the client is blocking.
-        self._reentrant = reentrant
+        assert reentrant in (None, True, False)
         server = RPCServer.get_server()
-        if not reentrant or server is None:
+        if reentrant is False or server is None:
             self._poller = None
+            self._reentrant = False
         else:
-            self._poller = zmq.Poller()
-            self._poller.register(self._socket, zmq.POLLIN)
-            self._poller.register(server._socket, zmq.POLLIN)
+            if isinstance(server, QtRPCServer):
+                if reentrant is True:
+                    raise TypeError("Reentrancy is not yet supported with QtRPCServer.")
+                self._poller = None
+                self._reentrant = False
+            else:
+                self._poller = zmq.Poller()
+                self._poller.register(self._socket, zmq.POLLIN)
+                self._poller.register(server._socket, zmq.POLLIN)
+                self._reentrant = True
         
         info("RPC connect to %s", address.decode())
         self._socket.connect(address)
