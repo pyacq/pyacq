@@ -19,6 +19,12 @@ class RPCClient(object):
     ----------
     address : URL
         Address of RPC server to connect to.
+    reentrant : bool
+        If True, then this client will allow the server running in the same 
+        thread (if any) to process requests whenever the client is waiting
+        for a response. This is necessary to avoid deadlocks in case of 
+        reentrant RPC requests (eg, server A calls server B, which then calls
+        server A again).
     """
     
     clients_by_thread = {}  # (thread_id, rpc_addr): client
@@ -44,7 +50,7 @@ class RPCClient(object):
                 # create a new client!
                 return RPCClient(address)
     
-    def __init__(self, address):
+    def __init__(self, address, reentrant=True):
         # pick a unique name: host:pid.tid:rpc_addr
         self.name = ('%s:%d.%x:%s' % (socket.gethostname(), os.getpid(), 
                                       threading.current_thread().ident, 
@@ -73,8 +79,9 @@ class RPCClient(object):
         
         # If this thread is running a server, then we need to allow the 
         # server to process requests when the client is blocking.
+        self._reentrant = reentrant
         server = RPCServer.get_server()
-        if server is None:
+        if not reentrant or server is None:
             self._poller = None
         else:
             self._poller = zmq.Poller()
