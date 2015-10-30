@@ -37,11 +37,13 @@ class RPCServer(object):
     
     @staticmethod
     def register_server(srv):
+        assert srv._thread is None, "Server has already been registered."
+        key = threading.current_thread().ident
         with RPCServer.servers_by_thread_lock:
-            key = threading.current_thread().ident
             if key in RPCServer.servers_by_thread:
                 raise KeyError("An RPCServer is already running in this thread.")
             RPCServer.servers_by_thread[key] = srv
+        srv._thread = key
         
     def __init__(self, addr="tcp://*:*"):
         # pick a unique name: host:pid.tid
@@ -54,6 +56,9 @@ class RPCServer(object):
         self._closed = False
         self._closed_lock = threading.Lock()
         self._serializer = MsgpackSerializer(server=self)
+        
+        # Id of thread that this server is registered to
+        self._thread = None
         
         # types that are sent by value when return_type='auto'
         self.no_proxy_types = [type(None), str, int, float, tuple, list, dict, ObjectProxy, np.ndarray]
@@ -232,8 +237,6 @@ class RPCServer(object):
         """
         with self._closed_lock:
             self._closed = True
-        # keep the socket open just long enough to send a confirmation of
-        # closure.
 
     def running(self):
         """Boolean indicating whether the server is still running.
@@ -242,10 +245,25 @@ class RPCServer(object):
             return not self._closed
     
     def run_forever(self):
+        """Read and process RPC requests until the server is asked to close.
+        """
         info("RPC start server: %s@%s", self._name.decode(), self.address.decode())
         RPCServer.register_server(self)
         while self.running():
             self._read_and_process_one()
+            
+    def run_lazy(self):
+        """Register this server as being active for the current thread, but do
+        not actually begin processing requests.
+        
+        RPCClients in the same thread will allow the server to process requests
+        while they are waiting for responses. This can prevent deadlocks that
+        occur when 
+        
+        This can also be used to allow the user to manually process requests.
+        """
+        info("RPC lazy-start server: %s@%s", self._name.decode(), self.address.decode())
+        RPCServer.register_server(self)
 
     def auto_proxy(self, obj, no_proxy_types):
         ## Return object wrapped in LocalObjectProxy _unless_ its type is in noProxyTypes.

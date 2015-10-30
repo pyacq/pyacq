@@ -70,5 +70,5 @@ class Host(object):
     def _set_spawner_logger(self, sp):
         if self.logger is None:
             return
-        rlog = sp._import('pyacq.core.log')
+        rlog = sp.client._import('pyacq.core.log')
         rlog.logger = self.logger

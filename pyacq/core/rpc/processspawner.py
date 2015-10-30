@@ -87,7 +87,7 @@ class ProcessSpawner(object):
         logger.info("Spawned process: %d", self.proc.pid)
         
         # Automatically shut down process when we exit. 
-        atexit.register(self.kill)
+        atexit.register(self.stop)
         
         # Receive status information (especially the final RPC address)
         status = bootstrap_sock.recv_json()

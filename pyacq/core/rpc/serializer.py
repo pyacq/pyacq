@@ -93,9 +93,17 @@ class MsgpackSerializer:
     https://github.com/msgpack/msgpack-python/issues/98
     """
     def __init__(self, server=None, client=None):
-        self.server = server
+        self._server = server
         self.client = client
         assert HAVE_MSGPACK
+    
+    @property
+    def server(self):
+        if self._server is None:
+            # get the current server for this thread, if one exists
+            from .server import RPCServer
+            self._server = RPCServer.get_server()
+        return self._server
     
     def dumps(self, obj):
         """Convert obj to msgpack string.
