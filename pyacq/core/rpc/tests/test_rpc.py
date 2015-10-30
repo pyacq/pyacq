@@ -59,7 +59,7 @@ def test_rpc():
     obj = client['my_object']
     assert isinstance(obj, ObjectProxy)
     
-    # test call / sync return
+    logger.info("-- Test call with sync return --")
     add = obj.add
     assert isinstance(add, ObjectProxy)
     assert add(7, 5) == 12
@@ -68,27 +68,27 @@ def test_rpc():
     # See: https://github.com/msgpack/msgpack-python/issues/98
     assert obj.get_list() == (0, 'x', 7)
 
-    # test async return
+    logger.info("-- Test async return --")
     fut = obj.sleep(0.1, _sync='async')
     assert not fut.done()
     assert fut.result() is None
 
-    # test no return
+    logger.info("-- Test no return --")
     assert obj.add(1, 2, _sync='off') is None
 
-    # test return by proxy
+    logger.info("-- Test return by proxy --")
     list_prox = obj.get_list(_return_type='proxy')
     assert isinstance(list_prox, ObjectProxy)
     assert list_prox._type_str == "<class 'list'>"
     assert len(list_prox) == 3
     assert list_prox[2] == 7
 
-    # test proxy access to server1
+    logger.info("-- Test proxy access to server --")
     srv = client['self']
     assert srv.address == server1.address
 
 
-    # Test remote exception raising
+    logger.info("-- Test remote exception raising --")
     try:
         obj.add(7, 'x')
     except RemoteCallException as err:
@@ -103,7 +103,7 @@ def test_rpc():
     except AttributeError:
         pass
 
-    # test deferred getattr
+    logger.info("-- Test deferred getattr --")
     arr = obj.array(_return_type='proxy')
     dt1 = arr.dtype.name._get_value()
     assert isinstance(dt1, str)
@@ -115,7 +115,7 @@ def test_rpc():
     dt3 = dt2._undefer()
     assert dt3 == dt2
 
-    # test remote object creation / deletion
+    logger.info("-- Test remote object creation / deletion --")
     class_proxy = client['test_class']
     obj2 = class_proxy('obj2')
     assert class_proxy.count == 2
@@ -125,7 +125,7 @@ def test_rpc():
     # reference management is temporarily disabled.
     #assert class_proxy.count == 1
 
-    # test timeouts
+    logger.info("-- Test timeouts --")
     try:
         obj.sleep(0.2, _timeout=0.01)
     except TimeoutError:
@@ -134,27 +134,27 @@ def test_rpc():
         raise AssertionError('should have raised TimeoutError')
     obj.sleep(0.2, _timeout=0.5)
 
-    # test result order
+    logger.info("-- Test result order --")
     a = obj.add(1, 2, _sync='async')
     b = obj.add(3, 4, _sync='async')
     assert b.result() == 7
     assert a.result() == 3
 
     
-    # test transfer
+    logger.info("-- Test transfer --")
     arr = np.ones(10, dtype='float32')
     arr_prox = client.transfer(arr)
     assert arr_prox.dtype.name == 'float32'
     assert arr_prox.shape == (10,)
 
 
-    # test import
+    logger.info("-- Test import --")
     import os.path as osp
     rosp = client._import('os.path')
     assert osp.abspath(osp.dirname(__file__)) == rosp.abspath(rosp.dirname(__file__))
 
 
-    # test proxy sharing with a second server
+    logger.info("-- Test proxy sharing between servers --")
     obj._set_proxy_options(defer_getattr=True)
     r1 = obj.test(obj)
     server2 = RPCServer()
@@ -177,14 +177,34 @@ def test_rpc():
     assert np.all(r1[3] == r2[3])
     assert r1[4] == r2[4]
     
-    # Test publishing objects
+    logger.info("-- Test publishing objects --")
     arr = np.arange(5, 10)
     client['arr'] = arr  # publish to server1
     s2rpc = client2._import('pyacq.core.rpc')
     s2cli = s2rpc.RPCClient.get_client(client.server_address)  # server2's client for server1
     assert np.all(s2cli['arr'] == arr)  # retrieve via server2
     
+    logger.info("-- Setup reentrant communication test.. --")
+    class PingPong(object):
+        def set_other(self, o):
+            self.other = o
+        def pingpong(self, depth=0):
+            if depth > 6:
+                return "reentrant!"
+            return self.other.pingpong(depth+1)
+
+    server1['pp1'] = PingPong()
+    server2['pp2'] = PingPong()
+    pp1 = client['pp1']
+    pp2 = client2['pp2']
+    pp1.set_other(pp2)
+    pp2.set_other(pp1)
     
+    logger.info("-- Test reentrant communication --")
+    assert pp1.pingpong() == 'reentrant!'
+
+    
+    logger.info("-- Shut down servers --")
     client2.close_server()
     serve_thread2.join()
     
