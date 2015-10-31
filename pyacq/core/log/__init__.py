@@ -1,5 +1,5 @@
-from .log import *
-from .monitor import LogWidget
+from .colorizer import ColorizingStreamHandler
+from .logviewer import LogViewer
 
 from ..rpc.log import LogSender, LogReceiver
 
