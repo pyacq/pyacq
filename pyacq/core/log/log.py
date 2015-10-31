@@ -82,14 +82,3 @@ class ColorizingStreamHandler(logging.StreamHandler):
             return message
 
 
-logger = logging.getLogger('pyacq')
-handler = ColorizingStreamHandler(sys.stdout)
-logger.addHandler(handler)
-
-logger.level = logging.WARN
-
-info = logger.info
-debug = logger.debug
-warn = logger.warn
-error = logger.error
-critical = logger.critical

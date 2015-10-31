@@ -60,8 +60,25 @@ if {qt}:
 
 class ProcessSpawner(object):
     """Utility for spawning and bootstrapping a new process with an RPC server.
+    
+    `ProcessSpawner.client` is an RPCClient that is connected to the remote
+    server.
+    
+    Parameters
+    ----------
+    addr : str
+        ZMQ socket address that the new process's RPCServer will bind to.
+        Default is 'tcp://*:*'.
+    qt : bool
+        If True, then start a Qt application in the remote process, and use
+        a QtRPCServer.
+    logging : bool
+        If True, then forward all log records from the remote process to 
+        the locally used log receiver address (see rpc.log.get_receiver_address).
+    name : str | None
+        Optional process name that will be assigned to all remote log records.
     """
-    def __init__(self, addr="tcp://*:*", qt=False):
+    def __init__(self, addr="tcp://*:*", qt=False, logging=True, name=None):
         assert qt in (True, False)
         self.qt = qt
         
@@ -99,6 +116,13 @@ class ProcessSpawner(object):
         else:
             err = ''.join(status['error'])
             raise RuntimeError("Error while spawning process:\n%s" % err)
+        
+        # Set up remote logging for this process
+        if logging:
+            rlog = self.client._import('pyacq.core.rpc.log')
+            rlog.set_receiver_address(get_receiver_address())
+            if name is not None:
+                rlog.set_process_name(name)
         
     def wait(self):
         self.proc.wait()
