@@ -29,11 +29,18 @@ except ImportError:
     
 
 class ColorizingStreamHandler(logging.StreamHandler):
-    """Credit: https://gist.github.com/kergoth/813057
+    """StreamHandler that formats colored messages and sends them to a stream.
+    
+    Credit: https://gist.github.com/kergoth/813057
+    
+    Parameters
+    ----------
+    stream : file-like
+        The stream to which messages should be sent. The default is sys.stderr.
     """
     thread_headers = {}
 
-    def __init__(self, stream):
+    def __init__(self, stream=sys.stderr):
         if HAVE_COLORAMA:
             logging.StreamHandler.__init__(self, colorama.AnsiToWin32(stream).stream)
         else:
@@ -45,8 +52,7 @@ class ColorizingStreamHandler(logging.StreamHandler):
         return isatty and isatty()
 
     def format(self, record):
-        tid = threading.current_thread().ident        
-        header = self.get_thread_header(tid)
+        header = self.get_thread_header(record)
         
         message = logging.StreamHandler.format(self, record)
         if HAVE_COLORAMA:
@@ -55,14 +61,17 @@ class ColorizingStreamHandler(logging.StreamHandler):
             
         return header + ' ' + message
 
-    def get_thread_header(self, tid):
-        header = self.thread_headers.get(tid, None)
+    def get_thread_header(self, record):
+        tid = record.threadName
+        pid = record.processName
+        key = (pid, tid)
+        header = self.thread_headers.get(key, None)
         if header is None:
-            header = '[%s:%d.%x]' % (socket.gethostname(), os.getpid(), tid)
+            header = '[%s:%s]' % (pid, tid)
             if HAVE_COLORAMA:
                 color = _thread_color_list[len(self.thread_headers) % len(_thread_color_list)]
                 header = color + header + colorama.Style.RESET_ALL
-            self.thread_headers[tid] = header
+            self.thread_headers[key] = header
         return header
 
     def colorize(self, message, record):

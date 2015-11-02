@@ -1,3 +1,4 @@
+import logging
 from pyqtgraph.Qt import QtCore, QtGui
 
 
@@ -14,44 +15,39 @@ Stylesheet = """
 """
 
 
-class LogWidget(QtGui.QWidget):
-    def __init__(self, parent=None):
+class LogViewer(QtGui.QWidget):
+    """QWidget for displaying and filtering log messages.
+    """
+    def __init__(self, logger='', parent=None):
         QtGui.QWidget.__init__(self, parent=parent)
+        
+        # Set up handler to send log records to this widget by signal
+        self.handler = QtLogHandler()
+        self.handler.new_record.connect(self.new_record)
+        if isinstance(logger, str):
+            logger = logging.getLogger(logger)
+        logger.addHandler(self.handler)
+        
+        # Set up GUI
         self.layout = QtGui.QGridLayout()
         self.layout.setContentsMargins(0, 0, 0, 0)
         self.setLayout(self.layout)
-        self.tab_widget = QtGui.QTabWidget()
-        self.layout.addWidget(self.tab_widget, 0, 0)
+        self.text = QtGui.QTextBrowser()
+        self.text.document().setDefaultStyleSheet(Stylesheet)
         
-        self.tabs = {}
+    def new_record(self, rec):
+        print("NEW LOG RECORD:", rec)
         
-    def message(self, sender, message):
-        if sender not in self.tabs:
-            text = QtGui.QTextBrowser()
-            self.tab_widget.addTab(text, sender)
-            self.tabs[sender] = text
-            
-            text.document().setDefaultStyleSheet(Stylesheet)
-            
-        text = self.tabs[sender]
-        
-        text.append(message)
         
 
-#class LogThread(QtCore.QThread):
+class QtLogHandler(logging.Handler, QtCore.QObject):
+    """Log handler that emits a Qt signal for each record.
+    """
+    new_record = QtCore.Signal(object)
     
-    #new_message = QtCore.QSignal(object, object)  # sender, message
-    
-    #def __init__(self, widget):
-        #QtCore.QThread.__init__(self)
-        #self.server = RPCServer()
-        #self.server['logger'] = self
-        #self.client = RPCClient(self.server.address)
-        #self.logger = self.client['logger']
+    def __init__(self):
+        logging.Handler.__init__(self)
+        QtCore.QObject.__init__(self)
         
-    #def run(self):
-        #self.server.run_forever()
-        
-    #def message(self, sender, message):
-        #self.new_message.emit(sender, message)
-
+    def handle(self, record):
+        new_record.emit(record)

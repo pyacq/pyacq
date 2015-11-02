@@ -36,6 +36,14 @@ def test_rpc():
         
         def test(self, obj):
             return self.name, obj.name, obj.add(5, 7), obj.array(), obj.get_list()
+
+        def types(self):
+            return {'int': 7, 'float': 0.5, 'str': 'xxx', 'bytes': bytes('xxx', 'utf8'),
+                    'ndarray': np.arange(10), 'dict': {}, 'tuple': (),
+                    'ObjectProxy': self}
+    
+        def type(self, x):
+            return type(x).__name__
     
     
     server1 = RPCServer()
@@ -63,7 +71,13 @@ def test_rpc():
     add = obj.add
     assert isinstance(add, ObjectProxy)
     assert add(7, 5) == 12
-    
+
+    # test return types
+    for k, v in obj.types().items():
+        assert type(v).__name__ == k
+        if k != 'ObjectProxy':
+            assert obj.type(v) == k
+
     # NOTE: msgpack converts list to tuple. 
     # See: https://github.com/msgpack/msgpack-python/issues/98
     assert obj.get_list() == (0, 'x', 7)

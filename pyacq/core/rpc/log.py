@@ -1,4 +1,5 @@
 import threading
+import os
 import zmq
 import logging
 logger = logging.getLogger(__name__)
@@ -9,7 +10,7 @@ from .serializer import MsgpackSerializer
 # Provide access to process and thread names for logging purposes.
 # Python already has a notion of process and thread names, but these are
 # apparently difficult to set. 
-process_name = None
+process_name = "process-%d" % os.getpid()
 thread_names = {}
 
 def set_process_name(name):
@@ -26,7 +27,7 @@ def set_thread_name(name, tid=None):
 # Provide global access to sender / receiver
 receiver = None
 sender = None
-recevier_addr = None
+receiver_addr = None
 
 
 def start_receiver(logger):
@@ -38,6 +39,7 @@ def start_receiver(logger):
     if isinstance(logger, str):
         logger = logging.getLogger(logger)
     receiver = LogReceiver(logger)
+    receiver.start()
 
 
 def get_receiver_address():
@@ -136,6 +138,5 @@ class LogReceiver(threading.Thread):
     def run(self):
         while True:
             kwds = self.serializer.loads(self.socket.recv())
-            print(kwds)
             rec = logging.makeLogRecord(kwds)
             self.logger.handle(rec)

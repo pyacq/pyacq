@@ -5,6 +5,7 @@ import zmq
 from pyqtgraph.Qt import QtCore
 
 from .client import RPCClient
+from .log import get_receiver_address
 from ..log import logger
 
 
@@ -18,6 +19,7 @@ faulthandler.enable()
 
 from pyacq import {class_name}
 from pyacq.core.log import logger
+from pyacq.core.rpc import log
 
 if {qt}:
     import pyqtgraph as pg
@@ -25,6 +27,10 @@ if {qt}:
     app.setQuitOnLastWindowClosed(False)
 
 logger.level = {loglevel}
+if {procname} is not None:
+    log.set_process_name({procname})
+if {logaddr} is not None:
+    log.set_receiver_address({logaddr})
 
 bootstrap_sock = zmq.Context.instance().socket(zmq.PAIR)
 bootstrap_sock.connect({bootstrap_addr})
@@ -92,13 +98,15 @@ class ProcessSpawner(object):
         # Spawn new process
         class_name = 'QtRPCServer' if qt else 'RPCServer'
         args = "addr='%s'" % addr
+        logaddr = repr(get_receiver_address()) if logging else None
         loglevel = str(logger.getEffectiveLevel())
         bootstrap = bootstrap_template.format(class_name=class_name, args=args,
                                               bootstrap_addr=bootstrap_addr,
-                                              loglevel=loglevel, qt=str(qt))
+                                              loglevel=loglevel, qt=str(qt),
+                                              logaddr=logaddr, procname=repr(name))
         executable = sys.executable
-        self.proc = subprocess.Popen((executable, '-c', bootstrap), 
-                                     stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+        self.proc = subprocess.Popen((executable, '-c', bootstrap),) 
+                                     #stdin=subprocess.PIPE, stdout=subprocess.PIPE)
         #self.stdout_poller = PipePoller(self.proc.stdout)
         #self.stderr_poller = PipePoller(self.proc.stderr)
         logger.info("Spawned process: %d", self.proc.pid)
@@ -118,11 +126,11 @@ class ProcessSpawner(object):
             raise RuntimeError("Error while spawning process:\n%s" % err)
         
         # Set up remote logging for this process
-        if logging:
-            rlog = self.client._import('pyacq.core.rpc.log')
-            rlog.set_receiver_address(get_receiver_address())
-            if name is not None:
-                rlog.set_process_name(name)
+        #if logging:
+            #rlog = self.client._import('pyacq.core.rpc.log')
+            #rlog.set_receiver_address(get_receiver_address())
+            #if name is not None:
+                #rlog.set_process_name(name)
         
     def wait(self):
         self.proc.wait()
