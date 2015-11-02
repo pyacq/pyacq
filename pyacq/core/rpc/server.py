@@ -6,12 +6,15 @@ import socket
 import threading
 import builtins
 import zmq
+import logging
 import numpy as np
 from pyqtgraph.Qt import QtCore, QtGui
 
-from ..log import debug, info, warn, error
 from .serializer import MsgpackSerializer
 from .proxy import ObjectProxy
+
+
+logger = logging.getLogger(__name__)
 
 
 class RPCServer(object):
@@ -70,7 +73,7 @@ class RPCServer(object):
         self.next_object_id = 0
         self._proxies = {}  # obj_id: object
         
-        debug("RPC create server: %s@%s", self._name.decode(), self.address.decode())
+        logging.debug("RPC create server: %s@%s", self._name.decode(), self.address.decode())
 
     def get_proxy(self, obj, **kwds):
         """Return an ObjectProxy referring to a local object.
@@ -82,7 +85,7 @@ class RPCServer(object):
         type_str = str(type(obj))
         proxy = ObjectProxy(self.address, oid, type_str, attributes=(), **kwds)
         self._proxies[oid] = obj
-        #debug("server %s add proxy %d: %s", self.address, oid, obj)
+        #logging.debug("server %s add proxy %d: %s", self.address, oid, obj)
         return proxy
     
     def unwrap_proxy(self, proxy):
@@ -93,7 +96,7 @@ class RPCServer(object):
             obj = self._proxies[oid]
             for attr in proxy._attributes:
                 obj = getattr(obj, attr)
-            #debug("server %s unwrap proxy %d: %s", self.address, oid, obj)
+            #logging.debug("server %s unwrap proxy %d: %s", self.address, oid, obj)
             return obj
         except KeyError:
             raise KeyError("Invalid proxy object ID %r. The object may have "
@@ -133,11 +136,11 @@ class RPCServer(object):
         
         # Attempt to invoke requested action
         try:
-            debug("RPC recv '%s' from %s [req_id=%s]", action, caller.decode(), req_id)
-            debug("    => %s", msg)
+            logging.debug("RPC recv '%s' from %s [req_id=%s]", action, caller.decode(), req_id)
+            logging.debug("    => %s", msg)
             if opts is not None:
                 opts = self._serializer.loads(opts)
-            debug("    => opts: %s", opts)
+            logging.debug("    => opts: %s", opts)
             
             result = self.process_action(action, opts, return_type)
             exc = None
@@ -180,8 +183,8 @@ class RPCServer(object):
     def _send_result(self, caller, req_id, rval=None, error=None):
         result = {'action': 'return', 'req_id': req_id,
                   'rval': rval, 'error': error}
-        debug("RPC send result to %s [rpc_id=%s]", caller.decode(), result['req_id'])
-        debug("    => %s", result)
+        logging.debug("RPC send result to %s [rpc_id=%s]", caller.decode(), result['req_id'])
+        logging.debug("    => %s", result)
         data = self._serializer.dumps(result)
         self._socket.send_multipart([caller, data])
 
@@ -201,7 +204,7 @@ class RPCServer(object):
                     raise
             else:
                 result = obj(*fnargs, **fnkwds)
-            #debug("    => call_obj result: %r", result)
+            #logging.debug("    => call_obj result: %r", result)
         elif action == 'get_obj':
             result = opts['obj']
         elif action == 'del':
@@ -247,7 +250,7 @@ class RPCServer(object):
     def run_forever(self):
         """Read and process RPC requests until the server is asked to close.
         """
-        info("RPC start server: %s@%s", self._name.decode(), self.address.decode())
+        logging.info("RPC start server: %s@%s", self._name.decode(), self.address.decode())
         RPCServer.register_server(self)
         while self.running():
             self._read_and_process_one()
@@ -262,7 +265,7 @@ class RPCServer(object):
         
         This can also be used to allow the user to manually process requests.
         """
-        info("RPC lazy-start server: %s@%s", self._name.decode(), self.address.decode())
+        logging.info("RPC lazy-start server: %s@%s", self._name.decode(), self.address.decode())
         RPCServer.register_server(self)
 
     def auto_proxy(self, obj, no_proxy_types):
@@ -285,7 +288,7 @@ class QtRPCServer(RPCServer):
         self.poll_thread = QtPollThread(self)
         
     def run_forever(self):
-        info("RPC start server: %s@%s", self._name.decode(), self.address.decode())
+        logging.info("RPC start server: %s@%s", self._name.decode(), self.address.decode())
         RPCServer.register_server(self)
         self.poll_thread.start()
 

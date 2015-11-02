@@ -1,8 +1,5 @@
 from .rpc import ProcessSpawner
 from .nodegroup import NodeGroup
-from .rpc.log import set_process_name, LogSender, get_receiver_address
-
-from logging import info, getLogger
 
 
 class HostSpawner(ProcessSpawner):

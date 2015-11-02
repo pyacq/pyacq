@@ -5,11 +5,14 @@ import socket
 import concurrent.futures
 import threading
 import zmq
+import logging
 
-from ..log import debug, info
 from .serializer import MsgpackSerializer
 from .proxy import ObjectProxy
 from .server import RPCServer, QtRPCServer
+
+
+logger = logging.getLogger(__name__)
 
 
 class RPCClient(object):
@@ -97,7 +100,7 @@ class RPCClient(object):
                 self._poller.register(server._socket, zmq.POLLIN)
                 self._reentrant = True
         
-        info("RPC connect to %s", address.decode())
+        logger.info("RPC connect to %s", address.decode())
         self._socket.connect(address)
         self.next_request_id = 0
         self.futures = weakref.WeakValueDictionary()
@@ -152,8 +155,8 @@ class RPCClient(object):
             req_id = self.next_request_id
             self.next_request_id += 1
         cmd['req_id'] = req_id
-        info("RPC request '%s' to %s [req_id=%s]", cmd['action'], self.server_address.decode(), req_id)
-        debug("    => %s", cmd)
+        logger.info("RPC request '%s' to %s [req_id=%s]", cmd['action'], self.server_address.decode(), req_id)
+        logger.debug("    => %s", cmd)
         
         # double-serialize opts to ensure that cmd can be read even if opts
         # cannot.
@@ -273,8 +276,8 @@ class RPCClient(object):
         This takes care of assigning return values or exceptions to existing
         Future instances.
         """
-        debug("RPC recv result from %s [req_id=%s]", self.server_address.decode(), msg['req_id'])
-        debug("    => %s" % msg)
+        logger.debug("RPC recv result from %s [req_id=%s]", self.server_address.decode(), msg['req_id'])
+        logger.debug("    => %s" % msg)
         if msg['action'] == 'return':
             req_id = msg['req_id']
             fut = self.futures.pop(req_id, None)
