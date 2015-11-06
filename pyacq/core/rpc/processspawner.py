@@ -11,7 +11,6 @@ from .log import get_logger_address
 
 logger = logging.getLogger(__name__)
 
-
 bootstrap_template = """
 import zmq
 import time
@@ -22,6 +21,7 @@ import logging
 
 faulthandler.enable()
 logger = logging.getLogger()
+logger.level = {loglevel}
 
 from pyacq import {class_name}
 from pyacq.core.rpc import log
@@ -31,15 +31,17 @@ if {qt}:
     app = pg.mkQApp()
     app.setQuitOnLastWindowClosed(False)
 
-logger.level = {loglevel}
 if {procname} is not None:
     log.set_process_name({procname})
 if {logaddr} is not None:
     log.set_logger_address({logaddr})
 
+logger.info("New process {procname} {class_name}({args}) {logaddr} {loglevel}")
+
 bootstrap_sock = zmq.Context.instance().socket(zmq.PAIR)
 bootstrap_sock.connect({bootstrap_addr})
 
+# Create RPC server
 try:
     # Create server
     server = {class_name}({args})
@@ -77,21 +79,26 @@ class ProcessSpawner(object):
     
     Parameters
     ----------
+    name : str | None
+        Optional process name that will be assigned to all remote log records.
     addr : str
         ZMQ socket address that the new process's RPCServer will bind to.
         Default is 'tcp://*:*'.
     qt : bool
         If True, then start a Qt application in the remote process, and use
         a QtRPCServer.
-    logging : bool
-        If True, then forward all log records from the remote process to 
-        the locally used log server address (see rpc.log.get_logger_address).
-    name : str | None
-        Optional process name that will be assigned to all remote log records.
+    log_addr : str
+        Optional log server address to which the new process will send its log
+        records.
+    log_level : int
+        Optional initial log level to assign to the root logger. 
     """
-    def __init__(self, addr="tcp://*:*", qt=False, logging=True, name=None):
+    def __init__(self, name=None, addr="tcp://*:*", qt=False, log_addr=None, log_level=None):
         assert qt in (True, False)
         self.qt = qt
+        
+        if log_level is None:
+            log_level = logger.getEffectiveLevel()
         
         # temporary socket to allow the remote process to report its status.
         bootstrap_addr = 'tcp://127.0.0.1:*'
@@ -103,12 +110,10 @@ class ProcessSpawner(object):
         # Spawn new process
         class_name = 'QtRPCServer' if qt else 'RPCServer'
         args = "addr='%s'" % addr
-        logaddr = repr(get_logger_address()) if logging else None
-        loglevel = str(logger.getEffectiveLevel())
         bootstrap = bootstrap_template.format(class_name=class_name, args=args,
                                               bootstrap_addr=bootstrap_addr,
-                                              loglevel=loglevel, qt=str(qt),
-                                              logaddr=logaddr, procname=repr(name))
+                                              loglevel=log_level, qt=str(qt),
+                                              logaddr=log_addr, procname=repr(name))
         executable = sys.executable
         self.proc = subprocess.Popen((executable, '-c', bootstrap),) 
                                      #stdin=subprocess.PIPE, stdout=subprocess.PIPE)

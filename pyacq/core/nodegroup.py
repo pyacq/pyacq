@@ -1,3 +1,6 @@
+from .rpc import ProcessSpawner
+
+
 class NodeGroup(object):
     """
     NodeGroup is responsible for managing a collection of Nodes within a single
@@ -6,7 +9,8 @@ class NodeGroup(object):
     NodeGroups themselves are created and destroyed by Hosts, which manage all 
     NodeGroups on a particular machine.
     """
-    def __init__(self):
+    def __init__(self, host):
+        self.host = host
         self.nodes = set()
 
     def add_node(self, node):
@@ -31,3 +35,6 @@ class NodeGroup(object):
         """Return True if any of the Nodes in this group are running.
         """
         return any(node.running() for node in self.nodes)
+
+    def close(self):
+        self.server.close()

@@ -160,11 +160,11 @@ class RPCServer(object):
                 try:
                     self._send_result(caller, req_id, rval=result)
                 except:
-                    warn("    => Failed to send result for %d", req_id) 
+                    logger.warn("    => Failed to send result for %d", req_id) 
                     exc = sys.exc_info()
                     self._send_error(caller, req_id, exc)
             else:
-                warn("    => returning exception for %d: %s", req_id, exc) 
+                logger.warn("    => returning exception for %d: %s", req_id, exc) 
                 self._send_error(caller, req_id, exc)
                     
         elif exc is not None:
@@ -200,7 +200,7 @@ class RPCServer(object):
                 try:
                     result = obj(*fnargs)
                 except:
-                    warn("Failed to call object %s: %d, %s", obj, len(fnargs), fnargs[1:])
+                    logger.warn("Failed to call object %s: %d, %s", obj, len(fnargs), fnargs[1:])
                     raise
             else:
                 result = obj(*fnargs, **fnkwds)
