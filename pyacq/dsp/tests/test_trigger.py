@@ -58,7 +58,7 @@ def test_AnalogTrigger_nodebounce():
     def on_new_trigger(pos, indexes):
         #~ print(pos, indexes)
         all_triggers.extend(indexes)
-    poller = ThreadPollOuput(trigger.output)
+    poller = ThreadPollOutput(trigger.output)
     poller.new_data.connect(on_new_trigger)
     
     poller.start()
@@ -95,7 +95,7 @@ def test_AnalogTrigger_after_stable():
     def on_new_trigger(pos, indexes):
         #~ print(pos, indexes)
         all_triggers.extend(indexes)
-    poller = ThreadPollOuput(trigger.output)
+    poller = ThreadPollOutput(trigger.output)
     poller.new_data.connect(on_new_trigger)
     
     dev.start()
@@ -130,7 +130,7 @@ def test_AnalogTrigger_before_stable():
     def on_new_trigger(pos, indexes):
         #~ print(pos, indexes)
         all_triggers.extend(indexes)
-    poller = ThreadPollOuput(trigger.output)
+    poller = ThreadPollOutput(trigger.output)
     poller.new_data.connect(on_new_trigger)
     
     dev.start()
