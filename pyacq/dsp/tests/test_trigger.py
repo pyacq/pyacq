@@ -2,7 +2,7 @@ import time
 import numpy as np
 import pyqtgraph as pg
 
-from pyacq import create_manager, InputStream, NumpyDeviceBuffer, ThreadPollOuput
+from pyacq import create_manager, InputStream, NumpyDeviceBuffer, ThreadPollOutput
 from pyacq.dsp.trigger import AnalogTrigger, DigitalTrigger
 
 from pyqtgraph.Qt import QtCore, QtGui
