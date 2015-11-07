@@ -1,17 +1,22 @@
 import threading, atexit, time, logging
-from pyacq.core.log import logger
 from pyacq.core.rpc import RPCClient, RemoteCallException, RPCServer, QtRPCServer, ObjectProxy
+from pyacq.core.rpc.log import ColorizingStreamHandler
 import zmq.utils.monitor
 import numpy as np
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtGui
+
+
+logger = logging.getLogger()
+colorizer = ColorizingStreamHandler()
+logger.addHandler(colorizer)
 
 qapp = pg.mkQApp()
 
 
 def test_rpc():
     previous_level = logger.level
-    logger.level = logging.DEBUG
+    #logger.level = logging.DEBUG
     
     class TestClass(object):
         count = 0
@@ -232,7 +237,7 @@ def test_rpc():
 
 def test_qt_rpc():
     previous_level = logger.level
-    logger.level = logging.DEBUG
+    #logger.level = logging.DEBUG
     
     server = QtRPCServer()
     server.run_forever()
