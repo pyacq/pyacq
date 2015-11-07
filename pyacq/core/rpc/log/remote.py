@@ -122,8 +122,12 @@ class LogSender(logging.Handler):
         
         if address is not None:
             self.connect(address)
+            
+        # attach to logger if requested
+        if isinstance(logger, str):
+            logger = logging.getLogger(logger)
         if logger is not None:
-            logging.getLogger(logger).addHandler(self)
+            logger.addHandler(self)
 
     def handle(self, record):
         global process_name, thread_names

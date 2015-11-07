@@ -65,6 +65,9 @@ class Manager(object):
         # make nice local log output
         root_logger = logging.getLogger()
         self.log_handler = ColorizingStreamHandler()
+        # for some reason the root logger already has a handler..
+        while len(root_logger.handlers) > 0:
+            root_logger.removeHandler(root_logger.handlers[0])
         root_logger.addHandler(self.log_handler)
             
         # start a global log server
@@ -140,6 +143,13 @@ class Manager(object):
             host = self.hosts[host]
         if host is None:
             host = self.default_host
+            
+        # Ask nodegroup to send log records to our server
+        if 'log_addr' not in kwds:
+            kwds['log_addr'] = get_logger_address()
+        if 'log_level' not in kwds:
+            kwds['log_level'] = logger.getEffectiveLevel()
+        
         ng = host.create_nodegroup(name, self, **kwds)
         self.nodegroups[name] = ng
         return ng

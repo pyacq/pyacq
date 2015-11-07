@@ -3,13 +3,15 @@ from .nodegroup import NodeGroup
 
 
 class HostSpawner(ProcessSpawner):
-    def __init__(self, name):
+    def __init__(self, name, **kwds):
         """Spawns a new process with a Host.
         
         This object can be used to control both the spawned process and the
         Host itself.
+        
+        Extra keyword arguments are given to `ProcessSpawner()`.
         """
-        ProcessSpawner.__init__(self, name=name)
+        ProcessSpawner.__init__(self, name=name, **kwds)
         self.host = self.client._import('pyacq.core.host').Host(name)
 
     def create_nodegroup(self, **kwds):

@@ -3,10 +3,11 @@ import subprocess
 import atexit
 import zmq
 import logging
+import threading
 from pyqtgraph.Qt import QtCore
 
 from .client import RPCClient
-from .log import get_logger_address
+from .log import get_logger_address, LogSender
 
 
 logger = logging.getLogger(__name__)
@@ -90,15 +91,18 @@ class ProcessSpawner(object):
         a QtRPCServer.
     log_addr : str
         Optional log server address to which the new process will send its log
-        records.
+        records. This will also cause the new process's stdout and stderr to be
+        captured and forwarded as log records.
     log_level : int
-        Optional initial log level to assign to the root logger. 
+        Optional initial log level to assign to the root logger in the new
+        process.
     """
     def __init__(self, name=None, addr="tcp://*:*", qt=False, log_addr=None, log_level=None):
+        #logger.warn("Spawning process: %s %s %s", name, log_addr, log_level)
         assert qt in (True, False)
-        assert isinstance(addr, str)
+        assert isinstance(addr, (str, bytes))
         assert name is None or isinstance(name, str)
-        assert log_addr is None or isinstance(log_addr, str)
+        assert log_addr is None or isinstance(log_addr, (str, bytes)), "log_addr must be str or None; got %r" % log_addr
         assert log_level is None or isinstance(log_level, int)
         if log_level is None:
             log_level = logger.getEffectiveLevel()
@@ -121,10 +125,28 @@ class ProcessSpawner(object):
                                               loglevel=log_level, qt=str(qt),
                                               logaddr=log_addr, procname=repr(name))
         executable = sys.executable
-        self.proc = subprocess.Popen((executable, '-c', bootstrap),) 
-                                     #stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-        #self.stdout_poller = PipePoller(self.proc.stdout)
-        #self.stderr_poller = PipePoller(self.proc.stderr)
+
+        if log_addr is not None:
+            # start process with stdout/stderr piped
+            self.proc = subprocess.Popen((executable, '-c', bootstrap), 
+                                         stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+            
+            # create a logger for handling stdout/stderr and forwarding to log server
+            self.logger = logging.getLogger(__name__ + '.' + str(id(self)))
+            self.logger.propagate = False
+            self.log_handler = LogSender(log_addr, self.logger)
+            if log_level is not None:
+                self.logger.level = log_level
+            
+            # create threads to poll stdout/stderr and generate / send log records
+            self.stdout_poller = PipePoller(self.proc.stdout, self.logger.info, '[%s.stdout] '%name)
+            self.stderr_poller = PipePoller(self.proc.stderr, self.logger.warn, '[%s.stderr] '%name)
+            
+        else:
+            # don't intercept stdout/stderr
+            self.proc = subprocess.Popen((executable, '-c', bootstrap))
+            
+            
         logger.info("Spawned process: %d", self.proc.pid)
         
         # Automatically shut down process when we exit. 
@@ -162,20 +184,24 @@ class ProcessSpawner(object):
         self.proc.wait()
 
 
-#class PipePoller(QtCore.QThread):
+class PipePoller(threading.Thread):
     
-    #new_line = QtCore.Signal(object)
-    
-    #def __init__(self, pipe):
-        #QThread.__init__(self)
-        #self.pipe = pipe
+    def __init__(self, pipe, callback, prefix):
+        threading.Thread.__init__(self, daemon=True)
+        self.pipe = pipe
+        self.callback = callback
+        self.prefix = prefix
+        self.start()
         
-    #def run(self):
-        #while True:
-            #line = self.pipe.readline()
-            #if line == '':
-                #break
-            #self.new_line.emit(line)
+    def run(self):
+        callback = self.callback
+        prefix = self.prefix
+        pipe = self.pipe
+        while True:
+            line = pipe.readline().decode()[:-1]
+            if line == '':
+                break
+            callback(prefix + line)
         
     
 
