@@ -11,6 +11,7 @@ from .log import get_logger_address
 
 logger = logging.getLogger(__name__)
 
+
 bootstrap_template = """
 import zmq
 import time
@@ -95,10 +96,15 @@ class ProcessSpawner(object):
     """
     def __init__(self, name=None, addr="tcp://*:*", qt=False, log_addr=None, log_level=None):
         assert qt in (True, False)
-        self.qt = qt
-        
+        assert isinstance(addr, str)
+        assert name is None or isinstance(name, str)
+        assert log_addr is None or isinstance(log_addr, str)
+        assert log_level is None or isinstance(log_level, int)
         if log_level is None:
             log_level = logger.getEffectiveLevel()
+        
+        self.qt = qt
+        self.name = name
         
         # temporary socket to allow the remote process to report its status.
         bootstrap_addr = 'tcp://127.0.0.1:*'

@@ -195,7 +195,7 @@ def test_rpc():
     arr = np.arange(5, 10)
     client['arr'] = arr  # publish to server1
     s2rpc = client2._import('pyacq.core.rpc')
-    s2cli = s2rpc.RPCClient.get_client(client.server_address)  # server2's client for server1
+    s2cli = s2rpc.RPCClient.get_client(client.address)  # server2's client for server1
     assert np.all(s2cli['arr'] == arr)  # retrieve via server2
     
     logger.info("-- Setup reentrant communication test.. --")

@@ -41,25 +41,31 @@ class RPCClient(object):
         If no client exists already, then a new one will be created. If the 
         server is running in the current thread, then return None.
         """
-        try:
-            with RPCClient.clients_by_thread_lock:
-                return RPCClient.clients_by_thread[(threading.current_thread().ident, address)]
-        except KeyError:
-            from .server import RPCServer
-            server = RPCServer.get_server()
-            if server is not None and server.address == address:
-                # address is for local RPC server; don't need client.
-                return None
-            else:
-                # create a new client!
-                return RPCClient(address)
+        if isinstance(address, str):
+            address = address.encode()
+        key = (threading.current_thread().ident, address)
+        
+        # Return an existing client if there is one
+        with RPCClient.clients_by_thread_lock:
+            if key in RPCClient.clients_by_thread:
+                return RPCClient.clients_by_thread[key]
+        
+        # Connect and return a new client
+        from .server import RPCServer
+        server = RPCServer.get_server()
+        if server is not None and server.address == address:
+            # address is for local RPC server; don't need client.
+            return None
+        else:
+            # create a new client!
+            return RPCClient(address)
     
     def __init__(self, address, reentrant=None):
         # pick a unique name: host:pid.tid:rpc_addr
         self.name = ('%s:%d.%x:%s' % (socket.gethostname(), os.getpid(), 
                                       threading.current_thread().ident, 
                                       address.decode())).encode()
-        self.server_address = address
+        self.address = address
         
         key = (threading.current_thread().ident, address)
         with RPCClient.clients_by_thread_lock:
@@ -155,7 +161,7 @@ class RPCClient(object):
             req_id = self.next_request_id
             self.next_request_id += 1
         cmd['req_id'] = req_id
-        logger.info("RPC request '%s' to %s [req_id=%s]", cmd['action'], self.server_address.decode(), req_id)
+        logger.info("RPC request '%s' to %s [req_id=%s]", cmd['action'], self.address.decode(), req_id)
         logger.debug("    => %s", cmd)
         
         # double-serialize opts to ensure that cmd can be read even if opts
@@ -276,7 +282,7 @@ class RPCClient(object):
         This takes care of assigning return values or exceptions to existing
         Future instances.
         """
-        logger.debug("RPC recv result from %s [req_id=%s]", self.server_address.decode(), msg['req_id'])
+        logger.debug("RPC recv result from %s [req_id=%s]", self.address.decode(), msg['req_id'])
         logger.debug("    => %s" % msg)
         if msg['action'] == 'return':
             req_id = msg['req_id']

@@ -88,7 +88,11 @@ class Manager(object):
         Nodegroups can be spawned or closed.
         """
         if addr not in self.hosts:
-            cli = RPCClient.get_client(addr)
+            try:
+                cli = RPCClient.get_client(addr)
+            except TimeoutError:
+                raise TimeoutError("No response from host at %s" % addr)
+                
             try:
                 self.hosts[addr] = cli['host']
             except KeyError:
@@ -101,8 +105,8 @@ class Manager(object):
         If a default host was created by this Manager, then it will be closed 
         as well.
         """
-        if self._default_host is not None:
-            self._default_host.stop()
+        if self.default_host is not None:
+            self.default_host.close_all_nodegroups()
             
         # TODO: shut down all known nodegroups?
 
@@ -129,6 +133,7 @@ class Manager(object):
             
         All extra keyword arguments are passed to `Host.create_nodegroup()`.
         """
+        assert isinstance(name, str)
         if name in self.nodegroups:
             raise KeyError("Nodegroup named %s already exists" % name)
         if isinstance(host, str):
