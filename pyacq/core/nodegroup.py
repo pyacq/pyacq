@@ -10,10 +10,9 @@ class NodeGroup(object):
     NodeGroups themselves are created and destroyed by Hosts, which manage all 
     NodeGroups on a particular machine.
     """
-    
-    
-    def __init__(self, host):
+    def __init__(self, host, manager):
         self.host = host
+        self.manager = manager
         self.nodes = set()
 
     def create_node(self, node_class, *args, **kwds):

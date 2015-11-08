@@ -96,8 +96,11 @@ class ProcessSpawner(object):
     log_level : int
         Optional initial log level to assign to the root logger in the new
         process.
+    executable : str | None
+        Optional python executable to invoke. The default value is `sys.executable`.
     """
-    def __init__(self, name=None, addr="tcp://*:*", qt=False, log_addr=None, log_level=None):
+    def __init__(self, name=None, addr="tcp://*:*", qt=False, log_addr=None, 
+                 log_level=None, executable=None):
         #logger.warn("Spawning process: %s %s %s", name, log_addr, log_level)
         assert qt in (True, False)
         assert isinstance(addr, (str, bytes))
@@ -124,7 +127,9 @@ class ProcessSpawner(object):
                                               bootstrap_addr=bootstrap_addr,
                                               loglevel=log_level, qt=str(qt),
                                               logaddr=log_addr, procname=repr(name))
-        executable = sys.executable
+        
+        if executable is None:
+            executable = sys.executable
 
         if log_addr is not None:
             # start process with stdout/stderr piped
@@ -145,7 +150,6 @@ class ProcessSpawner(object):
         else:
             # don't intercept stdout/stderr
             self.proc = subprocess.Popen((executable, '-c', bootstrap))
-            
             
         logger.info("Spawned process: %d", self.proc.pid)
         

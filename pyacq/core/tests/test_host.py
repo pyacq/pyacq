@@ -1,29 +1,29 @@
 import time
 import logging
 
-from pyacq.core.host import HostSpawner
+from pyacq.core.host import Host
 
 #~ logging.getLogger().level=logging.INFO
 
 
 def test_host1():
     
-    host1 = HostSpawner('host1')
-    host2 = HostSpawner('host2')
+    p1, host1 = Host.spawn('host1')
+    p2, host2 = Host.spawn('host2')
     
-    ng11 = host1.create_nodegroup()
-    ng12 = host1.create_nodegroup()
-    ng21 = host2.create_nodegroup()
-    ng22 = host2.create_nodegroup()
+    ng11 = host1.create_nodegroup('ng1')
+    ng12 = host1.create_nodegroup('ng2')
+    ng21 = host2.create_nodegroup('ng3')
+    ng22 = host2.create_nodegroup('ng4')
 
+    assert len(host1.spawners) == 2
     host1.close_all_nodegroups()
-    ng22.stop_all_nodes()
+    assert len(host1.spawners) == 0
     host2.close_all_nodegroups()
+    assert len(host2.spawners) == 0
     
-    host1.stop()
-    host2.stop()
-
-
+    p1.stop()
+    p2.stop()
 
 
 if __name__ == '__main__':

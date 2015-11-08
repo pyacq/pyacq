@@ -24,6 +24,9 @@ def create_manager(mode='rpc', auto_close_at_exit=True):
     """
     assert mode in ('local', 'rpc'), "mode must be either 'local' or 'rpc'"
     if mode == 'local':
+        if RPCServer.get_server() is None:
+            server = RPCServer()
+            server.run_lazy()
         return Manager()
     else:
         logger.info('Spawning remote manager process..')
