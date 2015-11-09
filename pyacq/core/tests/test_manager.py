@@ -8,23 +8,24 @@ import os
 
 import pytest
 
-#~ logging.getLogger().level=logging.INFO
+logging.getLogger().level = logging.DEBUG
 
 
-def basic_test_manager():
+def test_manager():
     # Create a local Host to communicate with
     host_proc, host = Host.spawn('test-host')
+    host_addr = host_proc.client.address
     
     mgr = create_manager('rpc')
     
     # test connection to host
-    host = mgr.connect_host(host_proc.client.address)
-    assert mgr.list_hosts() == [host]
+    host = mgr.get_host(host_addr)
+    assert mgr.list_hosts() == (host,)
     
     # create nodegroup 
-    assert mgr.list_nodegroups(host) == []
+    assert mgr.list_nodegroups() == ()
     ng1 = mgr.create_nodegroup('nodegroup1', host)
-    assert mgr.list_nodegroups(host_name) == [ng1]
+    assert mgr.list_nodegroups() == (ng1,)
     
 
     assert mgr.list_nodes('nodegroup1') == []
@@ -95,6 +96,6 @@ def test_close_manager_implicit():
     time.sleep(2.)
 
 if __name__ == '__main__':
-    basic_test_manager()
+    test_manager()
     test_close_manager_explicit()
     test_close_manager_implicit()

@@ -117,12 +117,11 @@ class Manager(object):
         # TODO: shut down all known nodegroups?
 
     def list_hosts(self):
-        """Return a list of the addresses for Hosts that the Manager is
-        connected to.
+        """Return a list of the Hosts that the Manager is connected to.
         """
-        return list(self.hosts.keys())
+        return list(self.hosts.values())
     
-    def create_nodegroup(self, name, host=None, **kwds):
+    def create_nodegroup(self, name, host=None, qt=True, **kwds):
         """Create a new NodeGroup process and return a proxy to the NodeGroup.
         
         A NodeGroup is a process that manages one or more Nodes for device
@@ -137,6 +136,8 @@ class Manager(object):
             Optional address of the Host that should be used to spawn the new
             NodeGroup, or a proxy to the Host itself. If omitted, then the
             NodeGroup is spawned from the Manager's default host.
+        qt : bool
+            Whether to start a QApplication in the new process. Default is True.
             
         All extra keyword arguments are passed to `Host.create_nodegroup()`.
         """
@@ -154,7 +155,7 @@ class Manager(object):
         if 'log_level' not in kwds:
             kwds['log_level'] = logger.getEffectiveLevel()
         
-        ng = host.create_nodegroup(name=name, manager=self, **kwds)
+        ng = host.create_nodegroup(name=name, manager=self, qt=qt, **kwds)
         self.nodegroups[name] = ng
         return ng
     

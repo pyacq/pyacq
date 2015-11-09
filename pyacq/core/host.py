@@ -27,7 +27,7 @@ class Host(object):
         if server is not None:
             server['host'] = self
 
-    def create_nodegroup(self, name, manager=None, **kwds):
+    def create_nodegroup(self, name, manager=None, qt=True, **kwds):
         """Create a new NodeGroup in a new process and return a proxy to it.
         
         Parameters:
@@ -37,11 +37,12 @@ class Host(object):
             of the process in log records sent to the Manager.
         manager : Manager | ObjectProxy<Manager> | None
             The Manager to which this NodeGroup belongs.
+        qt : bool
+            Whether to start a QApplication in the new process. Default is True.
             
         All extra keyword arguments are passed to `ProcessSpawner()`.
         """
-        kwds.setdefault('qt', True)
-        ps = ProcessSpawner(name=name, **kwds)
+        ps = ProcessSpawner(name=name, qt=qt, **kwds)
         rng = ps.client._import('pyacq.core.nodegroup')
         
         # create nodegroup in remote process
