@@ -131,7 +131,8 @@ class Manager(object):
         Parameters
         ----------
         name : str
-            A unique identifier for the new NodeGroup.
+            A name for the new NodeGroup's process. This name is used to uniquely
+            identify log messages originating from this nodegroup.
         host : None | str | ObjectProxy<Host>
             Optional address of the Host that should be used to spawn the new
             NodeGroup, or a proxy to the Host itself. If omitted, then the
@@ -153,7 +154,7 @@ class Manager(object):
         if 'log_level' not in kwds:
             kwds['log_level'] = logger.getEffectiveLevel()
         
-        ng = host.create_nodegroup(name, self, **kwds)
+        ng = host.create_nodegroup(name=name, manager=self, **kwds)
         self.nodegroups[name] = ng
         return ng
     

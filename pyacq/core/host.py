@@ -40,9 +40,16 @@ class Host(object):
             
         All extra keyword arguments are passed to `ProcessSpawner()`.
         """
+        kwds.setdefault('qt', True)
         ps = ProcessSpawner(name=name, **kwds)
         rng = ps.client._import('pyacq.core.nodegroup')
+        
+        # create nodegroup in remote process
         ps._nodegroup = rng.NodeGroup(host=self, manager=manager)
+        
+        # publish so others can easily connect to the nodegroup
+        ps.client['nodegroup'] = ps._nodegroup
+        
         ps._manager = manager
         self.spawners.add(ps)
         return ps._nodegroup

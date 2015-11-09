@@ -1,8 +1,8 @@
 import logging
 import time
-from pyacq.core import Manager, Host, create_manager
-from pyacq.core.processspawner import ProcessSpawner
-from pyacq.core.rpc import RPCClient
+from pyacq.core import Manager, create_manager
+from pyacq.core.host import Host
+from pyacq.core.rpc import ProcessSpawner
 import os
 
 
@@ -13,31 +13,29 @@ import pytest
 
 def basic_test_manager():
     # Create a local Host to communicate with
-    test_host = ProcessSpawner(Host, name='test-host', addr='tcp://127.0.0.1:*')
-    host_cli = RPCClient(test_host.name, test_host.addr)
+    host_proc, host = Host.spawn('test-host')
     
-    mgr = ProcessSpawner(Manager, name='manager', addr='tcp://127.0.0.1:*')
-    mcli = RPCClient(mgr.name, mgr.addr)
+    mgr = create_manager('rpc')
     
     # test connection to host
-    host_name = test_host.name
-    mcli.connect_host(host_name, test_host.addr)
-    assert mcli.list_hosts() == [host_name]
+    host = mgr.connect_host(host_proc.client.address)
+    assert mgr.list_hosts() == [host]
     
-    # create nodegroup and nodes
-    assert mcli.list_nodegroups(host_name) == []
-    mcli.create_nodegroup(host_name, 'nodegroup1')
-    assert mcli.list_nodegroups(host_name) == ['nodegroup1']
+    # create nodegroup 
+    assert mgr.list_nodegroups(host) == []
+    ng1 = mgr.create_nodegroup('nodegroup1', host)
+    assert mgr.list_nodegroups(host_name) == [ng1]
+    
 
-    assert mcli.list_nodes('nodegroup1') == []
-    mcli.create_node('nodegroup1', 'node1', '_MyTestNode')
-    assert mcli.list_nodes('nodegroup1') == ['node1']
-    mcli.control_node('node1', 'start')
-    mcli.control_node('node1', 'stop')
-    mcli.delete_node('node1')
-    assert mcli.list_nodes('nodegroup1') == []
+    assert mgr.list_nodes('nodegroup1') == []
+    mgr.create_node('nodegroup1', 'node1', '_MyTestNode')
+    assert mgr.list_nodes('nodegroup1') == ['node1']
+    mgr.control_node('node1', 'start')
+    mgr.control_node('node1', 'stop')
+    mgr.delete_node('node1')
+    assert mgr.list_nodes('nodegroup1') == []
     
-    # mcli.close()
+    # mgr.close()
     # host_cli.close()
     mgr.stop()
     test_host.stop()

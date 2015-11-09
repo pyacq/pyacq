@@ -66,7 +66,7 @@ class ObjectProxy(object):
     def __init__(self, rpc_id, obj_id, type_str='', attributes=(), **kwds):
         object.__init__(self)
         ## can't set attributes directly because setattr is overridden.
-        self.__dict__['_rpc_id'] = rpc_id
+        self.__dict__['_rpc_addr'] = rpc_id
         self.__dict__['_obj_id'] = obj_id
         self.__dict__['_type_str'] = type_str
         self.__dict__['_attributes'] = attributes
@@ -74,7 +74,7 @@ class ObjectProxy(object):
         
         # identify local client/server instances this proxy might belong to
         from .client import RPCClient
-        self.__dict__['_client'] = RPCClient.get_client(self._rpc_id)
+        self.__dict__['_client'] = RPCClient.get_client(self._rpc_addr)
         from .server import RPCServer
         self.__dict__['_server'] = RPCServer.get_server()
         
@@ -149,7 +149,7 @@ class ObjectProxy(object):
         """Convert this proxy to a serializable structure.
         """
         state = {
-            'rpc_id': self._rpc_id, 
+            'rpc_id': self._rpc_addr, 
             'obj_id': self._obj_id, 
             'type_str': self._type_str,
             'attributes': self._attributes,
@@ -172,7 +172,7 @@ class ObjectProxy(object):
         
     def __repr__(self):
         orep = '.'.join((self._type_str,) + self._attributes)
-        rep = '<ObjectProxy for %s[%d] %s >' % (self._rpc_id.decode(), self._obj_id, orep)
+        rep = '<ObjectProxy for %s[%d] %s >' % (self._rpc_addr.decode(), self._obj_id, orep)
         return rep
 
     def _undefer(self, sync='sync', return_type='auto'):
@@ -208,7 +208,7 @@ class ObjectProxy(object):
         """
         opts = self._proxy_options.copy()
         opts.update(kwds)
-        proxy = ObjectProxy(self._rpc_id, self._obj_id, self._type_str, self._attributes + (attr,), **opts)
+        proxy = ObjectProxy(self._rpc_addr, self._obj_id, self._type_str, self._attributes + (attr,), **opts)
         # Keep a reference to the parent proxy so that the remote object cannot be
         # released as long as this proxy is alive.
         proxy.__dict__['_parent_proxy'] = self

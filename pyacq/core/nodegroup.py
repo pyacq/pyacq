@@ -31,6 +31,9 @@ class NodeGroup(object):
         """
         return list(nodelist.all_nodes.keys())
 
+    def register_node_type_from_module(self, modname, classname):
+        nodelist.register_node_type_from_module(modname, classname)
+
     def add_node(self, node):
         """Add a Node to this NodeGroup.
         """

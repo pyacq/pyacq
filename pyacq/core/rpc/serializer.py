@@ -166,7 +166,7 @@ class MsgpackSerializer:
                 proxy = ObjectProxy(**dct)
                 if self.client is not None:
                     proxy._set_proxy_options(**self.client.default_proxy_options)
-                if self.server is not None and proxy._rpc_id == self.server.address:
+                if self.server is not None and proxy._rpc_addr == self.server.address:
                     return self.server.unwrap_proxy(proxy)
                 else:
                     return proxy
