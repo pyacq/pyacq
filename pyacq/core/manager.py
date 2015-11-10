@@ -3,7 +3,7 @@ import logging
 
 from .rpc import RPCServer, RPCClient, ProcessSpawner
 from .host import Host
-from .rpc.log import start_log_server, get_logger_address, ColorizingStreamHandler
+from .rpc import log as rpc_log
 
 
 logger = logging.getLogger(__name__)
@@ -23,18 +23,33 @@ def create_manager(mode='rpc', auto_close_at_exit=True):
         process exits (only used when ``mode=='rpc'``).
     """
     assert mode in ('local', 'rpc'), "mode must be either 'local' or 'rpc'"
+    rpc_log.set_process_name('main_process')
+    
+    # make nice local log output
+    root_logger = logging.getLogger()
+    log_handler = rpc_log.RPCLogHandler()
+    # for some reason the root logger already has a handler..
+    while len(root_logger.handlers) > 0:
+        root_logger.removeHandler(root_logger.handlers[0])
+    root_logger.addHandler(log_handler)
+        
+    # start a global log server
+    rpc_log.start_log_server(logger)
+    
+    # start the manager
     if mode == 'local':
         if RPCServer.get_server() is None:
             server = RPCServer()
             server.run_lazy()
-        return Manager()
+        man = Manager()
     else:
         logger.info('Spawning remote manager process..')
-        proc = ProcessSpawner(name='manager_proc')
+        proc = ProcessSpawner(name='manager_proc', log_addr=rpc_log.get_logger_address())
         man = proc.client._import('pyacq.core.manager').Manager()
         if auto_close_at_exit:
             atexit.register(man.close)
-        return man
+            
+    return man
         
 
 class Manager(object):
@@ -65,17 +80,6 @@ class Manager(object):
         self._next_nodegroup_name = 0
         self._next_node_name = 0
         
-        # make nice local log output
-        root_logger = logging.getLogger()
-        self.log_handler = ColorizingStreamHandler()
-        # for some reason the root logger already has a handler..
-        while len(root_logger.handlers) > 0:
-            root_logger.removeHandler(root_logger.handlers[0])
-        root_logger.addHandler(self.log_handler)
-            
-        # start a global log server
-        start_log_server(logger)
-        
         # publish with the RPC server if there is one
         server = RPCServer.get_server()
         if server is not None:
@@ -84,7 +88,7 @@ class Manager(object):
     def get_logger_info(self):
         """Return the address of the log server and the level of the root logger.
         """
-        return get_logger_address(), logging.getLogger().level
+        return rpc_log.get_logger_address(), logging.getLogger().level
     
     def get_host(self, addr):
         """Connect the manager to a Host's RPC server and return a proxy to the
@@ -151,7 +155,7 @@ class Manager(object):
             
         # Ask nodegroup to send log records to our server
         if 'log_addr' not in kwds:
-            kwds['log_addr'] = get_logger_address()
+            kwds['log_addr'] = rpc_log.get_logger_address()
         if 'log_level' not in kwds:
             kwds['log_level'] = logger.getEffectiveLevel()
         

@@ -1,6 +1,6 @@
 import threading, atexit, time, logging
 from pyacq.core.rpc import RPCClient, RemoteCallException, RPCServer, QtRPCServer, ObjectProxy
-from pyacq.core.rpc.log import ColorizingStreamHandler
+from pyacq.core.rpc.log import RPCLogHandler
 import zmq.utils.monitor
 import numpy as np
 import pyqtgraph as pg
@@ -8,8 +8,8 @@ from pyqtgraph.Qt import QtCore, QtGui
 
 
 logger = logging.getLogger()
-colorizer = ColorizingStreamHandler()
-logger.addHandler(colorizer)
+handler = RPCLogHandler()
+logger.addHandler(handler)
 
 qapp = pg.mkQApp()
 

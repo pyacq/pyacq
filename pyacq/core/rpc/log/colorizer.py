@@ -1,5 +1,10 @@
 import logging
 import sys
+import socket
+import os
+import threading
+import time
+
 
 try:
     import colorama
@@ -25,8 +30,10 @@ except ImportError:
     HAVE_COLORAMA = False
     
 
-class ColorizingStreamHandler(logging.StreamHandler):
-    """StreamHandler that formats colored messages and sends them to a stream.
+class RPCLogHandler(logging.StreamHandler):
+    """StreamHandler that sorts incoming log records by their creation time
+    and writes to stderr. Messages are also colored by their log level and
+    the host/process/thread that created the record.
     
     Credit: https://gist.github.com/kergoth/813057
     
@@ -42,29 +49,57 @@ class ColorizingStreamHandler(logging.StreamHandler):
             logging.StreamHandler.__init__(self, colorama.AnsiToWin32(stream).stream)
         else:
             logging.StreamHandler.__init__(self, stream)
-    
+        
+        self.record_lock = threading.Lock()
+        self.records = []
+        self.thread = threading.Thread(target=self.poll_records, daemon=True)
+        self.thread.start()
+
     @property
     def is_tty(self):
         isatty = getattr(self.stream, 'isatty', None)
         return isatty and isatty()
+
+    def emit(self, record):
+        # send record to sorting thread
+        with self.record_lock:
+            self.records.append(record)
+            self.records.sort(key=lambda rec: rec.created)
+
+    def poll_records(self):
+        while True:
+            # collect all records more than 0.5 sec old
+            limit = time.time() - 0.5
+            recs = []
+            with self.record_lock:
+                while len(self.records) > 0 and self.records[0].created < limit:
+                    recs.append(self.records.pop(0))
+                    
+            # emit records or sleep
+            if len(recs) > 0:
+                for rec in recs:
+                    logging.StreamHandler.emit(self, rec)
+            else:
+                time.sleep(0.2)
 
     def format(self, record):
         header = self.get_thread_header(record)
         
         message = logging.StreamHandler.format(self, record)
         if HAVE_COLORAMA:
-            ind = record.levelno//10*10  # decrease to multiple of 10
+            ind = record.levelno // 10 * 10  # decrease to multiple of 10
             message = _level_color_map[ind] + message + colorama.Style.RESET_ALL
             
         return header + ' ' + message
 
     def get_thread_header(self, record):
-        tid = record.threadName
-        pid = record.processName
-        key = (pid, tid)
+        hid = getattr(record, 'hostname', socket.gethostname())
+        pid = getattr(record, 'process_name', "process-%d" % os.getpid())
+        tid = getattr(record, 'thread_name', 'main_thread')
+        key = (hid, pid, tid)
         header = self.thread_headers.get(key, None)
         if header is None:
-            header = '[%s:%s]' % (pid, tid)
+            header = '[%s:%s:%s]' % (hid, pid, tid)
             if HAVE_COLORAMA:
                 color = _thread_color_list[len(self.thread_headers) % len(_thread_color_list)]
                 header = color + header + colorama.Style.RESET_ALL
@@ -77,12 +112,12 @@ class ColorizingStreamHandler(logging.StreamHandler):
         
         try:
             tid = threading.current_thread().ident
-            color = ColorizingStreamHandler.thread_colors.get(tid, None)
+            color = RPCLogHandler.thread_colors.get(tid, None)
             if color is None:
-                ind = len(ColorizingStreamHandler.thread_colors) % len(_color_list)
+                ind = len(RPCLogHandler.thread_colors) % len(_color_list)
                 ind = ind//10*10  # decrease to multiple of 10
                 color = _color_list[ind]
-                ColorizingStreamHandler.thread_colors[tid] = color
+                RPCLogHandler.thread_colors[tid] = color
             return (color + message + colorama.Style.RESET_ALL)
         except KeyError:
             return message

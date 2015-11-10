@@ -248,7 +248,7 @@ class RPCClient(object):
                 itimeout = -1
             else:
                 dt = time.perf_counter() - start
-                itimeout = int((timeout - dt) * 1000)
+                itimeout = timeout - dt
                 if itimeout < 0:
                     raise TimeoutError("Timeout waiting for Future result.")
                 
@@ -265,6 +265,9 @@ class RPCClient(object):
                     server._read_and_process_one()
                 
     def _read_and_process_one(self, timeout):
+        # timeout is in seconds; convert to ms
+        timeout = int(timeout * 1000)
+        
         try:
             # NOTE: docs say timeout can only be set before bind, but this
             # seems to work for now.

@@ -4,6 +4,7 @@ import threading
 import os
 import zmq
 import logging
+import time
 logger = logging.getLogger(__name__)
 logger.propagate = False
 
@@ -12,8 +13,21 @@ from ..serializer import MsgpackSerializer
 # Provide access to process and thread names for logging purposes.
 # Python already has a notion of process and thread names, but these are
 # apparently difficult to set. 
-process_name = "%s-%d" % (socket.gethostname(), os.getpid())
+host_name = socket.gethostname()
+process_name = "process-%d" % os.getpid()
 thread_names = {}
+
+
+def set_host_name(name):
+    """Set the name of this host used for logging.
+    """
+    global host_name
+    host_name = name
+
+def get_host_name(self):
+    """Return the name of this host used for logging.
+    """
+    return host_name
 
 def set_process_name(name):
     """Set the name of this process used for logging.
@@ -130,14 +144,15 @@ class LogSender(logging.Handler):
             logger.addHandler(self)
 
     def handle(self, record):
-        global process_name, thread_names
+        global host_name, process_name, thread_names
         if self.socket is None:
             return
         rec = record.__dict__.copy()
         rec['msg'] = rec['msg'] % rec.pop('args')
         if process_name is not None:
-            rec['processName'] = process_name
-        rec['threadName'] = thread_names.get(rec['thread'], rec['threadName'])
+            rec['process_name'] = process_name
+        rec['thread_name'] = thread_names.get(rec['thread'], rec['threadName'])
+        rec['host_name'] = host_name
         self.socket.send(self.serializer.dumps(rec))
         
     def connect(self, addr):
@@ -159,7 +174,7 @@ class LogServer(threading.Thread):
     logger : Logger
         The python logger that should handle incoming messages.
     """
-    def __init__(self, logger):
+    def __init__(self, logger, sort=True):
         threading.Thread.__init__(self, daemon=True)
         self.logger = logger
         self.socket = zmq.Context.instance().socket(zmq.PULL)
@@ -169,6 +184,7 @@ class LogServer(threading.Thread):
         
     def run(self):
         while True:
-            kwds = self.serializer.loads(self.socket.recv())
+            msg = self.socket.recv()
+            kwds = self.serializer.loads(msg)
             rec = logging.makeLogRecord(kwds)
             self.logger.handle(rec)
