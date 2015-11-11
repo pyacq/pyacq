@@ -43,6 +43,9 @@ class NodeGroup(object):
         """Remove a Node from this NodeGroup.
         """
         self.nodes.remove(node)
+        
+    def list_nodes(self):
+        return list(self.nodes)
     
     def start_all_nodes(self):
         """Call `Node.start()` for all Nodes in this group.

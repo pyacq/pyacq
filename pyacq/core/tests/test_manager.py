@@ -8,7 +8,7 @@ import os
 
 import pytest
 
-logging.getLogger().level = logging.DEBUG
+logging.getLogger().level = logging.INFO
 
 
 def test_manager():
@@ -28,13 +28,15 @@ def test_manager():
     assert mgr.list_nodegroups() == (ng1,)
     
 
-    assert mgr.list_nodes('nodegroup1') == []
-    mgr.create_node('nodegroup1', 'node1', '_MyTestNode')
-    assert mgr.list_nodes('nodegroup1') == ['node1']
-    mgr.control_node('node1', 'start')
-    mgr.control_node('node1', 'stop')
-    mgr.delete_node('node1')
-    assert mgr.list_nodes('nodegroup1') == []
+    assert ng1.list_nodes() == ()
+    n1 = ng1.create_node('_MyTestNode')
+    assert ng1.list_nodes() == (n1,)
+    n1.initialize()
+    n1.configure()
+    n1.start()
+    n1.stop()
+    ng1.remove_node(n1)
+    assert ng1.list_nodes() == ()
     
     # mgr.close()
     # host_cli.close()

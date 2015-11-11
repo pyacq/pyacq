@@ -59,7 +59,7 @@ def get_thread_name(tid=None):
     """
     if tid is None:
         tid = threading.current_thread().ident
-    return thread_names.get(tid, 'thread-%d'%tid)
+    return thread_names.get(tid, 'thread-%x'%tid)
     
 
 

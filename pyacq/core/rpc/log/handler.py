@@ -55,7 +55,7 @@ class RPCLogHandler(logging.StreamHandler):
         
         # Hold log records for 0.5 sec before printing them to allow sorting
         # by creation time.
-        self.delay = 0.9
+        self.delay = 0.2
         self.record_lock = threading.Lock()
         self.records = []
         self.thread = threading.Thread(target=self.poll_records, daemon=True)

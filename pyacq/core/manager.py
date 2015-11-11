@@ -71,7 +71,6 @@ class Manager(object):
         logger.info('Creating new Manager..')
         self.hosts = {}  # addr:Host
         self.nodegroups = {}  # name:Nodegroup
-        self.nodes = {}  # name:Node
         
         # Host used for starting nodegroups on the local machine
         self.default_host = Host('default_host')
@@ -163,49 +162,20 @@ class Manager(object):
         self.nodegroups[name] = ng
         return ng
     
+    def close_all_nodegroups(self):
+        for ng in self.nodegroups.values():
+            ng.close()
+
     def list_nodegroups(self):
-        return list(self.nodegroups.keys())
+        return list(self.nodegroups.values())
 
-    def create_node(self, nodegroup, name, classname, **kwargs):
-        if name in self.nodes:
-            raise KeyError("Node named %s already exists" % name)
-        ng = self.nodegroups[nodegroup]
-        ng.client.create_node(name, classname, **kwargs)
-        node = Manager._Node(ng, name, classname)
-        self.nodes[name] = node
-        ng.add_node(name, node)
-
-    def list_nodes(self, nodegroup=None):
-        if nodegroup is None:
-            return list(self.nodes.keys())
-        else:
-            return self.nodegroups[nodegroup].list_nodes()
-
-    def control_node(self, name, method, **kwargs):
-        ng = self.nodes[name].nodegroup
-        return ng.client.control_node(name, method, **kwargs)
-    
-    def delete_node(self, name):
-        ng = self.nodes[name].nodegroup
-        ng.client.delete_node(name)
-        del self.nodes[name]
-        ng.delete_node(name)
-
-    def suggest_nodegroup_name(self):
-        name = 'nodegroup-%d' % self._next_nodegroup_name
-        self._next_nodegroup_name += 1
-        return name
-    
-    def suggest_node_name(self):
-        name = 'node-%d' % self._next_node_name
-        self._next_node_name += 1
-        return name
-    
     def start_all_nodes(self):
         for ng in self.nodegroups.values():
-            ng.client.start_all_nodes()
+            ng.start_all_nodes()
     
     def stop_all_nodes(self):
         for ng in self.nodegroups.values():
-            ng.client.stop_all_nodes()
+            ng.stop_all_nodes()
 
+    def close(self):
+        
