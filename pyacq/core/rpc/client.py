@@ -169,6 +169,7 @@ class RPCClient(object):
         # TODO: This might be expensive; a better way might be to send opts in
         # a subsequent packet, but this makes the protocol more complicated..
         if cmd['opts'] is not None:
+            cmd = cmd.copy()  # because logger might format old dict later on..
             cmd['opts'] = self.serializer.dumps(cmd['opts'])
         cmd = self.serializer.dumps(cmd)
         

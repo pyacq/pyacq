@@ -4,6 +4,7 @@ import socket
 import os
 import threading
 import time
+import atexit
 
 from .remote import get_host_name, get_process_name, get_thread_name
 
@@ -52,10 +53,14 @@ class RPCLogHandler(logging.StreamHandler):
         else:
             logging.StreamHandler.__init__(self, stream)
         
+        # Hold log records for 0.5 sec before printing them to allow sorting
+        # by creation time.
+        self.delay = 0.9
         self.record_lock = threading.Lock()
         self.records = []
         self.thread = threading.Thread(target=self.poll_records, daemon=True)
         self.thread.start()
+        atexit.register(self.flush_records)
 
     @property
     def is_tty(self):
@@ -71,7 +76,7 @@ class RPCLogHandler(logging.StreamHandler):
     def poll_records(self):
         while True:
             # collect all records more than 0.5 sec old
-            limit = time.time() - 0.5
+            limit = time.time() - self.delay
             recs = []
             with self.record_lock:
                 while len(self.records) > 0 and self.records[0].created < limit:
@@ -124,4 +129,8 @@ class RPCLogHandler(logging.StreamHandler):
         except KeyError:
             return message
 
-
+    def flush_records(self):
+        with self.record_lock:
+            while len(self.records) > 0:
+                rec = self.records.pop(0)
+                logging.StreamHandler.emit(self, rec)
