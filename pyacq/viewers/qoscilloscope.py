@@ -69,8 +69,8 @@ class BaseOscilloscope(WidgetNode):
         
         self.all_mean, self.all_sd = None, None
         
-    def show_params_controler(self):
-        self.params_controler.show()
+    def show_params_controller(self):
+        self.params_controller.show()
         # TODO deal with modality
     
     def _configure(self, with_user_dialog=True):
@@ -122,12 +122,12 @@ class BaseOscilloscope(WidgetNode):
         self.all_params.sigTreeStateChanged.connect(self.on_param_change)
         
         
-        if self.with_user_dialog and self._ControlerClass:
-            self.params_controler = self._ControlerClass(parent=self, viewer=self)
-            self.params_controler.setWindowFlags(QtCore.Qt.Window)
-            self.viewBox.doubleclicked.connect(self.show_params_controler)
+        if self.with_user_dialog and self._ControllerClass:
+            self.params_controller = self._ControllerClass(parent=self, viewer=self)
+            self.params_controller.setWindowFlags(QtCore.Qt.Window)
+            self.viewBox.doubleclicked.connect(self.show_params_controller)
         else:
-            self.params_controler = None
+            self.params_controller = None
         
         
         # poller
@@ -156,7 +156,7 @@ class BaseOscilloscope(WidgetNode):
         if self.running():
             self.stop()
         if self.with_user_dialog:
-            self.params_controler.close()
+            self.params_controller.close()
 
     def _on_new_data(self, pos, data):
         self._head = pos
@@ -189,7 +189,7 @@ class BaseOscilloscope(WidgetNode):
         if newsize>limits[0] and newsize<limits[1]:
             self.params['xsize'] = newsize
 
-class OscilloscopeControler(QtGui.QWidget):
+class OscilloscopeController(QtGui.QWidget):
     def __init__(self, parent=None, viewer=None):
         QtGui.QWidget.__init__(self, parent)
         
@@ -316,7 +316,7 @@ class QOscilloscope(BaseOscilloscope):
     _default_params = default_params
     _default_by_channel_params = default_by_channel_params
     
-    _ControlerClass = OscilloscopeControler
+    _ControllerClass = OscilloscopeController
     
     def __init__(self, **kargs):
         BaseOscilloscope.__init__(self, **kargs)
@@ -325,7 +325,7 @@ class QOscilloscope(BaseOscilloscope):
         self.viewBox.xsize_zoom.connect(self.xsize_zoom)
     
     def _configure(self, with_user_dialog=True, max_xsize=60.):
-        BaseOscilloscope._configure(self, with_user_dialog = with_user_dialog)
+        BaseOscilloscope._configure(self, with_user_dialog=with_user_dialog)
         self.max_xsize = max_xsize
 
     def _initialize(self):
