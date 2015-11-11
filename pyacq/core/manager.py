@@ -178,4 +178,4 @@ class Manager(object):
             ng.stop_all_nodes()
 
     def close(self):
-        
+        self.close_all_nodegroups()

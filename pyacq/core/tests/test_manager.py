@@ -38,10 +38,8 @@ def test_manager():
     ng1.remove_node(n1)
     assert ng1.list_nodes() == ()
     
-    # mgr.close()
-    # host_cli.close()
-    mgr.stop()
-    test_host.stop()
+    #mgr.close()
+    #test_host.stop()
 
 
 def create_some_node_group(man):
