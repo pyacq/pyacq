@@ -317,6 +317,9 @@ class RPCClient(object):
         """
         self.send('quit_qapp', sync=sync, **kwds)
 
+    def measure_clock_diff(self):
+        pass
+
     def __del__(self):
         if hasattr(self, 'socket'):
             self.close()

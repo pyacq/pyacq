@@ -106,6 +106,8 @@ class ProcessSpawner(object):
         assert isinstance(addr, (str, bytes))
         assert name is None or isinstance(name, str)
         assert log_addr is None or isinstance(log_addr, (str, bytes)), "log_addr must be str or None; got %r" % log_addr
+        if log_addr is None:
+            log_addr = get_logger_address()
         assert log_level is None or isinstance(log_level, int)
         if log_level is None:
             log_level = logger.getEffectiveLevel()

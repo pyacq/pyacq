@@ -12,11 +12,11 @@ logging.getLogger().level = logging.DEBUG
 
 
 def test_manager():
+    mgr = create_manager('rpc')
+    
     # Create a local Host to communicate with
     host_proc, host = Host.spawn('test-host')
     host_addr = host_proc.client.address
-    
-    mgr = create_manager('rpc')
     
     # test connection to host
     host = mgr.get_host(host_addr)

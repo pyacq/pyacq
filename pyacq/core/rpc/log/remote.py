@@ -24,9 +24,10 @@ def set_host_name(name):
     global host_name
     host_name = name
 
-def get_host_name(self):
+def get_host_name():
     """Return the name of this host used for logging.
     """
+    global host_name
     return host_name
 
 def set_process_name(name):
@@ -35,9 +36,10 @@ def set_process_name(name):
     global process_name
     process_name = name
 
-def get_process_name(self):
+def get_process_name():
     """Return the name of this process used for logging.
     """
+    global process_name
     return process_name
 
 def set_thread_name(name, tid=None):
@@ -50,11 +52,14 @@ def set_thread_name(name, tid=None):
         tid = threading.current_thread().ident
     thread_names[tid] = name
 
-def get_thread_name():
-    """Return the name of this thread used for logging.
+def get_thread_name(tid=None):
+    """Return the name of a thread used for logging.
+    
+    If no thread ID is given, then the current thread's ID is used.
     """
-    tid = threading.current_thread().ident
-    return thread_names[tid]
+    if tid is None:
+        tid = threading.current_thread().ident
+    return thread_names.get(tid, 'thread-%d'%tid)
     
 
 

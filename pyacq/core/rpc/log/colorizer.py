@@ -5,6 +5,8 @@ import os
 import threading
 import time
 
+from .remote import get_host_name, get_process_name, get_thread_name
+
 
 try:
     import colorama
@@ -93,9 +95,9 @@ class RPCLogHandler(logging.StreamHandler):
         return header + ' ' + message
 
     def get_thread_header(self, record):
-        hid = getattr(record, 'hostname', socket.gethostname())
-        pid = getattr(record, 'process_name', "process-%d" % os.getpid())
-        tid = getattr(record, 'thread_name', 'main_thread')
+        hid = getattr(record, 'hostname', get_host_name())
+        pid = getattr(record, 'process_name', get_process_name())
+        tid = getattr(record, 'thread_name', get_thread_name(record.thread))
         key = (hid, pid, tid)
         header = self.thread_headers.get(key, None)
         if header is None:
