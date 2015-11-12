@@ -4,15 +4,15 @@ import pyqtgraph as pg
 import numpy as np
 
 
-from .qoscilloscope import BaseOscilloscope, OscilloscopeControler
+from .qoscilloscope import BaseOscilloscope, OscilloscopeController
 from ..core import (register_node_type,  StreamConverter)
 from ..dsp import AnalogTrigger, TriggerAccumulator
 
 
 
-class TriggeredOscilloscopeControler(OscilloscopeControler):
+class TriggeredOscilloscopeController(OscilloscopeController):
     def __init__(self, parent=None, viewer=None):
-        OscilloscopeControler.__init__(self, parent=parent, viewer=viewer)
+        OscilloscopeController.__init__(self, parent=parent, viewer=viewer)
 
 
         self.tree_params2 = pg.parametertree.ParameterTree()
@@ -43,7 +43,7 @@ class QTriggeredOscilloscope(BaseOscilloscope):
                     {'name': 'visible', 'type': 'bool', 'value': True},
                 ]
     
-    _ControlerClass = TriggeredOscilloscopeControler
+    _ControllerClass = TriggeredOscilloscopeController
     
     def __init__(self, **kargs):
         BaseOscilloscope.__init__(self, **kargs)
