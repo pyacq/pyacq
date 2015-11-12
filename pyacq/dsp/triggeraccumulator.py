@@ -88,6 +88,7 @@ class TriggerAccumulator(Node,  QtCore.QObject):
         
     def after_input_connect(self, inputname):
         self.nb_channel, _ = self.inputs['signals'].params['shape']
+        
         self.sample_rate = self.inputs['signals'].params['sample_rate']
     
     def _initialize(self):
@@ -142,6 +143,7 @@ class TriggerAccumulator(Node,  QtCore.QObject):
         self.limit1 = l1 = int(self.params['left_sweep']*self.sample_rate)
         self.limit2 = l2 = int(self.params['right_sweep']*self.sample_rate)
         self.size = l2 - l1
+        
         self.t_vect = np.arange(l2-l1)/self.sample_rate + self.params['left_sweep']
         self.stack = np.zeros((self.params['stack_size'], self.nb_channel, l2-l1), dtype = self.inputs['signals'].params['dtype'])
         self.stack_pos = 0

@@ -73,8 +73,9 @@ class BaseOscilloscope(WidgetNode):
         self.params_controller.show()
         # TODO deal with modality
     
-    def _configure(self, with_user_dialog=True):
+    def _configure(self, with_user_dialog=True, max_xsize=60.):
         self.with_user_dialog = with_user_dialog
+        self.max_xsize = max_xsize
     
     def _initialize(self):
         assert len(self.input.params['shape']) == 2, 'Are you joking ?'
@@ -103,6 +104,7 @@ class BaseOscilloscope(WidgetNode):
                    dtype='float32', shape=new_shape, timeaxis=1, 
                    compression='', scale=None, offset=None, units='',
                    sharedarray_shape=(self.nb_channel, int(sr*self.max_xsize)), ring_buffer_method = 'double',
+                   sample_rate = sr,
                    )
             self.conv.initialize()
             self.proxy_input = InputStream()
@@ -324,9 +326,8 @@ class QOscilloscope(BaseOscilloscope):
         self.viewBox.gain_zoom.connect(self.gain_zoom)
         self.viewBox.xsize_zoom.connect(self.xsize_zoom)
     
-    def _configure(self, with_user_dialog=True, max_xsize=60.):
-        BaseOscilloscope._configure(self, with_user_dialog=with_user_dialog)
-        self.max_xsize = max_xsize
+    def _configure(self, with_user_dialog=True, max_xsize = 60.):
+        BaseOscilloscope._configure(self, with_user_dialog=with_user_dialog, max_xsize = max_xsize)
 
     def _initialize(self):
         BaseOscilloscope._initialize(self)
