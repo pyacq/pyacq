@@ -32,6 +32,9 @@ def create_manager(mode='rpc', auto_close_at_exit=True):
     while len(root_logger.handlers) > 0:
         root_logger.removeHandler(root_logger.handlers[0])
     root_logger.addHandler(log_handler)
+    
+    # Send exceptions through logger for nice formatting
+    rpc_log.log_exceptions()
         
     # start a global log server
     rpc_log.start_log_server(logger)
@@ -107,6 +110,9 @@ class Manager(object):
             except KeyError:
                 raise ValueError("Contacted %s, but found no Host there." % addr)
         return self.hosts[addr]
+    
+    def disconnect_host(self, host):
+        host.close_nodegroups(self)
 
     def close(self):
         """Close the Manager.
@@ -178,4 +184,4 @@ class Manager(object):
             ng.stop_all_nodes()
 
     def close(self):
-        self.close_all_nodegroups()
+        #self.close_all_nodegroups()

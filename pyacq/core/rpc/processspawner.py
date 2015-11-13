@@ -38,6 +38,8 @@ if {procname} is not None:
 if {logaddr} is not None:
     log.set_logger_address({logaddr})
 
+log.log_exceptions()
+
 logger.info("New process {procname} {class_name}({args}) {logaddr} {loglevel}")
 
 bootstrap_sock = zmq.Context.instance().socket(zmq.PAIR)

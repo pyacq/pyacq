@@ -5,6 +5,7 @@ import os
 import threading
 import time
 import atexit
+import traceback
 
 from .remote import get_host_name, get_process_name, get_thread_name
 
@@ -134,3 +135,26 @@ class RPCLogHandler(logging.StreamHandler):
             while len(self.records) > 0:
                 rec = self.records.pop(0)
                 logging.StreamHandler.emit(self, rec)
+
+
+_sys_excepthook = None
+
+
+def _log_unhandled_exception(exc, val, tb):
+    global _sys_excepthook
+    exc_str += traceback.format_stack()
+    exc_str += [" < exception caught here >\n"]
+    exc_str += traceback.format_exception(exc, val, tb)
+    exc_str = '\n'.join(['    ' + line for line in exc_str.split('\n')])
+    logging.getLogger().warn("Unhandled exception:\n%s", exc_str)
+    #_sys_excepthook(exc, val, tb)
+
+
+def log_exceptions():
+    """Install a hook that creates log messages from unhandled exceptions.
+    """
+    global _sys_excepthook
+    if sys.excepthook is _log_unhandled_exception:
+        return
+    _sys_excepthook = sys.excepthook
+    sys.excepthook = _log_unhandled_exception

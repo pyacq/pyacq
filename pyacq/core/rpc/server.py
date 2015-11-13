@@ -8,6 +8,7 @@ import builtins
 import zmq
 import logging
 import numpy as np
+import atexit
 from pyqtgraph.Qt import QtCore, QtGui
 
 from .serializer import MsgpackSerializer
@@ -26,6 +27,48 @@ class RPCServer(object):
         Name used to identify this server.
     addr : URL
         Address for RPC server to bind to.
+
+    Basic usage::
+    
+        # In host/process/thread 1:
+        server = RPCServer()
+        rpc_addr = server.address
+
+        # Publish an object for others to access easily
+        server['object_name'] = MyClass()
+        
+        
+        # In host/process/thread 2: (you must communicate rpc_addr manually)
+        client = RPCClient(rpc_addr)
+        
+        # Get a proxy to published object; use this (almost) exactly as you
+        # would a local object:
+        remote_obj = client['object_name']
+        remote_obj.method(...)
+        
+        # Or, you can remotely import and operate a module:
+        remote_module = client._import("my.module.name")
+        remote_obj = remote_module.MyClass()
+        remote_obj.method(...)
+        
+        # See ObjectProxy for more information on interacting with remote
+        # objects, including (a)synchronous communication.
+
+    There may be at most one RPCServer per thread. RPCServers can be run in a
+    few different modes:
+    
+    * Exclusive event loop - call `run_forever()` to cause the server to listen
+      indefinitely for incoming request messages.
+    * Lazy event loop - call `run_lazy()` to register the server with the current
+      thread. The server's socket will be polled whenever an RPCClient is waiting
+      for a response (this allows reentrant function calls). You can also manually
+      listen for requests with `_read_and_process_one()` in this mode.
+    * Qt event loop - use QtRPCServer. In this mode, messages are polled in 
+      a separate thread, but then sent to the Qt event loop by signal and
+      processed there. The server is registered as running in the Qt thread.
+        
+    Note: RPCServer is not a thread-safe class. Only use RPCClient to communicate
+    with RPCServer from other threads.
     """
     
     servers_by_thread = {}
@@ -57,8 +100,11 @@ class RPCServer(object):
         self._socket.bind(addr)
         self.address = self._socket.getsockopt(zmq.LAST_ENDPOINT)
         self._closed = False
-        self._closed_lock = threading.Lock()
         self._serializer = MsgpackSerializer(server=self)
+        
+        # keep track of all clients we have seen so that we can inform them 
+        # when the server exits.
+        self._clients = []
         
         # Id of thread that this server is registered to
         self._thread = None
@@ -229,6 +275,7 @@ class RPCServer(object):
         elif action == 'ping':
             result = 'pong'
         elif action == 'close':
+            # close is handled after response has been sent.
             result = True
         else:
             raise ValueError("Invalid RPC action '%s'" % action)
@@ -238,14 +285,12 @@ class RPCServer(object):
     def close(self):
         """Close this RPC server.
         """
-        with self._closed_lock:
-            self._closed = True
+        self._closed = True
 
     def running(self):
         """Boolean indicating whether the server is still running.
         """
-        with self._closed_lock:
-            return not self._closed
+        return not self._closed
     
     def run_forever(self):
         """Read and process RPC requests until the server is asked to close.
