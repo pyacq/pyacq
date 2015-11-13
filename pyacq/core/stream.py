@@ -17,7 +17,7 @@ default_stream = dict(protocol='tcp', interface='127.0.0.1', port='*',
                         transfermode='plaindata', streamtype='analogsignal',
                         dtype='float32', shape=(-1, 1), timeaxis = 0, 
                         compression ='', scale = None, offset = None, units = '',
-                        sample_rate = 1.,)
+                        sample_rate = 1., autoswapaxes=True)
 
 
 common_doc = """
@@ -45,10 +45,14 @@ common_doc = """
         
         * For ``streamtype=image``, the shape should be (-1, H, W), (n_frames, H, W), or (H, W).
         * For ``streamtype=analogsignal`` the shape should be (n_samples, n_channels) or (-1, n_channels)
+        Note that it is the internal shape, see autoswapaxes and footnotes.
     timeaxis: int
         The index of the axis that represents time within a single data chunk, or
         -1 if the chunk lacks this axis (in this case, each chunk represents exactly one
-        timepoint).
+        timepoint). Note that this describe internal buffer only.
+    autoswapaxes: bool (True by default)
+        Perform a swapaxes on numpy.array to force timeaxis to be viewed as 0.
+        So with autoswapaxes=True, Nodes always need to send/recv arrays with timeaxis=0.
     compression: '', 'blosclz', 'blosc-lz4', 'mp4', 'h264'
         The compression for the data stream. The default uses no compression.
     scale: float
@@ -73,6 +77,17 @@ common_doc = """
         Note that, The ring buffer is along `timeaxis` for each case. And in case, of 'double', concatenated axis is also `timeaxis`.
     shm_id : str or int (depending on platform)
         id of the SharedArray when using `transfermode = 'sharedarray'`.
+
+.. note::
+    Streams are C order and CONTINUOUS. For efficiency reasons, you can choose differents timesaxis depending on the context.
+    For example, for a 16 signals stream (ndim=2), from dac device the natural shape=(time, channel), so timeaxis=0.
+    In that case each channel is not continuous in memory (because C order). For some processing, it is better to have continuous
+    channel so you could want  shape=(channel, time) so timeaxis=1. So from one Node to another the timeaxis can be differents.
+    To simplify this necessary mess : the streams always perform a transpose (swapaxis) to force a fake timeaxis to 0 (by convention).
+    This means that internaly if a timeaxis=1 (cahnnel are toninious inmemory), the numpy.array will be slicable on axis 0 for time.
+    Notes that internally numpy change the np.array.strides but not the memory itself.
+    You can disable this swapaxes by setting autoswapaxes=False, but this make internal code for Nodes more difficult.
+    
 """
 
     
@@ -101,6 +116,10 @@ class OutputStream(object):
         
         self.params = dict(default_stream)
         self.params.update(self.spec)
+        for k in kargs:
+            if k in self.spec:
+                assert kargs[k]==self.spec[k], \
+                    'You cannot configure {}={}, already in fixed in self.spec {}={}'.format(k, kargs[k], k, self.spec[k])
         self.params.update(kargs)
         if self.params['protocol'] in ('inproc', 'ipc'):
             pipename = u'pyacq_pipe_'+''.join(random.SystemRandom().choice(string.ascii_uppercase + string.digits) for _ in range(24))
@@ -202,7 +221,7 @@ class InputStream(object):
         """
         return self.socket.poll(timeout=timeout)
     
-    def recv(self):
+    def recv(self, **kargs):
         """
         Receive a chunk of data.
         
@@ -218,7 +237,7 @@ class InputStream(object):
             to read from the shared array.
 
         """
-        return self.receiver.recv()
+        return self.receiver.recv(**kargs)
 
     def close(self):
         """Close the Input.
@@ -285,7 +304,10 @@ class PlainDataSender:
         return index, data
     
     def send(self, index, data):
-        # TODO deal when data is nparray and self.copy is False and a.flags['C_CONTIGUOUS']=False
+        if self.params['autoswapaxes'] and self.params['timeaxis']!=0:
+            data = data.swapaxes(0, self.params['timeaxis'])
+        if not data.flags['C_CONTIGUOUS']:
+            data = data.copy()
         for f in self.funcs:
             index, data = f(index, data)
         self.socket.send_multipart([np.int64(index), data], copy=self.copy)
@@ -319,10 +341,14 @@ class PlainDataReceiver:
 
     def _numpy_fromstring(self, index, data):
         data = np.frombuffer(data, dtype=self.params['dtype']).reshape(self.params['shape'])
+        if self.params['autoswapaxes'] and self.params['timeaxis']!=0:
+            data = data.swapaxes(0, self.params['timeaxis'])
         return index, data
     
     def _uncompress_blosc(self, index, data):
         data = blosc.unpack_array(data)
+        if self.params['autoswapaxes'] and self.params['timeaxis']!=0:
+            data = data.swapaxes(0, self.params['timeaxis'])
         return index, data
 
 
@@ -367,6 +393,8 @@ class SharedArraySender:
         self._numpyarr = self._sharedarray.to_numpy()
 
     def send(self, index, data):
+        if self.params['autoswapaxes'] and self.params['timeaxis']!=0:
+            data = data.swapaxes(0, self.params['timeaxis'])
         self.func(index, data)
 
     def close(self):
@@ -399,7 +427,8 @@ class SharedArraySender:
             sl4 = [slice(None)] * self._ndim
             sl4[self._timeaxis] = slice(-size2, None)
             self._numpyarr[sl3] = data[sl4]
-        
+                
+
         self.socket.send(np.int64(index), copy=self.copy)
         self._index += data.shape[self._timeaxis]
 
@@ -463,12 +492,15 @@ class SharedArrayReceiver:
         self.last_chunk_size = None
         self.last_index = 0
 
-    def recv(self):
+    def recv(self, with_data = False):
         m0 = self.socket.recv()
         index = np.fromstring(m0, dtype='int64')[0]
         self.last_chunk_size = index - self.last_index
         self.last_index = index
-        return index, None
+        if with_data:
+            return index, self.get_array_slice(index, self.last_chunk_size)
+        else:
+            return index, None
 
     def get_array_slice(self, index, length):
         assert length<self._ring_size, 'The ring size is too small {} {}'.format(self._ring_size, length)
@@ -477,7 +509,10 @@ class SharedArrayReceiver:
             i1 = i2 - length
             sl = [slice(None)] * self._ndim 
             sl[self._timeaxis] = slice(i1,i2)
-            return self._numpyarr[sl]
+            data = self._numpyarr[sl]
+            if self.params['autoswapaxes'] and self.params['timeaxis']!=0:
+                data = data.swapaxes(0, self.params['timeaxis'])
+            return data
         elif self.params['ring_buffer_method'] == 'single':
             raise(NotImplementedError)
     
