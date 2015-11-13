@@ -80,10 +80,7 @@ class BaseOscilloscope(WidgetNode):
     def _initialize(self):
         assert len(self.input.params['shape']) == 2, 'Are you joking ?'
         d0, d1 = self.input.params['shape']
-        if self.input.params['timeaxis']==0:
-            self.nb_channel = d1
-        else:
-            self.nb_channel = d0
+        self.nb_channel = self.input.params['nb_channel']
         
         sr = self.input.params['sample_rate']
         # create proxy input
@@ -362,10 +359,10 @@ class QOscilloscope(BaseOscilloscope):
             else:
                 head = head - head%decimate
             
-        full_arr = self.proxy_input.get_array_slice(head,self.full_size)
+        full_arr = self.proxy_input.get_array_slice(head,self.full_size, autoswapaxes = False)
         if decimate>1:
             if self.params['decimation_method'] == 'pure_decimate':
-                small_arr = full_arr[:,::decimate].copy()
+                small_arr = full_arr[:, ::decimate].copy()
             elif self.params['decimation_method'] == 'min_max':
                 arr = full_arr.reshape(full_arr.shape[0], -1, decimate*2)
                 small_arr = np.empty((full_arr.shape[0], self.small_size), dtype=full_arr.dtype)

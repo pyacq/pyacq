@@ -39,10 +39,10 @@ def test_stream_plaindata():
                 # send
                 index += chunksize
                 arr = np.random.rand(1024, nb_channel).astype(stream_spec['dtype'])
-                outstream.send(index, arr)
+                outstream.send(index, arr, autoswapaxes=False)
                 
                 # recv
-                index2, arr2 = instream.recv()
+                index2, arr2 = instream.recv(autoswapaxes=False)
                 assert index2==index
                 assert np.all((arr-arr2)==0.)
         
@@ -63,7 +63,6 @@ def test_stream_sharedarray():
                         dtype='float32', shape=(-1, nb_channel), timeaxis = 0, compression ='',
                         scale = None, offset = None, units = '',
                         sharedarray_shape = (ring_size, nb_channel), ring_buffer_method= 'single',
-                        autoswapaxes=False,
                         )
     protocol = 'tcp'
     for ring_buffer_method in['single', 'double',]:
@@ -93,16 +92,16 @@ def test_stream_sharedarray():
                 elif timeaxis==1:
                     arr = np.tile(np.arange(index, index+chunksize)[None,:], (nb_channel, 1)).astype(stream_spec['dtype'])
                 index += chunksize
-                outstream.send(index, arr)
+                outstream.send(index, arr, autoswapaxes=False)
                 
-                index2, arr2 = instream.recv()
+                index2, arr2 = instream.recv(autoswapaxes=False, with_data = False)
                 
                 assert index2==index
                 assert arr2 is None
                 
                 # get a buffer of size chunksize*3
                 if ring_buffer_method == 'double' and index>chunksize*3:
-                    arr2 = instream.get_array_slice(index2, chunksize*3)
+                    arr2 = instream.get_array_slice(index2, chunksize*3, autoswapaxes=False)
                     if timeaxis==0:
                         assert np.all(arr2[:,0]==np.arange(index-chunksize*3, index).astype('float32'))
                     elif timeaxis==1:

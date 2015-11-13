@@ -40,6 +40,7 @@ class NumpyDeviceBuffer(Node):
         self.chunksize = chunksize
         self.timeaxis = timeaxis
         
+        
         if self.timeaxis == 0:
             self.output.spec['shape'] = (-1, nb_channel)
             self.output.spec['timeaxis'] = self.timeaxis
@@ -49,6 +50,7 @@ class NumpyDeviceBuffer(Node):
             self.output.spec['timeaxis'] = self.timeaxis
             self.channelaxis = 0
         self.output.spec['sample_rate'] = 1./sample_interval
+        self.output.spec['nb_channel'] = nb_channel
         
         if buffer is None:
             nloop = 40
@@ -58,7 +60,7 @@ class NumpyDeviceBuffer(Node):
             self.buffer += np.sin(2*np.pi*440.*t)[:,None]*.5
             self.buffer = self.buffer.astype('float32')
             if self.timeaxis == 1:
-                self.buffer = self.buffer.transpose()
+                self.buffer = self.buffer.transpose().copy()
         else:
             assert buffer.shape[self.channelaxis] == self.nb_channel, 'Wrong nb_channel'
             assert buffer.shape[self.timeaxis]%chunksize == 0, 'Wrong buffer.shape[0] not multiple chunksize'
@@ -86,6 +88,6 @@ class NumpyDeviceBuffer(Node):
         if self.timeaxis==0:
             self.output.send(self.head, self.buffer[i1:i2, :])
         else:
-            self.output.send(self.head, self.buffer[:,i1:i2])
+            self.output.send(self.head, self.buffer[:,i1:i2], autoswapaxes = False)
 
 register_node_type(NumpyDeviceBuffer)

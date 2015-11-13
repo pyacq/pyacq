@@ -549,7 +549,7 @@ class ComputeThread(QtCore.QThread):
         
         if downsample_factor>1:
             head = head - head%downsample_factor
-        full_arr = self.in_stream().get_array_slice(head, sig_chunk_size)[self.channel, :]
+        full_arr = self.in_stream().get_array_slice(head, sig_chunk_size, autoswapaxes = False)[self.channel, :]
         
         #~ t2 = time.time()
         

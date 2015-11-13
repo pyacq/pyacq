@@ -129,7 +129,7 @@ class TriggerAccumulator(Node,  QtCore.QObject):
             self.limit_poller.append_limit(trig_index+self.limit2)
     
     def on_limit_reached(self, limit_index):
-        arr = self.inputs['signals'].get_array_slice(limit_index, self.size)
+        arr = self.inputs['signals'].get_array_slice(limit_index, self.size).transpose()
         if arr is not None:
             self.stack[self.stack_pos,:,:] = arr
             

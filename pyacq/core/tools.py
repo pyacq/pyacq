@@ -90,8 +90,8 @@ class ThreadStreamConverter(ThreadPollInput):
     def process_data(self, pos, data):
         if 'transfermode' in self.conversions and self.conversions['transfermode'][0]=='sharedarray':
             data = self.input_stream().get_array_slice(self, pos, None)
-        if 'timeaxis' in self.conversions:
-            data = data.swapaxes(*self.conversions['timeaxis'])
+        #~ if 'timeaxis' in self.conversions:
+            #~ data = data.swapaxes(*self.conversions['timeaxis'])
         self.output_stream().send(pos, data)
 
 
