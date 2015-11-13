@@ -111,8 +111,8 @@ class QTimeFreq(WidgetNode):
         self.graphiclayout = pg.GraphicsLayoutWidget()
         self.mainlayout.addWidget(self.graphiclayout)
         
-    def show_params_controler(self):
-        self.params_controler.show()
+    def show_params_controller(self):
+        self.params_controller.show()
     
     def _configure(self, with_user_dialog=True, max_xsize=60., nodegroup_friends=None):
         self.with_user_dialog = with_user_dialog
@@ -223,10 +223,10 @@ class QTimeFreq(WidgetNode):
         self.all_params.sigTreeStateChanged.connect(self.on_param_change)
         
         if self.with_user_dialog:
-            self.params_controler = TimeFreqControler(parent=self, viewer=self)
-            self.params_controler.setWindowFlags(QtCore.Qt.Window)
+            self.params_controller = TimeFreqController(parent=self, viewer=self)
+            self.params_controller.setWindowFlags(QtCore.Qt.Window)
         else:
-            self.params_controler = None
+            self.params_controller = None
         
         self.create_grid()
         self.initialize_time_freq()
@@ -258,7 +258,7 @@ class QTimeFreq(WidgetNode):
         if self.running():
             self.stop()
         if self.with_user_dialog:
-            self.params_controler.close()
+            self.params_controller.close()
         for worker in self.workers:
             worker.close()
         self.conv.close()
@@ -284,7 +284,7 @@ class QTimeFreq(WidgetNode):
 
             viewBox = MyViewBox()
             if self.with_user_dialog:
-                viewBox.doubleclicked.connect(self.show_params_controler)
+                viewBox.doubleclicked.connect(self.show_params_controller)
             viewBox.gain_zoom.connect(self.clim_zoom)
             viewBox.xsize_zoom.connect(self.xsize_zoom)
             
@@ -662,7 +662,7 @@ register_node_type(TimeFreqWorker)
 
 
 
-class TimeFreqControler(QtGui.QWidget):
+class TimeFreqController(QtGui.QWidget):
     """
     GUI controller for QTimeFreq.
     """
