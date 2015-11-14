@@ -104,7 +104,7 @@ class RPCServer(object):
         
         # keep track of all clients we have seen so that we can inform them 
         # when the server exits.
-        self._clients = []
+        self._clients = set()
         
         # Id of thread that this server is registered to
         self._thread = None
@@ -174,6 +174,9 @@ class RPCServer(object):
         This method sends back to the client either the return value or an
         error message.
         """
+        # remember this caller so we can deliver a disconnect message later
+        self._clients.add(caller)
+        
         msg = self._serializer.loads(msg)
         action = msg['action']
         req_id = msg['req_id']
@@ -193,7 +196,6 @@ class RPCServer(object):
         except:
             exc = sys.exc_info()
 
-            
         # Send result or error back to client
         if req_id is not None:
             if exc is None:
@@ -214,10 +216,12 @@ class RPCServer(object):
                 self._send_error(caller, req_id, exc)
                     
         elif exc is not None:
+            # An exception occurred, but client did not request a response.
+            # Instead we will dump the exception here.
             sys.excepthook(*exc)
     
         if action == 'close':
-            self.close()
+            self._close()
     
     def _send_error(self, caller, req_id, exc):
         exc_str = ["Error while processing request %s [%d]: " % (caller.decode(), req_id)]
@@ -282,10 +286,12 @@ class RPCServer(object):
         
         return result
 
-    def close(self):
-        """Close this RPC server.
-        """
+    def _close(self):
         self._closed = True
+        # Send a disconnect message to all known clients
+        data = self._serializer.dumps({'action': 'disconnect'})
+        for client in self._clients:
+            self._socket.send_multipart([client, data])
 
     def running(self):
         """Boolean indicating whether the server is still running.

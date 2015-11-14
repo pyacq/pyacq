@@ -87,6 +87,7 @@ class RPCClient(object):
         self.sock_name = self.name
         self._socket.setsockopt(zmq.IDENTITY, self.sock_name)
         
+        
         # If this thread is running a server, then we need to allow the 
         # server to process requests when the client is blocking.
         assert reentrant in (None, True, False)
@@ -119,6 +120,7 @@ class RPCClient(object):
         
         self.connect_established = False
         self.establishing_connect = False
+        self.disconnected = False
 
         # Proxies we have received from other machines. 
         self.proxies = {}
@@ -152,7 +154,8 @@ class RPCClient(object):
             The amount of time to wait for a response when in synchronous
             operation (sync='sync').
         """
-        
+        if self.disconnected:
+            raise RuntimeError("Cannot send request; server has already disconnected.")
         cmd = {'action': action, 'return_type': return_type, 
                'opts': opts}
         if sync == 'off':
@@ -161,7 +164,8 @@ class RPCClient(object):
             req_id = self.next_request_id
             self.next_request_id += 1
         cmd['req_id'] = req_id
-        logger.info("RPC request '%s' to %s [req_id=%s]", cmd['action'], self.address.decode(), req_id)
+        logger.info("RPC request '%s' to %s [req_id=%s]", cmd['action'], 
+                    self.address.decode(), req_id)
         logger.debug("    => %s", cmd)
         
         # double-serialize opts to ensure that cmd can be read even if opts
@@ -222,7 +226,7 @@ class RPCClient(object):
         try:
             start = time.time()
             while time.time() < start + timeout:
-                fut = self.send('ping', sync='async')
+                fut = self.ping(sync='async')
                 try:
                     result = fut.result(timeout=0.1)
                     self.connect_established = True
@@ -246,7 +250,7 @@ class RPCClient(object):
         while not future.done():
             # wait patiently with blocking calls.
             if timeout is None:
-                itimeout = -1
+                itimeout = None
             else:
                 dt = time.perf_counter() - start
                 itimeout = timeout - dt
@@ -267,7 +271,11 @@ class RPCClient(object):
                 
     def _read_and_process_one(self, timeout):
         # timeout is in seconds; convert to ms
-        timeout = int(timeout * 1000)
+        # use timeout=None to block indefinitely
+        if timeout is None:
+            timeout = -1
+        else:
+            timeout = int(timeout * 1000)
         
         try:
             # NOTE: docs say timeout can only be set before bind, but this
@@ -286,7 +294,8 @@ class RPCClient(object):
         This takes care of assigning return values or exceptions to existing
         Future instances.
         """
-        logger.debug("RPC recv result from %s [req_id=%s]", self.address.decode(), msg['req_id'])
+        logger.debug("RPC recv result from %s [req_id=%s]", self.address.decode(), 
+                     msg.get('req_id', None))
         logger.debug("    => %s" % msg)
         if msg['action'] == 'return':
             req_id = msg['req_id']
@@ -298,10 +307,29 @@ class RPCClient(object):
                 fut.set_exception(exc)
             else:
                 fut.set_result(msg['rval'])
+        elif msg['action'] == 'disconnect':
+            self._server_disconnected()
         else:
             raise ValueError("Invalid action '%s'" % msg['action'])
     
+    def _server_disconnected(self):
+        # server has disconnected; inform all pending futures.
+        self.disconnected = True
+        exc = RuntimeError("Cannot send request; server has already disconnected.")
+        for fut in self.futures.values():
+            fut.set_exception(exc)
+        self.futures.clear()
+    
+    def ping(self, sync='sync', **kwds):
+        """Ping the server.
+        
+        This can be used to test connectivity to the server.
+        """
+        return self.send('ping', sync=sync, **kwds)        
+    
     def close(self):
+        """Close this client's socket (but leave the server running).
+        """
         # reference management is disabled for now..
         #self.send('release_all', return_type=None) 
         self._socket.close()

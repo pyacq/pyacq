@@ -1,5 +1,5 @@
 import threading, atexit, time, logging
-from pyacq.core.rpc import RPCClient, RemoteCallException, RPCServer, QtRPCServer, ObjectProxy
+from pyacq.core.rpc import RPCClient, RemoteCallException, RPCServer, QtRPCServer, ObjectProxy, ProcessSpawner
 from pyacq.core.rpc.log import RPCLogHandler
 import zmq.utils.monitor
 import numpy as np
@@ -266,6 +266,34 @@ def test_qt_rpc():
 
     assert 'QLabel' in thread.l._type_str
     logger.level = previous_level
+
+
+def test_disconnect():
+    
+    # Clients receive notification when server disconnects gracefully
+    server_proc = ProcessSpawner()
+    
+    client_proc = ProcessSpawner()
+    cli = client_proc.client._import('pyacq.core.rpc').RPCClient(server_proc.client.address)
+    cli.close_server()
+    
+    try:
+        print(server_proc.client.ping())
+        assert False, "Expected RuntimeError"
+    except RuntimeError:
+        pass
+    assert server_proc.client.disconnected is True
+    
+    
+    # Clients gracefully handle unexpected loss of server
+    server_proc = ProcessSpawner()
+    server_proc.kill()
+    
+    try:
+        server_proc.client.ping(timeout=1)
+        assert False, "Expected TimeoutError"
+    except TimeoutError:
+        pass
 
 
 if __name__ == '__main__':
