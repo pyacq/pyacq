@@ -301,6 +301,7 @@ class RPCServer(object):
     def _atexit(self):
         # Process is exiting; do any last-minute cleanup if necessary.
         if self._closed is not True:
+            logger.warn("RPCServer exiting without close()!")
             from .client import RPCClient
             cli = RPCClient.get_client(self.address)
             if cli is None:
@@ -369,7 +370,7 @@ class QtRPCServer(RPCServer):
     def process_action(self, action, opts, return_type, caller):
         if action == 'close' and self.quit_on_close:
             QtGui.QApplication.instance().quit()
-        self.poll_thread.stop()
+            self.poll_thread.stop()
         return RPCServer.process_action(self, action, opts, return_type, caller)
 
     def _read_and_process_one(self):

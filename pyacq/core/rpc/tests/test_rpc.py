@@ -244,32 +244,40 @@ def test_qt_rpc():
     
     # Start a thread that will remotely request a widget to be created in the 
     # GUI thread.
-    class TestThread(QtCore.QThread):
+    class TestThread(threading.Thread):
         def __init__(self, addr):
-            QtCore.QThread.__init__(self)
+            threading.Thread.__init__(self, daemon=True)
             self.addr = addr
             self.done = False
+            self.lock = threading.Lock()
         
         def run(self):
             client = RPCClient(self.addr)
             qt = client._import('pyqtgraph.Qt')
+            # widget creation happens in main GUI thread; we are working with
+            # proxies from here.
             self.l = qt.QtGui.QLabel('remote-controlled label')
             self.l.show()
             time.sleep(0.3)
             self.l.hide()
-            self.done = True
+            with self.lock:
+                self.done = True
     
     thread = TestThread(server.address)
     thread.start()
     
     start = time.time()
-    while not thread.done:
+    while True:
+        with thread.lock:
+            if thread.done:
+                break
         assert time.time() < start + 5.0, "Thread did not finish within 5 sec."
+        time.sleep(0.01)
         qapp.processEvents()
 
     assert 'QLabel' in thread.l._type_str
     logger.level = previous_level
-
+    
 
 def test_disconnect():
     #logger.level = logging.DEBUG
@@ -294,6 +302,7 @@ def test_disconnect():
     # Clients receive closure messages even if the server exits without closing
     server_proc = ProcessSpawner()
     server_proc.client['self']._closed = 'sabotage!'
+    time.sleep(0.1)
     assert server_proc.client.disconnected() is True
     
     
