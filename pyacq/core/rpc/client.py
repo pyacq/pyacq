@@ -131,7 +131,6 @@ class RPCClient(object):
         
         self.ensure_connection()
 
-    @property
     def disconnected(self):
         """Boolean indicating whether the server has disconnected from the client.
         """
@@ -164,7 +163,7 @@ class RPCClient(object):
             The amount of time to wait for a response when in synchronous
             operation (sync='sync').
         """
-        if self.disconnected:
+        if self.disconnected():
             raise RuntimeError("Cannot send request; server has already disconnected.")
         cmd = {'action': action, 'return_type': return_type, 
                'opts': opts}
@@ -197,7 +196,11 @@ class RPCClient(object):
             return
         
         fut = Future(self, req_id)
+        if action == 'close':
+            # for server closure we require a little special handling
+            fut.add_done_callback(self._close_request_returned)
         self.futures[req_id] = fut
+        
         if sync == 'async':
             return fut
         elif sync == 'sync':
@@ -329,9 +332,19 @@ class RPCClient(object):
             self._server_disconnected()
         else:
             raise ValueError("Invalid action '%s'" % msg['action'])
+
+    def _close_request_returned(self, fut):
+        if fut.result() is True:
+            # We requested a server closure and the server complied; now
+            # handle the disconnect.
+            self._server_disconnected()
     
     def _server_disconnected(self):
         # server has disconnected; inform all pending futures.
+        # This method can be called two different ways:
+        # * this client requested that the server close and it returned True
+        # * another client requested that the server close and this client
+        #   received a preemptive disconnect message from the server.
         self._disconnected = True
         exc = RuntimeError("Cannot send request; server has already disconnected.")
         for fut in self.futures.values():
@@ -354,7 +367,15 @@ class RPCClient(object):
 
     def close_server(self, sync='sync', **kwds):
         """Ask the server to close.
+        
+        The server returns True if it has closed. All clients known to the
+        server will be informed that the server has disconnected.
+        
+        If the server has already disconnected from this client, then the
+        method returns without error.
         """
+        if self.disconnected():
+            return
         self.send('close', sync=sync, **kwds)
 
     def quit_qapplication(self, sync='sync', **kwds):
@@ -407,4 +428,3 @@ class Future(concurrent.futures.Future):
         """
         self.client.process_until_future(self, timeout=timeout)
         return concurrent.futures.Future.result(self)
-

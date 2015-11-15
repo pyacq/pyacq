@@ -191,7 +191,7 @@ class RPCServer(object):
                 opts = self._serializer.loads(opts)
             logging.debug("    => opts: %s", opts)
             
-            result = self.process_action(action, opts, return_type)
+            result = self.process_action(action, opts, return_type, caller)
             exc = None
         except:
             exc = sys.exc_info()
@@ -220,8 +220,8 @@ class RPCServer(object):
             # Instead we will dump the exception here.
             sys.excepthook(*exc)
     
-        if action == 'close':
-            self._close()
+        #if action == 'close':
+            #self._close()
     
     def _send_error(self, caller, req_id, exc):
         exc_str = ["Error while processing request %s [%d]: " % (caller.decode(), req_id)]
@@ -238,7 +238,7 @@ class RPCServer(object):
         data = self._serializer.dumps(result)
         self._socket.send_multipart([caller, data])
 
-    def process_action(self, action, opts, return_type):
+    def process_action(self, action, opts, return_type, caller):
         """Invoke a single action and return the result.
         """
         if action == 'call_obj':
@@ -279,19 +279,21 @@ class RPCServer(object):
         elif action == 'ping':
             result = 'pong'
         elif action == 'close':
-            # close is handled after response has been sent.
-            result = True
+            self._closed = True
+            # Send a disconnect message to all known clients
+            data = self._serializer.dumps({'action': 'disconnect'})
+            for client in self._clients:
+                if client == caller:
+                    # We will send an actual return value to confirm closure
+                    # to the caller.
+                    continue
+                logger.debug("RPC server sending disconnect message to %s", client)
+                self._socket.send_multipart([client, data])
+            return True
         else:
             raise ValueError("Invalid RPC action '%s'" % action)
         
         return result
-
-    def _close(self):
-        self._closed = True
-        # Send a disconnect message to all known clients
-        data = self._serializer.dumps({'action': 'disconnect'})
-        for client in self._clients:
-            self._socket.send_multipart([client, data])
 
     def running(self):
         """Boolean indicating whether the server is still running.
@@ -343,11 +345,11 @@ class QtRPCServer(RPCServer):
         RPCServer.register_server(self)
         self.poll_thread.start()
 
-    def process_action(self, action, opts, return_type):
+    def process_action(self, action, opts, return_type, caller):
         if action == 'quit_qapp':
             QtGui.QApplication.instance().quit()
         else:
-            return RPCServer.process_action(self, action, opts, return_type)
+            return RPCServer.process_action(self, action, opts, return_type, caller)
 
     def _read_and_process_one(self):
         raise NotImplementedError('Socket reading is handled by poller thread.')

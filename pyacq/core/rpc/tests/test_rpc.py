@@ -261,7 +261,8 @@ def test_qt_rpc():
     thread.start()
     
     start = time.time()
-    while time.time() < start + 1.0:
+    while not hasattr(thread, 'l'):
+        assert time.time() < start + 5.0, "Thread did not create label within 5 sec."
         qapp.processEvents()
 
     assert 'QLabel' in thread.l._type_str
@@ -269,6 +270,7 @@ def test_qt_rpc():
 
 
 def test_disconnect():
+    #logger.level = logging.DEBUG
     
     # Clients receive notification when server disconnects gracefully
     server_proc = ProcessSpawner()
@@ -276,8 +278,10 @@ def test_disconnect():
     client_proc = ProcessSpawner()
     cli = client_proc.client._import('pyacq.core.rpc').RPCClient(server_proc.client.address)
     cli.close_server()
+
+    assert cli.disconnected() is True
     
-    assert server_proc.client.disconnected is True
+    assert server_proc.client.disconnected() is True
     try:
         print(server_proc.client.ping())
         assert False, "Expected RuntimeError"
@@ -285,7 +289,7 @@ def test_disconnect():
         pass
     
     
-    # Clients gracefully handle unexpected loss of server
+    # Clients gracefully handle unexpected loss of server (with timeout)
     server_proc = ProcessSpawner()
     server_proc.kill()
     
@@ -294,6 +298,21 @@ def test_disconnect():
         assert False, "Expected TimeoutError"
     except TimeoutError:
         pass
+
+
+    # server doesn't hang up if clients are not available to receive disconnect
+    # message
+    server_proc = ProcessSpawner()
+    for i in range(10):
+        # create a bunch of dead clients
+        cp = ProcessSpawner()
+        cli = cp.client._import('pyacq.core.rpc').RPCClient(server_proc.client.address)
+        cp.kill()
+    
+    start = time.time()
+    server_proc.client.close_server()
+    assert time.time() - start < 1.0
+    assert server_proc.client.disconnected() == True
 
 
 if __name__ == '__main__':
