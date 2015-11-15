@@ -290,8 +290,14 @@ def test_disconnect():
     except RuntimeError:
         pass
     
+
+    # Clients receive closure messages even if the server exits without closing
+    server_proc = ProcessSpawner()
+    server_proc.client['self']._closed = 'sabotage!'
+    assert server_proc.client.disconnected() is True
     
-    # Clients gracefully handle unexpected loss of server (with timeout)
+    
+    # Clients gracefully handle sudden death of server (with timeout)
     server_proc = ProcessSpawner()
     server_proc.kill()
     
@@ -315,6 +321,7 @@ def test_disconnect():
     server_proc.client.close_server()
     assert time.time() - start < 1.0
     assert server_proc.client.disconnected() == True
+
 
 
 if __name__ == '__main__':

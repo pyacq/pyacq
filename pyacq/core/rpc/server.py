@@ -300,7 +300,7 @@ class RPCServer(object):
 
     def _atexit(self):
         # Process is exiting; do any last-minute cleanup if necessary.
-        if not self._closed:
+        if self._closed is not True:
             from .client import RPCClient
             cli = RPCClient.get_client(self.address)
             if cli is None:
@@ -311,7 +311,7 @@ class RPCServer(object):
     def running(self):
         """Boolean indicating whether the server is still running.
         """
-        return not self._closed
+        return self._closed is False
     
     def run_forever(self):
         """Read and process RPC requests until the server is asked to close.
@@ -369,6 +369,7 @@ class QtRPCServer(RPCServer):
     def process_action(self, action, opts, return_type, caller):
         if action == 'close' and self.quit_on_close:
             QtGui.QApplication.instance().quit()
+        self.poll_thread.stop()
         return RPCServer.process_action(self, action, opts, return_type, caller)
 
     def _read_and_process_one(self):
@@ -425,8 +426,14 @@ class QtPollThread(QtCore.QThread):
             
             if self.return_socket in socks:
                 name, data = self.return_socket.recv_multipart()
+                if name == 'STOP':
+                    break
                 self.rpc_socket.send_multipart([name, data])
                 
             if self.rpc_socket in socks:
                 name, msg = self.rpc_socket.recv_multipart()
                 self.new_request.emit(name, msg)
+
+    def stop(self):
+        self.server._socket.send_multipart([b'STOP', b''])
+        self.wait()
