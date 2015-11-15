@@ -84,9 +84,8 @@ class RPCClient(object):
         # DEALER is fully asynchronous--we can send or receive at any time, and
         # unlike ROUTER, it only connects to a single endpoint.
         self._socket = zmq.Context.instance().socket(zmq.DEALER)
-        self.sock_name = self.name
-        self._socket.setsockopt(zmq.IDENTITY, self.sock_name)
-        
+        self._sock_name = self.name
+        self._socket.setsockopt(zmq.IDENTITY, self._sock_name)
         
         # If this thread is running a server, then we need to allow the 
         # server to process requests when the client is blocking.
@@ -120,7 +119,7 @@ class RPCClient(object):
         
         self.connect_established = False
         self.establishing_connect = False
-        self.disconnected = False
+        self._disconnected = False
 
         # Proxies we have received from other machines. 
         self.proxies = {}
@@ -131,6 +130,17 @@ class RPCClient(object):
         self.serializer = MsgpackSerializer(client=self)
         
         self.ensure_connection()
+
+    @property
+    def disconnected(self):
+        """Boolean indicating whether the server has disconnected from the client.
+        """
+        if self._disconnected:
+            return True
+        
+        # check to see if we have received any new messages
+        self._read_and_process_all()
+        return self._disconnected
 
     def send(self, action, opts=None, return_type='auto', sync='sync', timeout=10.0):
         """Send a request to the remote process.
@@ -288,6 +298,14 @@ class RPCClient(object):
         
         self.process_msg(msg)
 
+    def _read_and_process_all(self):
+        # process all messages until none are immediately available.
+        try:
+            while True:
+                self._read_and_process_one(timeout=0)
+        except TimeoutError:
+            return
+
     def process_msg(self, msg):
         """Handle one message received from the remote process.
         
@@ -314,7 +332,7 @@ class RPCClient(object):
     
     def _server_disconnected(self):
         # server has disconnected; inform all pending futures.
-        self.disconnected = True
+        self._disconnected = True
         exc = RuntimeError("Cannot send request; server has already disconnected.")
         for fut in self.futures.values():
             fut.set_exception(exc)

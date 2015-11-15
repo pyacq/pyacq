@@ -277,12 +277,12 @@ def test_disconnect():
     cli = client_proc.client._import('pyacq.core.rpc').RPCClient(server_proc.client.address)
     cli.close_server()
     
+    assert server_proc.client.disconnected is True
     try:
         print(server_proc.client.ping())
         assert False, "Expected RuntimeError"
     except RuntimeError:
         pass
-    assert server_proc.client.disconnected is True
     
     
     # Clients gracefully handle unexpected loss of server
