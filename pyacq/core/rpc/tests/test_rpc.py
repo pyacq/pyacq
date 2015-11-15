@@ -1,15 +1,23 @@
 import threading, atexit, time, logging
 from pyacq.core.rpc import RPCClient, RemoteCallException, RPCServer, QtRPCServer, ObjectProxy, ProcessSpawner
-from pyacq.core.rpc.log import RPCLogHandler
+from pyacq.core.rpc.log import RPCLogHandler, set_process_name, set_thread_name, start_log_server
 import zmq.utils.monitor
 import numpy as np
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtGui
 
 
+# Set up nice logging for tests:
+# remote processes forward logs to this process
 logger = logging.getLogger()
+start_log_server(logger)
+# local log messages are time-sorted and colored
 handler = RPCLogHandler()
 logger.addHandler(handler)
+# messages originating locally can be easily identified
+set_process_name('main_process')
+set_thread_name('main_thread')
+
 
 qapp = pg.mkQApp()
 
@@ -239,7 +247,7 @@ def test_qt_rpc():
     previous_level = logger.level
     #logger.level = logging.DEBUG
     
-    server = QtRPCServer()
+    server = QtRPCServer(quit_on_close=False)
     server.run_forever()
     
     # Start a thread that will remotely request a widget to be created in the 
@@ -278,6 +286,8 @@ def test_qt_rpc():
     assert 'QLabel' in thread.l._type_str
     logger.level = previous_level
     
+    server.close()
+
 
 def test_disconnect():
     #logger.level = logging.DEBUG

@@ -83,6 +83,11 @@ class RPCServer(object):
     
     @staticmethod
     def register_server(srv):
+        """Register a server as the (only) server running in this thread.
+        
+        This static method fails if another server is already registered for
+        this thread.
+        """
         assert srv._thread is None, "Server has already been registered."
         key = threading.current_thread().ident
         with RPCServer.servers_by_thread_lock:
@@ -90,6 +95,15 @@ class RPCServer(object):
                 raise KeyError("An RPCServer is already running in this thread.")
             RPCServer.servers_by_thread[key] = srv
         srv._thread = key
+
+    @staticmethod
+    def unregister_server(srv):
+        """Unregister a server from this thread.
+        """
+        key = srv._thread
+        with RPCServer.servers_by_thread_lock:
+            assert RPCServer.servers_by_thread[key] is srv
+            RPCServer.servers_by_thread.pop(key)
         
     def __init__(self, addr="tcp://*:*"):
         # pick a unique name: host:pid.tid
@@ -223,9 +237,6 @@ class RPCServer(object):
             # Instead we will dump the exception here.
             sys.excepthook(*exc)
     
-        #if action == 'close':
-            #self._close()
-    
     def _send_error(self, caller, req_id, exc):
         exc_str = ["Error while processing request %s [%d]: " % (caller.decode(), req_id)]
         exc_str += traceback.format_stack()
@@ -292,6 +303,7 @@ class RPCServer(object):
                     continue
                 logger.debug("RPC server sending disconnect message to %s", client)
                 self._socket.send_multipart([client, data])
+            RPCServer.unregister_server(self)
             result = True
         else:
             raise ValueError("Invalid RPC action '%s'" % action)
@@ -302,12 +314,19 @@ class RPCServer(object):
         # Process is exiting; do any last-minute cleanup if necessary.
         if self._closed is not True:
             logger.warn("RPCServer exiting without close()!")
-            from .client import RPCClient
-            cli = RPCClient.get_client(self.address)
-            if cli is None:
-                self.process_action('close', None, None, None)
-            else:
-                cli.close_server(sync='sync')
+            self.close()
+
+    def close(self):
+        """Ask the server to close.
+        
+        This method is thread-safe.
+        """
+        from .client import RPCClient
+        cli = RPCClient.get_client(self.address)
+        if cli is None:
+            self.process_action('close', None, None, None)
+        else:
+            cli.close_server(sync='sync')
 
     def running(self):
         """Boolean indicating whether the server is still running.
@@ -368,9 +387,12 @@ class QtRPCServer(RPCServer):
         self.poll_thread.start()
 
     def process_action(self, action, opts, return_type, caller):
-        if action == 'close' and self.quit_on_close:
-            QtGui.QApplication.instance().quit()
+        # this method is called from the Qt main thread.
+        if action == 'close':
+            if self.quit_on_close:
+                QtGui.QApplication.instance().quit()
             self.poll_thread.stop()
+            
         return RPCServer.process_action(self, action, opts, return_type, caller)
 
     def _read_and_process_one(self):
@@ -415,14 +437,6 @@ class QtPollThread(QtCore.QThread):
         poller.register(self.return_socket, zmq.POLLIN)
         
         while self.server.running():
-            #with self.lock:
-                #if not self.running:
-                    ## do a last poll
-                    #socks = dict(self.poller.poll(timeout=500))
-                    #if len(socks)==0:
-                        #self.local_socket.close()
-                        #break
-            
             socks = dict(poller.poll(timeout=100))
             
             if self.return_socket in socks:
@@ -436,5 +450,8 @@ class QtPollThread(QtCore.QThread):
                 self.new_request.emit(name, msg)
 
     def stop(self):
+        """Ask the poller thread to stop.
+        
+        This method may only be called from the Qt main thread.
+        """
         self.server._socket.send_multipart([b'STOP', b''])
-        self.wait()
