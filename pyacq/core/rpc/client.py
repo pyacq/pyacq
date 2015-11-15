@@ -372,18 +372,11 @@ class RPCClient(object):
         server will be informed that the server has disconnected.
         
         If the server has already disconnected from this client, then the
-        method returns without error.
+        method returns True without error.
         """
         if self.disconnected():
-            return
-        self.send('close', sync=sync, **kwds)
-
-    def quit_qapplication(self, sync='sync', **kwds):
-        """Ask the server to quit its QApplication.
-        
-        This may only be used when connected to a QtRPCServer.
-        """
-        self.send('quit_qapp', sync=sync, **kwds)
+            return True
+        return self.send('close', sync=sync, **kwds)
 
     def measure_clock_diff(self):
         pass

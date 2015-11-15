@@ -185,10 +185,8 @@ class ProcessSpawner(object):
         if self.proc.poll() is not None:
             return
         logger.info("Close process: %d", self.proc.pid)
-        if self.qt:
-            self.client.quit_qapplication()
-        else:
-            self.client.close_server()
+        closed = self.client.close_server()
+        assert closed is True, "Server refused to close. (reply: %s)" % closed
         self.proc.wait()
 
 

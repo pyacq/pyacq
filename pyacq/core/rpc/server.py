@@ -120,6 +120,9 @@ class RPCServer(object):
         self._proxies = {}  # obj_id: object
         
         logging.debug("RPC create server: %s@%s", self._name.decode(), self.address.decode())
+        
+        # Make sure we inform clients of closure
+        atexit.register(self._atexit)
 
     def get_proxy(self, obj, **kwds):
         """Return an ObjectProxy referring to a local object.
@@ -289,11 +292,21 @@ class RPCServer(object):
                     continue
                 logger.debug("RPC server sending disconnect message to %s", client)
                 self._socket.send_multipart([client, data])
-            return True
+            result = True
         else:
             raise ValueError("Invalid RPC action '%s'" % action)
         
         return result
+
+    def _atexit(self):
+        # Process is exiting; do any last-minute cleanup if necessary.
+        if not self._closed:
+            from .client import RPCClient
+            cli = RPCClient.get_client(self.address)
+            if cli is None:
+                self.process_action('close', None, None, None)
+            else:
+                cli.close_server(sync='sync')
 
     def running(self):
         """Boolean indicating whether the server is still running.
@@ -335,9 +348,17 @@ class QtRPCServer(RPCServer):
     This server may be used to create and manage QObjects, QWidgets, etc. It
     uses a separate thread to poll for RPC requests, which are then sent to the
     Qt event loop using by signal (see QtPollThread).
+    
+    Parameters
+    ----------
+    addr : str
+        ZMQ address to listen on. Default is "tcp://*:*".
+    quit_on_close : bool
+        If True, then call `QApplication.quit()` when the server is closed. 
     """
-    def __init__(self, addr="tcp://*:*"):
+    def __init__(self, addr="tcp://*:*", quit_on_close=True):
         RPCServer.__init__(self, addr)
+        self.quit_on_close = quit_on_close
         self.poll_thread = QtPollThread(self)
         
     def run_forever(self):
@@ -346,10 +367,9 @@ class QtRPCServer(RPCServer):
         self.poll_thread.start()
 
     def process_action(self, action, opts, return_type, caller):
-        if action == 'quit_qapp':
+        if action == 'close' and self.quit_on_close:
             QtGui.QApplication.instance().quit()
-        else:
-            return RPCServer.process_action(self, action, opts, return_type, caller)
+        return RPCServer.process_action(self, action, opts, return_type, caller)
 
     def _read_and_process_one(self):
         raise NotImplementedError('Socket reading is handled by poller thread.')
@@ -366,6 +386,8 @@ class QtPollThread(QtCore.QThread):
     new_request = QtCore.Signal(object, object)  # client, msg
     
     def __init__(self, server):
+        # Note: QThread behaves like threading.Thread(daemon=True); a running
+        # QThread will not prevent the process from exiting.
         QtCore.QThread.__init__(self)
         self.server = server
         

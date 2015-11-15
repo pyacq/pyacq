@@ -248,6 +248,7 @@ def test_qt_rpc():
         def __init__(self, addr):
             QtCore.QThread.__init__(self)
             self.addr = addr
+            self.done = False
         
         def run(self):
             client = RPCClient(self.addr)
@@ -256,13 +257,14 @@ def test_qt_rpc():
             self.l.show()
             time.sleep(0.3)
             self.l.hide()
+            self.done = True
     
     thread = TestThread(server.address)
     thread.start()
     
     start = time.time()
-    while not hasattr(thread, 'l'):
-        assert time.time() < start + 5.0, "Thread did not create label within 5 sec."
+    while not thread.done:
+        assert time.time() < start + 5.0, "Thread did not finish within 5 sec."
         qapp.processEvents()
 
     assert 'QLabel' in thread.l._type_str
@@ -303,7 +305,7 @@ def test_disconnect():
     # server doesn't hang up if clients are not available to receive disconnect
     # message
     server_proc = ProcessSpawner()
-    for i in range(10):
+    for i in range(4):
         # create a bunch of dead clients
         cp = ProcessSpawner()
         cli = cp.client._import('pyacq.core.rpc').RPCClient(server_proc.client.address)

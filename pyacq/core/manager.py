@@ -86,6 +86,10 @@ class Manager(object):
         server = RPCServer.get_server()
         if server is not None:
             server['manager'] = self
+            
+        # If the manager shuts down, then all spawned nodegroups should be
+        # closed as well.
+        atexit.register(self.close)
 
     def get_logger_info(self):
         """Return the address of the log server and the level of the root logger.
@@ -123,7 +127,8 @@ class Manager(object):
         if self.default_host is not None:
             self.default_host.close_all_nodegroups()
             
-        # TODO: shut down all known nodegroups?
+        for h in self.hosts:
+            h.close_all_nodegroups(self)
 
     def list_hosts(self):
         """Return a list of the Hosts that the Manager is connected to.
