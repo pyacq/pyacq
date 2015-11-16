@@ -8,7 +8,7 @@ import os
 
 import pytest
 
-logging.getLogger().level = logging.INFO
+#logging.getLogger().level = logging.INFO
 
 
 def test_manager():

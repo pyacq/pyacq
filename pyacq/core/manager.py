@@ -33,11 +33,12 @@ def create_manager(mode='rpc', auto_close_at_exit=True):
         root_logger.removeHandler(root_logger.handlers[0])
     root_logger.addHandler(log_handler)
     
-    # Send exceptions through logger for nice formatting
+    # Send local uncaught exceptions through logger for nice formatting
     rpc_log.log_exceptions()
         
     # start a global log server
-    rpc_log.start_log_server(logger)
+    if rpc_log.get_logger_address() is None:
+        rpc_log.start_log_server(logger)
     
     # start the manager
     if mode == 'local':
@@ -117,18 +118,7 @@ class Manager(object):
     
     def disconnect_host(self, host):
         host.close_nodegroups(self)
-
-    def close(self):
-        """Close the Manager.
-        
-        If a default host was created by this Manager, then it will be closed 
-        as well.
-        """
-        if self.default_host is not None:
-            self.default_host.close_all_nodegroups()
-            
-        for h in self.hosts:
-            h.close_all_nodegroups(self)
+        self.hosts.pop(host._rpc_addr)
 
     def list_hosts(self):
         """Return a list of the Hosts that the Manager is connected to.
@@ -173,10 +163,6 @@ class Manager(object):
         self.nodegroups[name] = ng
         return ng
     
-    def close_all_nodegroups(self):
-        for ng in self.nodegroups.values():
-            ng.close()
-
     def list_nodegroups(self):
         return list(self.nodegroups.values())
 
@@ -188,5 +174,17 @@ class Manager(object):
         for ng in self.nodegroups.values():
             ng.stop_all_nodes()
 
+    def close_all_nodegroups(self):
+        for ng in self.nodegroups.values():
+            ng.close()
+        self.nodegroups = {}
+
     def close(self):
+        """Close the Manager.
+        
+        If a default host was created by this Manager, then it will be closed 
+        as well.
+        """
         self.close_all_nodegroups()
+        if self.default_host is not None:
+            self.default_host.stop()

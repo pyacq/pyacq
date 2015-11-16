@@ -142,10 +142,10 @@ _sys_excepthook = None
 
 def _log_unhandled_exception(exc, val, tb):
     global _sys_excepthook
-    exc_str += traceback.format_stack()
+    exc_str = traceback.format_stack()
     exc_str += [" < exception caught here >\n"]
-    exc_str += traceback.format_exception(exc, val, tb)
-    exc_str = '\n'.join(['    ' + line for line in exc_str.split('\n')])
+    exc_str += traceback.format_exception(exc, val, tb)[1:]
+    exc_str = ''.join(['    ' + line for line in exc_str])
     logging.getLogger().warn("Unhandled exception:\n%s", exc_str)
     #_sys_excepthook(exc, val, tb)
 
