@@ -30,7 +30,7 @@ class ThreadPollInput(QtCore.QThread):
         self.running = False
         self.running_lock = Mutex()
         self._pos = None
-    
+        
     def run(self):
         with self.running_lock:
             self.running = True
