@@ -188,7 +188,14 @@ class QTimeFreq(WidgetNode):
             
             # socket stream for maps from worker
             input_map = InputStream()
-            stream_spec = dict(worker.output.params._get_value())
+            out_params = worker.output.params
+            if not isinstance(out_params, dict):
+                # worker is remote; request attribute from remote process.
+                out_params = out_params._get_value()
+            else:
+                # copy to prevent modification
+                out_params = dict(out_params)
+            stream_spec = out_params
             input_map.connect(worker.output)
             self.input_maps.append(input_map)
             if self.local_workers:
