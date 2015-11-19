@@ -42,6 +42,8 @@ class NodeGroup(object):
     def remove_node(self, node):
         """Remove a Node from this NodeGroup.
         """
+        if node.running():
+            raise RuntimeError("Refusing to remove Node while it is running.")
         self.nodes.remove(node)
         
     def list_nodes(self):

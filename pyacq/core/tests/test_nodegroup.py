@@ -2,12 +2,8 @@ import time
 import pytest
 import logging
 
-from pyacq.core.rpc import RPCClient, RemoteCallException
-from pyacq.core.processspawner import ProcessSpawner
+from pyacq.core.rpc import RemoteCallException
 from pyacq.core.host import Host
-from pyacq.core.nodegroup import NodeGroup
-from pyacq.core.node import Node
-from pyacq.core.nodelist import register_node_type
 
 from pyacq import create_manager
 
@@ -15,102 +11,40 @@ from pyacq import create_manager
 #~ logging.getLogger().level=logging.INFO
 
 def test_nodegroup0():
-    name, addr = 'nodegroup', 'tcp://127.0.0.1:*'
-    process_nodegroup0 = ProcessSpawner(NodeGroup, name, addr)
-    client0 = RPCClient(name, process_nodegroup0.addr)
-    
+    proc, host = Host.spawn('host1')
+    ng = host.create_nodegroup('nodegroup')
     n = 5
-    
-    for i in range(n):
-        client0.create_node('mynode{}'.format(i), '_MyTestNode')
+    nodes = [ng.create_node('_MyTestNode', name='mynode{}'.format(i)) for i in range(n)]
 
     for i in range(n):
-        client0.control_node('mynode{}'.format(i), 'configure')
+        nodes[i].configure()
 
     for i in range(n):
-        client0.control_node('mynode{}'.format(i), 'initialize')
+        nodes[i].initialize()
 
     for i in range(n):
-        client0.control_node('mynode{}'.format(i), 'start')
+        nodes[i].start()
 
-    for i in range(n):
-        client0.control_node('mynode{}'.format(i), 'stop')
-
-    for i in range(n):
-        client0.delete_node('mynode{}'.format(i))
-    
-    process_nodegroup0.stop()
-
-
-def bench_ping_pong_nodegroup():
-    # compare Qt4 mainloop of NodeGroup vs Host main loop which is infinite loop (fastest possible)
-    for name, class_ in [('Host', Host), ('NodeGroup', NodeGroup)]:
-        addr = 'tcp://127.0.0.1:*'
-        process = ProcessSpawner(class_, name, addr)
-        client = RPCClient(name, process.addr)
-        
-        N =1000
-        
-        t1 = time.time()
-        for i in range(N):
-            client.ping()
-        t2 = time.time()
-        print(name, ' : sync ping per second', N/(t2-t1))
-
-        t1 = time.time()
-        rets = []
-        for i in range(N):
-            rets.append(client.ping(_sync=False))
-        for ret in rets:
-            ret.result()
-        t2 = time.time()
-        print(name, ' : async ping per second', N/(t2-t1))
-        
-        client.close()
-
-
-def test_cannot_delete_node_while_running():
-    name, addr = 'nodegroup', 'tcp://127.0.0.1:*'
-    process_nodegroup0 = ProcessSpawner(NodeGroup, name, addr)
-    client0 = RPCClient(name, process_nodegroup0.addr)
-    
-    client0.create_node('mynode', '_MyTestNode')
-    client0.control_node('mynode', 'configure')
-    client0.control_node('mynode', 'initialize')
-    client0.control_node('mynode', 'start')
-    
     with pytest.raises(RemoteCallException):
         # a running node cannot be delete
-        client0.delete_node('mynode')
-    
-    client0.control_node('mynode', 'stop')
-    client0.delete_node('mynode')
+        ng.remove_node(nodes[0])
+        
+    for i in range(n):
+        nodes[i].stop()
 
-    process_nodegroup0.stop()
-
-
-def test_remotly_show_qwidget_node():
-    name, addr = 'nodegroup0', 'tcp://127.0.0.1:*'
-    process_nodegroup0 = ProcessSpawner(NodeGroup, name, addr)
-    client0 = RPCClient(name, process_nodegroup0.addr)
-    client0.create_node('mynode', '_MyTestNodeQWidget')
-    client0.control_node('mynode', 'show')
+    # test qwidget display
+    qt_node = ng.create_node('_MyTestNodeQWidget', name='myqtnode')
+    qt_node.show()
     
-    name, addr = 'nodegroup1', 'tcp://127.0.0.1:*'
-    process_nodegroup1 = ProcessSpawner(NodeGroup, name, addr)
-    client1 = RPCClient(name, process_nodegroup1.addr)
-    client1.create_node('mynode', '_MyTestNodeQWidget')
-    client1.control_node('mynode', 'show')
+    for i in range(n):
+        ng.remove_node(nodes[i])
     
-    time.sleep(3.)
-    
-    process_nodegroup0.stop()
-    process_nodegroup1.stop()
+    ng.close()
 
 
 def test_register_node_type_from_module():
     man = create_manager(auto_close_at_exit=False)
-    nodegroup = man.create_nodegroup()
+    nodegroup = man.create_nodegroup('nodegroup')
     
     nodegroup.register_node_type_from_module('pyacq.core.tests.fakenodes', 'NoneRegisteredClass')
     node = nodegroup.create_node('NoneRegisteredClass')
