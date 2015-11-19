@@ -242,6 +242,9 @@ class RPCServer(object):
             # An exception occurred, but client did not request a response.
             # Instead we will dump the exception here.
             sys.excepthook(*exc)
+            
+        if action == 'close':
+            self._final_close()
     
     def _send_error(self, caller, req_id, exc):
         exc_str = ["Error while processing request %s [%d]: " % (caller.decode(), req_id)]
@@ -334,6 +337,10 @@ class RPCServer(object):
         else:
             cli.close_server(sync='sync')
 
+    def _final_close(self):
+        # Called after the server has closed and sent its disconnect messages.
+        pass
+
     def running(self):
         """Boolean indicating whether the server is still running.
         """
@@ -409,6 +416,12 @@ class QtRPCServer(RPCServer):
             # running anyway.
             #self.poll_thread.stop()
         return RPCServer.process_action(self, action, opts, return_type, caller)
+
+    def _final_close(self):
+        # Block for a moment to allow the poller thread to flush any pending
+        # messages. Ideally, we could let the poller thread keep the process
+        # alive until it is done, but then we can end up with zombie processes..
+        time.sleep(0.1)
 
     def _read_and_process_one(self):
         raise NotImplementedError('Socket reading is handled by poller thread.')
