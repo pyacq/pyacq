@@ -13,6 +13,7 @@ from pyqtgraph.Qt import QtCore, QtGui
 
 from .serializer import MsgpackSerializer
 from .proxy import ObjectProxy
+from . import log
 
 
 logger = logging.getLogger(__name__)
@@ -104,13 +105,20 @@ class RPCServer(object):
         with RPCServer.servers_by_thread_lock:
             assert RPCServer.servers_by_thread[key] is srv
             RPCServer.servers_by_thread.pop(key)
+
+    @staticmethod
+    def local_client():
+        """Return the RPCClient used for accessing the server running in the
+        current thread.
+        """
+        from .client import RPCClient
+        srv = RPCServer.get_server()
+        return RPCClient.get_client(srv.address)
         
     def __init__(self, addr="tcp://*:*"):
-        # pick a unique name: host:pid.tid
-        self._name = ('%s:%d.%x' % (socket.gethostname(), os.getpid(), 
-                                    threading.current_thread().ident)).encode()
         self._socket = zmq.Context.instance().socket(zmq.ROUTER)
-        self._socket.setsockopt(zmq.IDENTITY, self._name)
+        # socket identity is not required for ROUTER.
+        #self._socket.setsockopt(zmq.IDENTITY, self._name)
         self._socket.bind(addr)
         self.address = self._socket.getsockopt(zmq.LAST_ENDPOINT)
         self._closed = False
@@ -132,8 +140,6 @@ class RPCServer(object):
         # Objects for which we have sent proxies to other machines.
         self.next_object_id = 0
         self._proxies = {}  # obj_id: object
-        
-        logging.debug("RPC create server: %s@%s", self._name.decode(), self.address.decode())
         
         # Make sure we inform clients of closure
         atexit.register(self._atexit)
@@ -301,7 +307,7 @@ class RPCServer(object):
                     # We will send an actual return value to confirm closure
                     # to the caller.
                     continue
-                logger.debug("RPC server sending disconnect message to %s", client)
+                logger.debug("RPC server sending disconnect message to %r != %r", client, caller)
                 self._socket.send_multipart([client, data])
             RPCServer.unregister_server(self)
             result = True
@@ -336,7 +342,10 @@ class RPCServer(object):
     def run_forever(self):
         """Read and process RPC requests until the server is asked to close.
         """
-        logging.info("RPC start server: %s@%s", self._name.decode(), self.address.decode())
+        name = ('%s.%s.%s' % (log.get_host_name(), log.get_process_name(), 
+                              log.get_thread_name()))
+
+        logging.info("RPC start server: %s@%s", name, self.address.decode())
         RPCServer.register_server(self)
         while self.running():
             self._read_and_process_one()
@@ -351,7 +360,9 @@ class RPCServer(object):
         
         This can also be used to allow the user to manually process requests.
         """
-        logging.info("RPC lazy-start server: %s@%s", self._name.decode(), self.address.decode())
+        name = ('%s.%s.%s' % (log.get_host_name(), log.get_process_name(), 
+                              log.get_thread_name()))
+        logging.info("RPC lazy-start server: %s@%s", name, self.address.decode())
         RPCServer.register_server(self)
 
     def auto_proxy(self, obj, no_proxy_types):
@@ -382,7 +393,9 @@ class QtRPCServer(RPCServer):
         self.poll_thread = QtPollThread(self)
         
     def run_forever(self):
-        logging.info("RPC start server: %s@%s", self._name.decode(), self.address.decode())
+        name = ('%s.%s.%s' % (log.get_host_name(), log.get_process_name(), 
+                              log.get_thread_name()))
+        logging.info("RPC start server: %s@%s", name, self.address.decode())
         RPCServer.register_server(self)
         self.poll_thread.start()
 
@@ -391,8 +404,10 @@ class QtRPCServer(RPCServer):
         if action == 'close':
             if self.quit_on_close:
                 QtGui.QApplication.instance().quit()
-            self.poll_thread.stop()
-            
+            # can't stop poller thread here--that would prevent the return 
+            # message being sent. In general it should be safe to leave this thread
+            # running anyway.
+            #self.poll_thread.stop()
         return RPCServer.process_action(self, action, opts, return_type, caller)
 
     def _read_and_process_one(self):
@@ -436,19 +451,26 @@ class QtPollThread(QtCore.QThread):
         poller.register(self.rpc_socket, zmq.POLLIN)
         poller.register(self.return_socket, zmq.POLLIN)
         
-        while self.server.running():
+        while True:
+            # Note: poller needs to continue running until server has sent 
+            # its final response (which can be after the server claims to be
+            # no longer running).
             socks = dict(poller.poll(timeout=100))
             
             if self.return_socket in socks:
                 name, data = self.return_socket.recv_multipart()
+                #logger.debug("poller return %s %s", name, data)
                 if name == 'STOP':
                     break
                 self.rpc_socket.send_multipart([name, data])
                 
             if self.rpc_socket in socks:
                 name, msg = self.rpc_socket.recv_multipart()
+                #logger.debug("poller recv %s %s", name, msg)
                 self.new_request.emit(name, msg)
 
+        #logger.error("poller exit.")
+        
     def stop(self):
         """Ask the poller thread to stop.
         

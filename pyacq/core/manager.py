@@ -176,7 +176,13 @@ class Manager(object):
 
     def close_all_nodegroups(self):
         for ng in self.nodegroups.values():
-            ng.close()
+            try:
+                ng.close()
+            except RuntimeError:
+                # If the server has already disconnected, then no need to close.
+                cli = RPCClient.get_client(ng._rpc_addr)
+                if not cli.disconnected():
+                    raise
         self.nodegroups = {}
 
     def close(self):
@@ -186,5 +192,3 @@ class Manager(object):
         as well.
         """
         self.close_all_nodegroups()
-        if self.default_host is not None:
-            self.default_host.stop()

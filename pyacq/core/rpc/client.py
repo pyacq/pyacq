@@ -6,10 +6,12 @@ import concurrent.futures
 import threading
 import zmq
 import logging
+from pyqtgraph.Qt import QtGui
 
 from .serializer import MsgpackSerializer
 from .proxy import ObjectProxy
 from .server import RPCServer, QtRPCServer
+from . import log
 
 
 logger = logging.getLogger(__name__)
@@ -27,8 +29,7 @@ class RPCClient(object):
         thread (if any) to process requests whenever the client is waiting
         for a response. This is necessary to avoid deadlocks in case of 
         reentrant RPC requests (eg, server A calls server B, which then calls
-        server A again). By default, clients are reentrant if the server 
-        supports it.
+        server A again). Default is True.
     """
     
     clients_by_thread = {}  # (thread_id, rpc_addr): client
@@ -50,21 +51,12 @@ class RPCClient(object):
             if key in RPCClient.clients_by_thread:
                 return RPCClient.clients_by_thread[key]
         
-        # Connect and return a new client
-        from .server import RPCServer
-        server = RPCServer.get_server()
-        if server is not None and server.address == address:
-            # address is for local RPC server; don't need client.
-            return None
-        else:
-            # create a new client!
-            return RPCClient(address)
+        return RPCClient(address)
     
-    def __init__(self, address, reentrant=None):
-        # pick a unique name: host:pid.tid:rpc_addr
-        self.name = ('%s:%d.%x:%s' % (socket.gethostname(), os.getpid(), 
-                                      threading.current_thread().ident, 
-                                      address.decode())).encode()
+    def __init__(self, address, reentrant=True):
+        # pick a unique name: host.pid.tid:rpc_addr
+        self.name = ("%s.%s.%s:%s" % (log.get_host_name(), log.get_process_name(),
+                                      log.get_thread_name(), address.decode())).encode()
         self.address = address
         
         key = (threading.current_thread().ident, address)
@@ -91,20 +83,18 @@ class RPCClient(object):
         # server to process requests when the client is blocking.
         assert reentrant in (None, True, False)
         server = RPCServer.get_server()
-        if reentrant is False or server is None:
-            self._poller = None
-            self._reentrant = False
-        else:
+        if reentrant is True and server is not None:
             if isinstance(server, QtRPCServer):
-                if reentrant is True:
-                    raise TypeError("Reentrancy is not yet supported with QtRPCServer.")
-                self._poller = None
-                self._reentrant = False
+                self._poller = 'qt'
+                self._reentrant = True
             else:
                 self._poller = zmq.Poller()
                 self._poller.register(self._socket, zmq.POLLIN)
                 self._poller.register(server._socket, zmq.POLLIN)
                 self._reentrant = True
+        else:
+            self._poller = None
+            self._reentrant = False
         
         logger.info("RPC connect to %s", address.decode())
         self._socket.connect(address)
@@ -272,6 +262,14 @@ class RPCClient(object):
                 
             if self._poller is None:
                 self._read_and_process_one(itimeout)
+            elif self._poller == 'qt':
+                # Server runs in Qt thread; we need to time-share with Qt event
+                # loop.
+                QtGui.QApplication.processEvents()
+                try:
+                    self._read_and_process_one(timeout=0.05)
+                except TimeoutError:
+                    pass
             else:
                 # Poll for input on both the client's socket and the server's
                 # socket. This is necessary to avoid deadlocks.
@@ -346,6 +344,7 @@ class RPCClient(object):
         # * another client requested that the server close and this client
         #   received a preemptive disconnect message from the server.
         self._disconnected = True
+        logger.debug("Received server disconnect from %s", self.address)
         exc = RuntimeError("Cannot send request; server has already disconnected.")
         for fut in self.futures.values():
             fut.set_exception(exc)

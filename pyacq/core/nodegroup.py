@@ -1,4 +1,4 @@
-from .rpc import ProcessSpawner, RPCServer
+from .rpc import ProcessSpawner, RPCServer, RPCClient
 from . import nodelist
 
 
@@ -57,7 +57,8 @@ class NodeGroup(object):
         """Call `Node.stop()` for all Nodes in this group.
         """
         for node in self.nodes:
-            node.stop()
+            if node.running():
+                node.stop()
 
     def any_node_running(self):
         """Return True if any of the Nodes in this group are running.
@@ -65,4 +66,6 @@ class NodeGroup(object):
         return any(node.running() for node in self.nodes)
 
     def close(self):
-        RPCServer.get_server().close()
+        self.stop_all_nodes()
+        cli = RPCServer.local_client()
+        cli.close_server(sync='off')

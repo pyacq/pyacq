@@ -284,10 +284,9 @@ def test_qt_rpc():
         qapp.processEvents()
 
     assert 'QLabel' in thread.l._type_str
-    logger.level = previous_level
-    
     server.close()
 
+    logger.level = previous_level
 
 def test_disconnect():
     #logger.level = logging.DEBUG
