@@ -307,7 +307,7 @@ class RPCServer(object):
                     # We will send an actual return value to confirm closure
                     # to the caller.
                     continue
-                logger.debug("RPC server sending disconnect message to %r != %r", client, caller)
+                logger.debug("RPC server sending disconnect message to %r", client)
                 self._socket.send_multipart([client, data])
             RPCServer.unregister_server(self)
             result = True

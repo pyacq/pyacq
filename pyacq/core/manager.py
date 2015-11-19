@@ -125,7 +125,7 @@ class Manager(object):
         """
         return list(self.hosts.values())
     
-    def create_nodegroup(self, name, host=None, qt=True, **kwds):
+    def create_nodegroup(self, name=None, host=None, qt=True, **kwds):
         """Create a new NodeGroup process and return a proxy to the NodeGroup.
         
         A NodeGroup is a process that manages one or more Nodes for device
@@ -145,6 +145,9 @@ class Manager(object):
             
         All extra keyword arguments are passed to `Host.create_nodegroup()`.
         """
+        if name is None:
+            name = "nodegroup_%d" % self._next_nodegroup_name
+            self._next_nodegroup_name += 1
         assert isinstance(name, str)
         if name in self.nodegroups:
             raise KeyError("Nodegroup named %s already exists" % name)

@@ -1,4 +1,5 @@
 import pytest
+import logging
 
 from pyacq import create_manager, ThreadPollInput
 from pyacq.viewers.qtimefreq import TimeFreqWorker, QTimeFreq, HAVE_SCIPY, generate_wavelet_fourier
@@ -8,6 +9,9 @@ import time
 
 from pyqtgraph.Qt import QtCore, QtGui
 import pyqtgraph as pg
+
+
+logger = logging.getLogger()
 
 nb_channel = 8
 sample_rate = 1000.
@@ -135,7 +139,7 @@ def test_qtimefreq_local_worker():
 
 @pytest.mark.skipif(not HAVE_SCIPY, reason='no HAVE_SCIPY')
 def test_qtimefreq_distributed_worker():
-    #~ man = create_manager(auto_close_at_exit = True)
+    #logger.level = logging.DEBUG
     man = create_manager(auto_close_at_exit=False)
 
     nodegroup_friends = [man.create_nodegroup() for _ in range(4)]

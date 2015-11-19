@@ -188,7 +188,7 @@ class QTimeFreq(WidgetNode):
             
             # socket stream for maps from worker
             input_map = InputStream()
-            stream_spec = dict(worker.output.params)
+            stream_spec = dict(worker.output.params._get_value())
             input_map.connect(worker.output)
             self.input_maps.append(input_map)
             if self.local_workers:
@@ -264,9 +264,9 @@ class QTimeFreq(WidgetNode):
         self.conv.close()
         if not self.local_workers:
             # remove from NodeGroup
-            self.conv.ng_proxy.delete_node(self.conv.name)
+            self.conv.ng_proxy.remove_node(self.conv)
             for worker in self.workers:
-                worker.ng_proxy.delete_node(worker.name)
+                worker.ng_proxy.remove_node(worker)
 
     def create_grid(self):
         color = self.params['background_color']
@@ -426,7 +426,7 @@ class QTimeFreq(WidgetNode):
                 if self.local_workers:
                     self.workers[i].compute_one_map(head)
                 else:
-                    self.workers[i].compute_one_map(head, _sync=False)
+                    self.workers[i].compute_one_map(head, _sync='off')
     
     def on_new_map_local(self, chan):
         head, wt_map = self.input_maps[chan].recv()

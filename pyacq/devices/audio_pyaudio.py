@@ -139,7 +139,7 @@ class PyAudio(Node):
         self.lock = Mutex()
         
         if self.output_device_index is not None:
-            self.thread = ThreadPollInput(self.input, parent=self)
+            self.thread = ThreadPollInput(self.input)
             self.thread.new_data.connect(self._new_output_buffer)
     
     def _start(self):

@@ -332,10 +332,16 @@ class RPCClient(object):
             raise ValueError("Invalid action '%s'" % msg['action'])
 
     def _close_request_returned(self, fut):
-        if fut.result() is True:
-            # We requested a server closure and the server complied; now
-            # handle the disconnect.
-            self._server_disconnected()
+        try:
+            if fut.result() is True:
+                # We requested a server closure and the server complied; now
+                # handle the disconnect.
+                self._server_disconnected()
+        except RuntimeError:
+            # might have already disconnected before this request finished.
+            if self.disconnected():
+                pass
+            raise
     
     def _server_disconnected(self):
         # server has disconnected; inform all pending futures.
