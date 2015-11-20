@@ -6,6 +6,7 @@ import concurrent.futures
 import threading
 import zmq
 import logging
+import numpy as np
 from pyqtgraph.Qt import QtGui
 
 from .serializer import MsgpackSerializer
@@ -388,7 +389,18 @@ class RPCClient(object):
         return self.send('close', sync=sync, **kwds)
 
     def measure_clock_diff(self):
-        pass
+        rcounter = self._import('time').perf_counter
+        ltimes = []
+        rtimes = []
+        for i in range(10):
+            ltimes.append(time.perf_counter())
+            rtimes.append(rcounter())
+        ltimes = np.array(ltimes)
+        rtimes = np.array(rtimes[:-1])
+        dif = rtimes - ((ltimes[1:] + ltimes[:-1]) * 0.5)
+        # we can probably constrain this estimate a bit more by looking at
+        # min/max times and excluding outliers.
+        return dif.mean()
 
     def __del__(self):
         if hasattr(self, 'socket'):
