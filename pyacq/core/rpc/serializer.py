@@ -146,7 +146,7 @@ class MsgpackSerializer:
                     raise TypeError("Cannot make proxy to %r without proxy server." % obj)
                 obj = self.server.get_proxy(obj)
             ser = {encode_key: 'proxy'}
-            ser.update(obj.save())
+            ser.update(obj._save())
             return ser
 
     def decode(self, dct):

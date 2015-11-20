@@ -280,8 +280,9 @@ class RPCServer(object):
             #logging.debug("    => call_obj result: %r", result)
         elif action == 'get_obj':
             result = opts['obj']
-        elif action == 'del':
-            del self.proxies[opts['obj_id']]
+        elif action == 'delete':
+            del self._proxies[opts['obj_id']]
+            result = None
         elif action =='getitem':
             result = self[opts['name']]
         elif action =='setitem':

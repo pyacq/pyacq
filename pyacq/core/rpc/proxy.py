@@ -66,11 +66,15 @@ class ObjectProxy(object):
     def __init__(self, rpc_id, obj_id, type_str='', attributes=(), **kwds):
         object.__init__(self)
         ## can't set attributes directly because setattr is overridden.
-        self.__dict__['_rpc_addr'] = rpc_id
-        self.__dict__['_obj_id'] = obj_id
-        self.__dict__['_type_str'] = type_str
-        self.__dict__['_attributes'] = attributes
-        self.__dict__['_parent_proxy'] = None
+        self.__dict__.update(dict(
+            _rpc_addr = rpc_id,
+            _obj_id = obj_id,
+            _type_str = type_str,
+            _attributes = attributes,
+            _parent_proxy = None,
+            _auto_delete = False,
+            _hash  = (rpc_id, obj_id, attributes),
+        ))
         
         # identify local client/server instances this proxy might belong to
         from .client import RPCClient
@@ -87,8 +91,6 @@ class ObjectProxy(object):
             'defer_getattr': True,   ## True, False
             'no_proxy_types': [type(None), str, int, float, tuple, list, dict, ObjectProxy],
         }
-        
-        self.__dict__['_hash'] = (rpc_id, obj_id, attributes)
         
         self._set_proxy_options(**kwds)
     
@@ -145,7 +147,7 @@ class ObjectProxy(object):
                 raise KeyError("Unrecognized proxy option '%s'" % k)
         self._proxy_options.update(kwds)
 
-    def save(self):
+    def _save(self):
         """Convert this proxy to a serializable structure.
         """
         state = {
@@ -175,14 +177,23 @@ class ObjectProxy(object):
         rep = '<ObjectProxy for %s[%d] %s >' % (self._rpc_addr.decode(), self._obj_id, orep)
         return rep
 
-    def _undefer(self, sync='sync', return_type='auto'):
+    def _undefer(self, sync='sync', return_type='auto', **kwds):
         """Process any deferred attribute lookups and return the result.
         """
         if len(self._attributes) == 0:
             return self
         # Transfer sends this object to the remote process and returns a new proxy.
         # In the process, this invokes any deferred attributes.
-        return self._client.get_obj(self, sync=sync, return_type=return_type)
+        return self._client.get_obj(self, sync=sync, return_type=return_type, **kwds)
+        
+    def _delete(self, sync='sync', **kwds):
+        """Ask the RPC server to release the reference held by this proxy.
+        
+        Note: this does not guarantee the remote object will be deleted; only
+        that its reference count will be reduced. Any copies of this proxy will
+        no longer be usable.
+        """
+        self._client.delete(self, sync=sync, **kwds)
         
     def __getattr__(self, attr):
         """

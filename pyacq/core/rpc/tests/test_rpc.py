@@ -148,9 +148,13 @@ def test_rpc():
     assert class_proxy.count == 2
     assert obj2.add(3, 4) == 7
     
-    del obj2
-    # reference management is temporarily disabled.
-    #assert class_proxy.count == 1
+    obj2._delete()
+    assert class_proxy.count == 1
+    try:
+        obj2.array()
+        assert False, "Should have raised RemoteCallException"
+    except RemoteCallException:
+        pass
 
     logger.info("-- Test timeouts --")
     try:

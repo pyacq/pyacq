@@ -212,6 +212,10 @@ class RPCClient(object):
     def _import(self, module, **kwds):
         return self.send('import', opts={'module': module}, **kwds)
 
+    def delete(self, obj, **kwds):
+        assert obj._rpc_addr == self.address
+        return self.send('delete', opts={'obj_id': obj._obj_id}, **kwds)
+
     def __getitem__(self, name):
         return self.send('getitem', opts={'name': name}, sync='sync')
 
