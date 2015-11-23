@@ -385,7 +385,7 @@ class SharedArraySender:
         elif self.params['ring_buffer_method'] == 'double':
             #~ self.funcs.append(self._copy_to_sharray_double)
             self.func = self._copy_to_sharray_double
-        self._index = 0
+        #~ self._index = 0
         
         # prepare SharedArray
         self._timeaxis = self.params['timeaxis']
@@ -410,7 +410,8 @@ class SharedArraySender:
     def _copy_to_sharray_single(self, index, data):
         assert data.shape[self._timeaxis]<self._ring_size, 'The chunk is too big for the buffer {} {}'.format(data.shape, self._numpyarr.shape)
         head = index % self._ring_size
-        tail = self._index%self._ring_size
+        #~ tail = self._index%self._ring_size
+        tail = (index-data.shape[self._timeaxis])%self._ring_size
         if head>tail:
             # 1 chunks
             sl = [slice(None)] * self._ndim
@@ -437,12 +438,13 @@ class SharedArraySender:
                 
 
         self.socket.send(np.int64(index), copy=self.copy)
-        self._index += data.shape[self._timeaxis]
+        #~ self._index += data.shape[self._timeaxis]
 
 
     def _copy_to_sharray_double(self, index, data):
         head = index % self._ring_size
-        tail = self._index%self._ring_size
+        #~ tail = self._index%self._ring_size
+        tail = (index-data.shape[self._timeaxis])%self._ring_size
         if head>tail:
             sl = [slice(None)] * self._ndim
             sl[self._timeaxis] = slice(tail, head)
@@ -478,7 +480,7 @@ class SharedArraySender:
                 self._numpyarr[sl3] = data[sl4]
             
         self.socket.send(np.int64(index), copy=self.copy)
-        self._index += data.shape[self._timeaxis]
+        #~ self._index += data.shape[self._timeaxis]
  
 
 
