@@ -16,86 +16,21 @@ from .proxy import ObjectProxy
 encode_key = '___type_name___'
 
 
-def enchance_encode(obj):
-    """
-    JSon/msgpack encoder that support date, datetime and numpy array, and bytes.
-    Mix of various stackoverflow solution.
-    """
-    
-    if isinstance(obj, np.ndarray):
-        if not obj.flags['C_CONTIGUOUS']:
-            obj = np.ascontiguousarray(obj)
-        assert(obj.flags['C_CONTIGUOUS'])
-        return {encode_key: 'ndarray',
-                'data': base64.b64encode(obj.data).decode(),
-                'dtype': str(obj.dtype),
-                'shape': obj.shape}
-    elif isinstance(obj, datetime.datetime):
-        return {encode_key: 'datetime',
-                'data': obj.strftime('%Y-%m-%dT%H:%M:%S.%f')}
-    elif isinstance(obj, datetime.date):
-        return {encode_key: 'date',
-                'data': obj.strftime('%Y-%m-%d')}
-    elif isinstance(obj, bytes):
-        return {encode_key: 'bytes',
-                'data': base64.b64encode(obj).decode()}
-    else:
-        return obj
-
-
-def enchanced_decode(dct):
-    """
-    JSon/msgpack decoder that support date, datetime and numpy array, and bytes.
-    Mix of various stackoverflow solution.
-    """
-    if isinstance(dct, dict):
-        type_name = dct.get(encode_key, None)
-        if type_name is None:
-            return dct
-        if type_name == 'ndarray':
-            data = base64.b64decode(dct['data'])
-            return np.frombuffer(data, dct['dtype']).reshape(dct['shape'])
-        elif type_name == 'datetime':
-            return datetime.datetime.strptime(dct['data'], '%Y-%m-%dT%H:%M:%S.%f')
-        elif type_name == 'date':
-            return datetime.datetime.strptime(dct['data'], '%Y-%m-%d').date()
-        elif type_name == 'bytes':
-            return base64.b64decode(dct['data'])
-    return dct
-
-
-class EnhancedJSONEncoder(json.JSONEncoder):
-    def default(self, obj):
-        obj2 = enchance_encode(obj)
-        if obj is obj2:
-            return json.JSONEncoder.default(self, obj)
-        else:
-            return obj2
-
-
-class JsonSerializer:
-    def dumps(self, obj):
-        return json.dumps(obj, cls=EnhancedJSONEncoder).encode()
-    
-    def loads(self, msg):
-        return json.loads(msg.decode(), object_hook=enchanced_decode)
-
-
-class MsgpackSerializer:
-    """Class for serializing objects using msgpack.
+class Serializer:
+    """Base serializer class on which msgpack and json serializers 
+    (and potentially others) are built.
     
     Supports ndarray, date, datetime, and bytes for transfer in addition to the
-    standard list supported by msgpack. All other types are converted to an
-    object proxy that can be used to access methods / attributes of the object
+    standard types supported by json and msgpack. All other types are converted
+    to an object proxy that can be used to access methods / attributes of the object
     remotely (this requires that the object be owned by an RPC server).
     
-    Note that lists are converted to tuple in transit. See:
+    Note that tuples are converted to lists in transit. See:
     https://github.com/msgpack/msgpack-python/issues/98
     """
     def __init__(self, server=None, client=None):
         self._server = server
         self.client = client
-        assert HAVE_MSGPACK
     
     @property
     def server(self):
@@ -106,23 +41,24 @@ class MsgpackSerializer:
         return self._server
     
     def dumps(self, obj):
-        """Convert obj to msgpack string.
+        """Convert obj to serialized string.
         """
-        return msgpack.dumps(obj, use_bin_type=True, default=self.encode)
+        raise NotImplementedError()
 
     def loads(self, msg):
-        """Convert from msgpack string to python object.
+        """Convert from serialized string to python object.
         
         Proxies that reference objects owned by the server are converted back
         into the local object. All other proxies are left as-is.
         """
-        # use_list=False because we are more likely to care about transmitting
-        # tuples correctly (because they are used as dict keys).
-        return msgpack.loads(msg, encoding='utf8', use_list=False, object_hook=self.decode)
+        raise NotImplementedError()
 
     def encode(self, obj):
-        # note: encode is only called for types that are not recognized internally
-        # by msgpack. 
+        """Convert various types to serializable objects.
+        
+        Provides support for ndarray, datetime, date, and None. Other types
+        are converted to proxies.
+        """
         if isinstance(obj, np.ndarray):
             if not obj.flags['C_CONTIGUOUS']:
                 obj = np.ascontiguousarray(obj)
@@ -150,6 +86,8 @@ class MsgpackSerializer:
             return ser
 
     def decode(self, dct):
+        """Convert from serializable objects back to original types.
+        """
         if isinstance(dct, dict):
             type_name = dct.pop(encode_key, None)
             if type_name is None:
@@ -163,6 +101,8 @@ class MsgpackSerializer:
             elif type_name == 'none':
                 return None
             elif type_name == 'proxy':
+                if 'attributes' in dct:
+                    dct['attributes'] = tuple(dct['attributes'])
                 proxy = ObjectProxy(**dct)
                 if self.client is not None:
                     proxy._set_proxy_options(**self.client.default_proxy_options)
@@ -171,6 +111,88 @@ class MsgpackSerializer:
                 else:
                     return proxy
         return dct
+
+
+class MsgpackSerializer(Serializer):
+    """Class for serializing objects using msgpack.
     
-#serializer = JsonSerializer()
-# serializer = MsgpackSerializer()
+    Supports ndarray, date, datetime, and bytes for transfer in addition to the
+    standard list supported by msgpack. All other types are converted to an
+    object proxy that can be used to access methods / attributes of the object
+    remotely (this requires that the object be owned by an RPC server).
+    
+    Note that tuples are converted to lists in transit. See:
+    https://github.com/msgpack/msgpack-python/issues/98
+    """
+    def __init__(self, server=None, client=None):
+        assert HAVE_MSGPACK
+        Serializer.__init__(self, server, client)
+    
+    def dumps(self, obj):
+        """Convert obj to msgpack string.
+        """
+        return msgpack.dumps(obj, use_bin_type=True, default=self.encode)
+
+    def loads(self, msg):
+        """Convert from msgpack string to python object.
+        
+        Proxies that reference objects owned by the server are converted back
+        into the local object. All other proxies are left as-is.
+        """
+        ## use_list=False because we are more likely to care about transmitting
+        ## tuples correctly (because they are used as dict keys).
+        #return msgpack.loads(msg, encoding='utf8', use_list=False, object_hook=self.decode)
+
+        #Return lists/tuples as lists because json can't be configured otherwise
+        return msgpack.loads(msg, encoding='utf8', object_hook=self.decode)
+
+
+class JsonSerializer(Serializer):
+    def __init__(self, server=None, client=None):
+        Serializer.__init__(self, server, client)
+        
+        # We require a custom class to overrode json encode behavior.
+        class EnhancedJSONEncoder(json.JSONEncoder):
+            def default(self2, obj):
+                obj2 = self.encode(obj)
+                if obj is obj2:
+                    return json.JSONEncoder.default(self, obj)
+                else:
+                    return obj2
+        self.EnhancedJSONEncoder = EnhancedJSONEncoder
+    
+    def dumps(self, obj):
+        return json.dumps(obj, cls=self.EnhancedJSONEncoder).encode()
+    
+    def loads(self, msg):
+        return json.loads(msg.decode(), object_hook=self.decode)
+
+    def encode(self, obj):
+        if isinstance(obj, np.ndarray):
+            # JSON doesn't support bytes, so we use base64 encoding instead:
+            if not obj.flags['C_CONTIGUOUS']:
+                obj = np.ascontiguousarray(obj)
+            assert(obj.flags['C_CONTIGUOUS'])
+            return {encode_key: 'ndarray',
+                    'data': base64.b64encode(obj.data).decode(),
+                    'dtype': str(obj.dtype),
+                    'shape': obj.shape}
+        elif isinstance(obj, bytes):
+            return {encode_key: 'bytes',
+                    'data': base64.b64encode(obj).decode()}
+        elif obj is None:
+            # JSON does support None/null:
+            return None
+        return Serializer.encode(self, obj)
+
+    def decode(self, dct):
+        if isinstance(dct, dict):
+            type_name = dct.get(encode_key, None)
+            if type_name == 'ndarray':
+                data = base64.b64decode(dct['data'])
+                return np.frombuffer(data, dct['dtype']).reshape(dct['shape'])
+            elif type_name == 'bytes':
+                return base64.b64decode(dct['data'])
+            
+            return Serializer.decode(self, dct)
+        return dct
