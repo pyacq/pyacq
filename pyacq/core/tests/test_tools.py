@@ -1,5 +1,5 @@
 from pyacq.core.stream import OutputStream, InputStream
-from pyacq.core.tools import ThreadPollInput, StreamConverter, StreamSplitter
+from pyacq.core.tools import ThreadPollInput, StreamConverter, ChannelSplitter
 from pyqtgraph.Qt import QtCore, QtGui
 import pyqtgraph as pg
 
@@ -14,6 +14,7 @@ sr = 20000.
 stream_spec = dict(protocol='tcp', interface='127.0.0.1', port='*', 
                    transfermode='plaindata', streamtype='analogsignal',
                    dtype='float32', shape=(-1, nb_channel), timeaxis = 0, 
+                   nb_channel =nb_channel,
                    compression ='', scale = None, offset = None, units = '')
 
 
@@ -128,23 +129,18 @@ def test_streamconverter():
 def test_stream_splitter():
     app = pg.mkQApp()
     
-    stream_spec = dict(protocol='tcp', interface='127.0.0.1', port='*', 
-                       transfermode='plaindata', streamtype='analogsignal',
-                       dtype='float32', shape=(-1, nb_channel), timeaxis = 0, 
-                       compression ='', scale = None, offset = None, units = '')
-    
     outstream = OutputStream()
     outstream.configure(**stream_spec)
     sender = ThreadSender(output_stream=outstream)
 
     def on_new_data(pos, arr):
-        assert arr.shape==(chunksize, 1)
-        # print(pos, arr.shape)
+        assert arr.shape[0]==chunksize
+        assert not arr.flags['C_CONTIGUOUS']
     
     all_instream = []
     all_poller = []
-    splitter = StreamSplitter()
-    splitter.configure()
+    splitter = ChannelSplitter()
+    splitter.configure(output_channels = { 'out0' : [0,1,2], 'out1' : [1,4,9, 12] }, output_timeaxis = 1)
     splitter.input.connect(outstream)
     for name, output in splitter.outputs.items():
         output.configure()

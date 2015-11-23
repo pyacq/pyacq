@@ -10,7 +10,7 @@ import time
 from collections import OrderedDict
 
 from ..core import (WidgetNode, Node, register_node_type, InputStream, OutputStream,
-        ThreadPollInput, StreamConverter, StreamSplitter)
+        ThreadPollInput, StreamConverter)
 
 from .qoscilloscope import MyViewBox
 

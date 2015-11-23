@@ -156,37 +156,31 @@ register_node_type(StreamConverter)
 
 
 
-class ThreadStreamSplitter(ThreadPollInput):
-    """Thread that splits a multi-channel input stream into multiple single-channel
-    output streams.    
-    """
-    def __init__(self, input_stream, outputs_stream, channelaxis, nb_channel, timeout=200, parent=None):
+class ThreadSplitter(ThreadPollInput):
+    def __init__(self, input_stream, outputs_stream, output_channels, timeout=200, parent=None):
         ThreadPollInput.__init__(self, input_stream, timeout=timeout, parent=parent)
         self.outputs_stream = weakref.WeakValueDictionary()
         self.outputs_stream.update(outputs_stream)
-        self.channelaxis = channelaxis
-        self.nb_channel = nb_channel
+        self.output_channels = output_channels
     
     def process_data(self, pos, data):
-        if self.channelaxis == 1:
-            for i in range(self.nb_channel):
-                self.outputs_stream[str(i)].send(pos, data[:, i:i+1].copy())
-        else:
-            for i in range(self.nb_channel):
-                self.outputs_stream[str(i)].send(pos, data[i:i+1, :])
+        if data is None:
+            #sharred_array case
+            data =  self.input_stream().get_array_slice(pos, None)
+        
+        for k , chans in self.output_channels.items():
+            self.outputs_stream[k].send(pos, data[:, chans])
 
 
-class StreamSplitter(Node):
+class ChannelSplitter(Node):
     """
-    StreamSplitter take a multi-channel input signal and splits it into
-    many single-channel outputs.
-    
-    This node requires its stream to use `transfermode = 'plaindata'`.
+    ChannelSplitter take a multi-channel input signal stream and splits it
+    into several sub streams.
     
     Usage::
     
         splitter = StreamSplitter()
-        splitter.configure()
+        splitter.configure(output_channels = { 'out0' : [1,2,3], 'out1' : [4,5,6] })
         splitter.input.connect(someinput)
         for output in splitter.outputs.values():
             output.configure(someotherspec)
@@ -200,44 +194,45 @@ class StreamSplitter(Node):
     def __init__(self, **kargs):
         Node.__init__(self, **kargs)
     
-    def _configure(self):
-        pass
+    def _configure(self, output_channels = {}, output_timeaxis = 'same'):
+        """
+        Params
+        -----------
+        output_channels: dict of list
+            This contain a dict of sub channel list.
+            Each key will be the name of each output.
+        output_timeaxis: int or 'same'
+            The output timeaxis is set here.
+        """
+        self.output_channels = output_channels
+        self.output_timeaxis = output_timeaxis
     
-    def check_input_specs(self):
-        assert self.input.params['transfermode'] == 'plaindata', 'StreamSplitter work only for transfermode=plaindata'
-
-    def check_output_specs(self):
-        for output in self.outputs.values():
-            if self.input.params['timeaxis']==0:
-                assert output.params['shape'][1] == 1, 'StreamSplitter: wrong shape'
-            else:
-                assert output.params['shape'][0] == 1, 'StreamSplitter: wrong shape'
-
     def after_input_connect(self, inputname):
-        if self.input.params['timeaxis']==0:
-            self.channelaxis = 1
-            self.nb_channel = self.input.params['shape'][1]
-            shape = (-1, 1)
-        else:
-            self.channelaxis = 0
-            self.nb_channel = self.input.params['shape'][0]
-            shape = (1, -1)
-
-        stream_spec = {}
-        stream_spec.update(self.input.params)
-        stream_spec['shape'] = shape
-        stream_spec['port'] = '*'
-        # overwrite
-        self.outputs = OrderedDict()
-        for i in range(self.nb_channel):
-            output = OutputStream(spec=stream_spec)
-            self.outputs[str(i)] = output
-    
-    def after_output_configure(self, outputname):
-        pass
+        if self.output_timeaxis == 'same':
+            self.output_timeaxis = self.input.params['timeaxis']
+        timeaxis = self.output_timeaxis
         
+        n =  self.input.params['nb_channel']
+        self.outputs = OrderedDict()
+        for k, chans in self.output_channels.items():
+            assert min(chans)>=0 and max(chans)<n, 'output_channels do not match channel count {}'.format(n)
+
+            stream_spec = dict(streamtype='analogsignal', dtype = self.input.params['dtype'],
+                                                sample_rate = self.input.params['sample_rate'])
+            stream_spec['shape'] = None
+            stream_spec['port'] = '*'
+            stream_spec['nb_channel'] = len(chans)
+            stream_spec['timeaxis'] = timeaxis
+            if timeaxis==0:
+                stream_spec['shape'] = (-1, len(chans))
+            else:
+                stream_spec['shape'] = (len(chans), -1)
+            
+            output = OutputStream(spec=stream_spec)
+            self.outputs[k] = output
+    
     def _initialize(self):
-        self.thread = ThreadStreamSplitter(self.input, self.outputs, self.channelaxis, self.nb_channel)
+        self.thread = ThreadSplitter(self.input, self.outputs, self.output_channels)
     
     def _start(self):
         self.thread.start()
@@ -249,4 +244,4 @@ class StreamSplitter(Node):
     def _close(self):
         pass
 
-register_node_type(StreamSplitter)
+register_node_type(ChannelSplitter)
