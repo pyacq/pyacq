@@ -20,23 +20,23 @@ def test_manager():
     
     # test connection to host
     host = mgr.get_host(host_addr)
-    assert mgr.list_hosts() == (host,)
+    assert mgr.list_hosts() == [host]
     
     # create nodegroup 
-    assert mgr.list_nodegroups() == ()
+    assert mgr.list_nodegroups() == []
     ng1 = mgr.create_nodegroup('nodegroup1', host)
-    assert mgr.list_nodegroups() == (ng1,)
+    assert mgr.list_nodegroups() == [ng1]
     
 
-    assert ng1.list_nodes() == ()
+    assert ng1.list_nodes() == []
     n1 = ng1.create_node('_MyTestNode')
-    assert ng1.list_nodes() == (n1,)
+    assert ng1.list_nodes() == [n1]
     n1.initialize()
     n1.configure()
     n1.start()
     n1.stop()
     ng1.remove_node(n1)
-    assert ng1.list_nodes() == ()
+    assert ng1.list_nodes() == []
 
 
 def create_some_node_group(man):
