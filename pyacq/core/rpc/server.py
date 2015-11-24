@@ -11,7 +11,7 @@ import numpy as np
 import atexit
 from pyqtgraph.Qt import QtCore, QtGui
 
-from .serializer import MsgpackSerializer
+from .serializer import all_serializers
 from .proxy import ObjectProxy
 from . import log
 
@@ -122,11 +122,16 @@ class RPCServer(object):
         self._socket.bind(addr)
         self.address = self._socket.getsockopt(zmq.LAST_ENDPOINT)
         self._closed = False
-        self._serializer = MsgpackSerializer(server=self)
+        
+        # Clients may make requests using any supported serializer, so we should
+        # have one of each ready.
+        self._serializers = {}
+        for ser in all_serializers.values():
+            self._serializers[ser.type] = ser(server=self)
         
         # keep track of all clients we have seen so that we can inform them 
         # when the server exits.
-        self._clients = set()
+        self._clients = {}  # {socket_id: serializer_type}
         
         # Id of thread that this server is registered to
         self._thread = None
@@ -186,11 +191,11 @@ class RPCServer(object):
         if not self.running:
             raise RuntimeError("RPC server socket is already closed.")
             
-        name, msg = self._socket.recv_multipart()
+        name, ser_type, msg = self._socket.recv_multipart()
         
-        self._process_one(name, msg)
+        self._process_one(name, ser_type, msg)
         
-    def _process_one(self, caller, msg):
+    def _process_one(self, caller, ser_type, msg):
         """
         Invoke the requested action.
         
@@ -198,20 +203,31 @@ class RPCServer(object):
         error message.
         """
         # remember this caller so we can deliver a disconnect message later
-        self._clients.add(caller)
+        ser_type = ser_type.decode()
+        self._clients[caller] = ser_type
         
-        msg = self._serializer.loads(msg)
-        action = msg['action']
-        req_id = msg['req_id']
-        return_type = msg.get('return_type', 'auto')
-        opts = msg.pop('opts')
-        
-        # Attempt to invoke requested action
+        # Attempt to read message and invoke requested action
         try:
+            try:
+                serializer = self._serializers[ser_type]
+                msg = serializer.loads(msg)
+            except KeyError:
+                raise ValueError("Unsupported serializer '%s'" % ser_type)
+            finally:
+                # Could not unserialize message, so can't respond directly.
+                # We could improve this by sending at least req_id on its own
+                # as a multipart message item.
+                action = None
+                req_id = None
+            action = msg['action']
+            req_id = msg['req_id']
+            return_type = msg.get('return_type', 'auto')
+            opts = msg.pop('opts')
+            
             logging.debug("RPC recv '%s' from %s [req_id=%s]", action, caller.decode(), req_id)
             logging.debug("    => %s", msg)
             if opts is not None:
-                opts = self._serializer.loads(opts)
+                opts = serializer.loads(opts)
             logging.debug("    => opts: %s", opts)
             
             result = self.process_action(action, opts, return_type, caller)
@@ -258,7 +274,12 @@ class RPCServer(object):
                   'rval': rval, 'error': error}
         logging.debug("RPC send result to %s [rpc_id=%s]", caller.decode(), result['req_id'])
         logging.debug("    => %s", result)
-        data = self._serializer.dumps(result)
+        
+        # Select the correct serializer for this client
+        serializer = self._serializers[self._clients[caller]]
+        
+        # Serialize and return the result
+        data = serializer.dumps(result)
         self._socket.send_multipart([caller, data])
 
     def process_action(self, action, opts, return_type, caller):
@@ -305,14 +326,23 @@ class RPCServer(object):
         elif action == 'close':
             self._closed = True
             # Send a disconnect message to all known clients
-            data = self._serializer.dumps({'action': 'disconnect'})
-            for client in self._clients:
+            data = {}
+            for client, ser_type in self._clients.items():
                 if client == caller:
                     # We will send an actual return value to confirm closure
                     # to the caller.
                     continue
+                
+                # Select or generate the disconnect message that was serialized
+                # correctly for this client.
+                if ser_type not in data:
+                    ser = self._serializers[ser_type]
+                    data[ser_type] = ser.dumps({'action': 'disconnect'})
+                data_str = data[ser_type]
+                
+                # Send disconnect message.
                 logger.debug("RPC server sending disconnect message to %r", client)
-                self._socket.send_multipart([client, data])
+                self._socket.send_multipart([client, data_str])
             RPCServer.unregister_server(self)
             result = True
         else:
@@ -436,7 +466,7 @@ class QtPollThread(QtCore.QThread):
     a timer to poll the RPC socket. Responses are sent back to the poller
     thread by a secondary socket.
     """
-    new_request = QtCore.Signal(object, object)  # client, msg
+    new_request = QtCore.Signal(object, object, object)  # client, msg
     
     def __init__(self, server):
         # Note: QThread behaves like threading.Thread(daemon=True); a running
@@ -479,9 +509,9 @@ class QtPollThread(QtCore.QThread):
                 self.rpc_socket.send_multipart([name, data])
                 
             if self.rpc_socket in socks:
-                name, msg = self.rpc_socket.recv_multipart()
+                name, ser_type, msg = self.rpc_socket.recv_multipart()
                 #logger.debug("poller recv %s %s", name, msg)
-                self.new_request.emit(name, msg)
+                self.new_request.emit(name, ser_type, msg)
 
         #logger.error("poller exit.")
         

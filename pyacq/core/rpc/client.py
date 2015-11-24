@@ -9,7 +9,7 @@ import logging
 import numpy as np
 from pyqtgraph.Qt import QtGui
 
-from .serializer import MsgpackSerializer
+from .serializer import all_serializers
 from .proxy import ObjectProxy
 from .server import RPCServer, QtRPCServer
 from . import log
@@ -54,7 +54,7 @@ class RPCClient(object):
         
         return RPCClient(address)
     
-    def __init__(self, address, reentrant=True):
+    def __init__(self, address, reentrant=True, serializer='msgpack'):
         # pick a unique name: host.pid.tid:rpc_addr
         self.name = ("%s.%s.%s:%s" % (log.get_host_name(), log.get_process_name(),
                                       log.get_thread_name(), address.decode())).encode()
@@ -118,7 +118,10 @@ class RPCClient(object):
         # For unserializing results returned from servers. This cannot be
         # used to send proxies of local objects unless there is also a server
         # for this thread..
-        self.serializer = MsgpackSerializer(client=self)
+        try:
+            self.serializer = all_serializers[serializer](client=self)
+        except KeyError:
+            raise ValueError("Unsupported serializer type '%s'" % serializer)
         
         self.ensure_connection()
 
@@ -177,7 +180,7 @@ class RPCClient(object):
             cmd['opts'] = self.serializer.dumps(cmd['opts'])
         cmd = self.serializer.dumps(cmd)
         
-        self._socket.send(cmd)
+        self._socket.send_multipart([self.serializer.type.encode(), cmd])
         
         # If using ROUTER, we have to include the name of the endpoint to which
         # we are sending

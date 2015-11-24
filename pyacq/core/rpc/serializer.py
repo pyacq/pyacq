@@ -11,6 +11,10 @@ except ImportError:
 from .proxy import ObjectProxy
 
 
+# Global list of supported serializers.
+all_serializers = {}  # type_str: class
+
+
 # Any type that is not supported by json/msgpack must be encoded as a dict.
 # To distinguish these from plain dicts, we include a unique key in them:
 encode_key = '___type_name___'
@@ -124,6 +128,10 @@ class MsgpackSerializer(Serializer):
     Note that tuples are converted to lists in transit. See:
     https://github.com/msgpack/msgpack-python/issues/98
     """
+    
+    # used to tell server how to unserialize messages
+    type = 'msgpack'
+    
     def __init__(self, server=None, client=None):
         assert HAVE_MSGPACK
         Serializer.__init__(self, server, client)
@@ -148,6 +156,10 @@ class MsgpackSerializer(Serializer):
 
 
 class JsonSerializer(Serializer):
+    
+    # used to tell server how to unserialize messages
+    type = 'json'
+    
     def __init__(self, server=None, client=None):
         Serializer.__init__(self, server, client)
         
@@ -196,3 +208,8 @@ class JsonSerializer(Serializer):
             
             return Serializer.decode(self, dct)
         return dct
+
+
+all_serializers[JsonSerializer.type] = JsonSerializer
+if HAVE_MSGPACK:
+    all_serializers[MsgpackSerializer.type] = MsgpackSerializer

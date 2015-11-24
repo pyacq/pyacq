@@ -217,6 +217,16 @@ def test_rpc():
     s2rpc = client2._import('pyacq.core.rpc')
     s2cli = s2rpc.RPCClient.get_client(client.address)  # server2's client for server1
     assert np.all(s2cli['arr'] == arr)  # retrieve via server2
+
+    logger.info("-- Test JSON client --")
+    # Start a JSON client in a remote process
+    cli_proc = ProcessSpawner()
+    cli = cli_proc.client._import('pyacq.core.rpc').RPCClient(server2.address, serializer='json')
+    # Check everything is ok..
+    assert cli.serializer.type._get_value() == 'json'
+    assert cli['test_class']('json-tester').add(3, 4) == 7
+    cli_proc.kill()
+
     
     logger.info("-- Setup reentrant communication test.. --")
     class PingPong(object):
