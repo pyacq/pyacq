@@ -10,6 +10,7 @@ from pyqtgraph.Qt import QtCore, QtGui
 # Set up nice logging for tests:
 # remote processes forward logs to this process
 logger = logging.getLogger()
+#logger.level = logging.DEBUG
 start_log_server(logger)
 # local log messages are time-sorted and colored
 handler = RPCLogHandler()
@@ -52,7 +53,7 @@ def test_rpc():
 
         def types(self):
             return {'int': 7, 'float': 0.5, 'str': 'xxx', 'bytes': bytes('xxx', 'utf8'),
-                    'ndarray': np.arange(10), 'dict': {}, 'tuple': (),
+                    'ndarray': np.arange(10), 'dict': {}, 'list': [],
                     'ObjectProxy': self}
     
         def type(self, x):
@@ -93,7 +94,7 @@ def test_rpc():
 
     # NOTE: msgpack converts list to tuple. 
     # See: https://github.com/msgpack/msgpack-python/issues/98
-    assert obj.get_list() == (0, 'x', 7)
+    assert obj.get_list() == [0, 'x', 7]
 
     logger.info("-- Test async return --")
     fut = obj.sleep(0.1, _sync='async')
@@ -149,7 +150,8 @@ def test_rpc():
     assert obj2.add(3, 4) == 7
     
     obj2._delete()
-    assert class_proxy.count == 1
+    handler.flush_records()  # records might have refs to the object
+    assert class_proxy.count._get_value() == 1
     try:
         obj2.array()
         assert False, "Should have raised RemoteCallException"
@@ -176,7 +178,8 @@ def test_rpc():
     arr = np.ones(10, dtype='float32')
     arr_prox = client.transfer(arr)
     assert arr_prox.dtype.name == 'float32'
-    assert arr_prox.shape == (10,)
+    print(arr_prox, arr_prox.shape)
+    assert arr_prox.shape._get_value() == [10]
 
 
     logger.info("-- Test import --")
