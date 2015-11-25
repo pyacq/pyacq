@@ -157,9 +157,6 @@ class ProcessSpawner(object):
             
         logger.info("Spawned process: %d", self.proc.pid)
         
-        # Automatically shut down process when we exit. 
-        atexit.register(self.stop)
-        
         # Receive status information (especially the final RPC address)
         status = bootstrap_sock.recv_json()
         logger.debug("recv status %s", status)
@@ -169,7 +166,11 @@ class ProcessSpawner(object):
             self.client = RPCClient(self.addr.encode())
         else:
             err = ''.join(status['error'])
+            self.kill()
             raise RuntimeError("Error while spawning process:\n%s" % err)
+        
+        # Automatically shut down process when we exit. 
+        atexit.register(self.stop)
         
     def wait(self):
         self.proc.wait()

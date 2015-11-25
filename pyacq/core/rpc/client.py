@@ -66,14 +66,6 @@ class RPCClient(object):
                 raise KeyError("An RPCClient instance already exists for this address."
                     " Use RPCClient.get_client(address) instead.")
         
-        # ROUTER is fully asynchronous and may connect to multiple endpoints.
-        # We can use ROUTER to allow this socket to connect to multiple servers.
-        # However this adds complexity with little benefit, as we can just use
-        # a poller to check for messages on multiple sockets if desired.
-        #self._socket = zmq.Context.instance().socket(zmq.ROUTER)
-        #self._name = ('%d-%x' % (os.getpid(), id(self))).encode()
-        #self._socket.setsockopt(zmq.IDENTITY, self._name)
-        
         # DEALER is fully asynchronous--we can send or receive at any time, and
         # unlike ROUTER, it only connects to a single endpoint.
         self._socket = zmq.Context.instance().socket(zmq.DEALER)
@@ -183,10 +175,6 @@ class RPCClient(object):
         
         msg = [str(req_id).encode(), action.encode(), return_type.encode(), ser_type, opts_str]
         self._socket.send_multipart(msg)
-        
-        # If using ROUTER, we have to include the name of the endpoint to which
-        # we are sending
-        #self._socket.send_multipart([name, cmd])
         
         if sync == 'off':
             return

@@ -117,8 +117,6 @@ class RPCServer(object):
         
     def __init__(self, addr="tcp://*:*"):
         self._socket = zmq.Context.instance().socket(zmq.ROUTER)
-        # socket identity is not required for ROUTER.
-        #self._socket.setsockopt(zmq.IDENTITY, self._name)
         
         # socket will continue attempting to deliver messages up to 5 sec after
         # it has closed. (default is -1, which can cause processes to hang
