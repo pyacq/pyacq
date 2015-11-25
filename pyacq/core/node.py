@@ -86,37 +86,6 @@ class Node(object):
         assert len(self.outputs)==1, 'Node.output is a shortcut when Node have only 1 output ({} here)'.format(len(self.outputs))
         return list(self.outputs.values())[0]
     
-    def get_input_names(self):
-        """This is useful for the InputStreamProxy only : remove if better rpc
-        """
-        return list(self.inputs.keys())
-    
-    def get_output_names(self):
-        """This is useful for the OutputStreamProxy only : remove if better rpc
-        """
-        return list(self.outputs.keys())
-    
-    def connect_input(self, name, stream_spec):
-        """This is useful for the InputStreamProxy only : remove if better rpc
-        """
-        self.inputs[name].connect(stream_spec)
-    
-    def configure_output(self, name, **stream_spec):
-        """This is useful for the OutputStreamProxy  only : remove if better rpc
-        """
-        self.outputs[name].configure(**stream_spec)
-    
-    def get_output(self, name):
-        """This is useful for the OutputStreamProxy  only : remove if better rpc
-        """
-        return self.outputs[name].params
-
-    def get_input(self, name):
-        """This is useful for the InputStreamProxy  only : remove if better rpc
-        """
-        return self.inputs[name].params
-
-
     def running(self):
         """Return True if the Node is running.
         
@@ -175,7 +144,6 @@ class Node(object):
         self._initialize()
         with self.lock:
             self._initialized = True
-
 
     def start(self):
         """Start the Node.
