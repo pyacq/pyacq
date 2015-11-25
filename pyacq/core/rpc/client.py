@@ -166,28 +166,23 @@ class RPCClient(object):
         if self._disconnected:
             raise RuntimeError("Cannot send request; server has already disconnected.")
         
-        cmd = {'action': action, 'return_type': return_type, 
-               'opts': opts}
         if sync == 'off':
-            req_id = None
+            req_id = -1
         else:
             req_id = self.next_request_id
             self.next_request_id += 1
-        cmd['req_id'] = req_id
-        logger.info("RPC request '%s' to %s [req_id=%s]", cmd['action'], 
+        logger.info("RPC request '%s' to %s [req_id=%s]", action, 
                     self.address.decode(), req_id)
-        logger.debug("    => %s", cmd)
+        logger.debug("    => sync=%s return=%s opts=%s", sync, return_type, opts)
         
-        # double-serialize opts to ensure that cmd can be read even if opts
-        # cannot.
-        # TODO: This might be expensive; a better way might be to send opts in
-        # a subsequent packet, but this makes the protocol more complicated..
-        if cmd['opts'] is not None:
-            cmd = cmd.copy()  # because logger might format old dict later on..
-            cmd['opts'] = self.serializer.dumps(cmd['opts'])
-        cmd = self.serializer.dumps(cmd)
+        if opts is None:
+            opts_str = b''
+        else:
+            opts_str = self.serializer.dumps(opts)
+        ser_type = self.serializer.type.encode()
         
-        self._socket.send_multipart([self.serializer.type.encode(), cmd])
+        msg = [str(req_id).encode(), action.encode(), return_type.encode(), ser_type, opts_str]
+        self._socket.send_multipart(msg)
         
         # If using ROUTER, we have to include the name of the endpoint to which
         # we are sending

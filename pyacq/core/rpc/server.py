@@ -184,6 +184,18 @@ class RPCServer(object):
         """
         self._namespace[key] = value
         
+    @staticmethod
+    def _read_one(socket):
+        name, req_id, action, return_type, ser_type, opts = socket.recv_multipart()
+        msg = {
+            'req_id': int(req_id), 
+            'action': action.decode(), 
+            'return_type': return_type.decode(),
+            'ser_type': ser_type.decode(),
+            'opts': opts,
+        }
+        return name, msg
+        
     def _read_and_process_one(self):
         """Read one message from the rpc socket and invoke the requested
         action.
@@ -191,42 +203,37 @@ class RPCServer(object):
         if not self.running:
             raise RuntimeError("RPC server socket is already closed.")
             
-        name, ser_type, msg = self._socket.recv_multipart()
+        name, msg = self._read_one(self._socket)
+        self._process_one(name, msg)
         
-        self._process_one(name, ser_type, msg)
-        
-    def _process_one(self, caller, ser_type, msg):
+    def _process_one(self, caller, msg):
         """
         Invoke the requested action.
         
         This method sends back to the client either the return value or an
         error message.
         """
+        ser_type = msg['ser_type']
+        action = msg['action']
+        req_id = msg['req_id']
+        return_type = msg.get('return_type', 'auto')
+        
         # remember this caller so we can deliver a disconnect message later
-        ser_type = ser_type.decode()
         self._clients[caller] = ser_type
         
         # Attempt to read message and invoke requested action
         try:
             try:
                 serializer = self._serializers[ser_type]
-                msg = serializer.loads(msg)
             except KeyError:
                 raise ValueError("Unsupported serializer '%s'" % ser_type)
-            finally:
-                # Could not unserialize message, so can't respond directly.
-                # We could improve this by sending at least req_id on its own
-                # as a multipart message item.
-                action = None
-                req_id = None
-            action = msg['action']
-            req_id = msg['req_id']
-            return_type = msg.get('return_type', 'auto')
             opts = msg.pop('opts', None)
             
             logging.debug("RPC recv '%s' from %s [req_id=%s]", action, caller.decode(), req_id)
             logging.debug("    => %s", msg)
-            if opts is not None:
+            if opts == b'':
+                opts = None
+            else:
                 opts = serializer.loads(opts)
             logging.debug("    => opts: %s", opts)
             
@@ -236,7 +243,7 @@ class RPCServer(object):
             exc = sys.exc_info()
 
         # Send result or error back to client
-        if req_id is not None:
+        if req_id >= 0:
             if exc is None:
                 #print "returnValue:", returnValue, result
                 if return_type == 'auto':
@@ -386,7 +393,8 @@ class RPCServer(object):
         logging.info("RPC start server: %s@%s", name, self.address.decode())
         RPCServer.register_server(self)
         while self.running():
-            self._read_and_process_one()
+            name, msg = self._read_one(self._socket)
+            self._process_one(name, msg)
             
     def run_lazy(self):
         """Register this server as being active for the current thread, but do
@@ -454,9 +462,6 @@ class QtRPCServer(RPCServer):
         # alive until it is done, but then we can end up with zombie processes..
         time.sleep(0.1)
 
-    def _read_and_process_one(self):
-        raise NotImplementedError('Socket reading is handled by poller thread.')
-
 
 class QtPollThread(QtCore.QThread):
     """Thread that polls an RPCServer socket and sends incoming messages to the
@@ -466,7 +471,7 @@ class QtPollThread(QtCore.QThread):
     a timer to poll the RPC socket. Responses are sent back to the poller
     thread by a secondary socket.
     """
-    new_request = QtCore.Signal(object, object, object)  # client, msg
+    new_request = QtCore.Signal(object, object)  # client, msg
     
     def __init__(self, server):
         # Note: QThread behaves like threading.Thread(daemon=True); a running
@@ -509,9 +514,9 @@ class QtPollThread(QtCore.QThread):
                 self.rpc_socket.send_multipart([name, data])
                 
             if self.rpc_socket in socks:
-                name, ser_type, msg = self.rpc_socket.recv_multipart()
+                name, msg = RPCServer._read_one(self.rpc_socket)
                 #logger.debug("poller recv %s %s", name, msg)
-                self.new_request.emit(name, ser_type, msg)
+                self.new_request.emit(name, msg)
 
         #logger.error("poller exit.")
         
