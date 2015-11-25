@@ -1,7 +1,7 @@
 import time, threading
 from pyacq.core import rpc
 
-def test_poingrate(cli, dur=10.0):
+def test_poingrate(cli, dur=2.0):
     start = time.time()
     count = 0
     while time.time() < start + dur:
@@ -11,7 +11,7 @@ def test_poingrate(cli, dur=10.0):
     print("Ping rate: %0.0f/sec" % (count/dur))
 
 
-def test_async_poingrate(cli, dur=10.0, buffer=500):
+def test_async_poingrate(cli, dur=2.0, buffer=500):
     start = time.time()
     count = 0
     futs = []
@@ -37,7 +37,7 @@ cli = rpc.RPCClient(server.address)
 test_poingrate(cli)
 test_async_poingrate(cli)
 
-cli.close()
+cli.close_server()
 
 
 # thread, tcp
@@ -50,7 +50,7 @@ cli = rpc.RPCClient(server.address)
 test_poingrate(cli)
 test_async_poingrate(cli)
 
-cli.close()
+cli.close_server()
 
 
 # process
