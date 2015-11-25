@@ -6,7 +6,7 @@ from collections import OrderedDict
 import logging
 
 from .node import Node, register_node_type
-from .stream import OutputStream
+from .stream import OutputStream, InputStream
 
 import time
 
@@ -28,15 +28,15 @@ class ThreadPollInput(QtCore.QThread):
         self.timeout = timeout
         
         self.running = False
-        self.lock = Mutex()
+        self.running_lock = Mutex()
         self._pos = None
     
     def run(self):
-        with self.lock:
+        with self.running_lock:
             self.running = True
         
         while True:
-            with self.lock:
+            with self.running_lock:
                 if not self.running:
                     break
                 if self.input_stream() is None:
@@ -59,12 +59,32 @@ class ThreadPollInput(QtCore.QThread):
         self.new_data.emit(pos, data)
     
     def stop(self):
-        with self.lock:
+        with self.running_lock:
             self.running = False
     
     def pos(self):
         with self.lock:
             return self._pos
+
+
+class ThreadPollOutput(ThreadPollInput):
+    """    
+    Thread that monitors an OutputStream in the background and emits a Qt signal
+    when data is sent.
+
+    Like ThreadPollInput, this class can be used where low-latency response to data
+    is needed within a Qt main thread (because polling from the main thread with
+    QTimer either introduces too much latency or consumes too much CPU).
+
+    The `process_data()` method may be reimplemented to define other behaviors.
+    
+    This is class also create internally its own `InputStream`.
+    And pull it the same way than ThreadPollInput.
+    """
+    def __init__(self, output_stream, **kargs):
+        self.instream = InputStream()
+        self.instream.connect(output_stream)
+        ThreadPollInput.__init__(self, self.instream, **kargs)
 
 
 class ThreadStreamConverter(ThreadPollInput):
