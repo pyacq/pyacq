@@ -79,6 +79,10 @@ class RPCClient(object):
         self._socket = zmq.Context.instance().socket(zmq.DEALER)
         self._sock_name = self.name
         self._socket.setsockopt(zmq.IDENTITY, self._sock_name)
+        # socket will continue attempting to deliver messages up to 1 sec after
+        # it has closed. (default is -1, which can cause processes to hang
+        # on exit)
+        self._socket.linger = 1000
         
         # If this thread is running a server, then we need to allow the 
         # server to process requests when the client is blocking.
@@ -157,8 +161,11 @@ class RPCClient(object):
             The amount of time to wait for a response when in synchronous
             operation (sync='sync').
         """
-        if self.disconnected():
+        # This is nice, but very expensive!
+        #if self.disconnected():
+        if self._disconnected:
             raise RuntimeError("Cannot send request; server has already disconnected.")
+        
         cmd = {'action': action, 'return_type': return_type, 
                'opts': opts}
         if sync == 'off':

@@ -222,7 +222,7 @@ class RPCServer(object):
             action = msg['action']
             req_id = msg['req_id']
             return_type = msg.get('return_type', 'auto')
-            opts = msg.pop('opts')
+            opts = msg.pop('opts', None)
             
             logging.debug("RPC recv '%s' from %s [req_id=%s]", action, caller.decode(), req_id)
             logging.debug("    => %s", msg)
