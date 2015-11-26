@@ -14,7 +14,8 @@ class MyViewBox(pg.ViewBox):
     xsize_zoom = QtCore.pyqtSignal(float)
     def __init__(self, *args, **kwds):
         pg.ViewBox.__init__(self, *args, **kwds)
-        self.disableAutoRange()
+        self.disableAutoRange(axis= self.XAxis)
+        self.disableAutoRange(axis = self.YAxis)
     def mouseClickEvent(self, ev):
         ev.accept()
     def mouseDoubleClickEvent(self, ev):
@@ -78,21 +79,24 @@ class BaseOscilloscope(WidgetNode):
         self.max_xsize = max_xsize
     
     def _initialize(self):
-        assert len(self.input.params['shape']) == 2, 'Are you joking ?'
-        d0, d1 = self.input.params['shape']
-        self.nb_channel = self.input.params['nb_channel']
+        sig_params = self.inputs['signals'].params
         
-        sr = self.input.params['sample_rate']
+        assert len(sig_params['shape']) == 2, 'Are you joking ?'
+        
+        d0, d1 = sig_params['shape']
+        self.nb_channel = sig_params['nb_channel']
+        sr = sig_params['sample_rate']
+        
         # create proxy input
-        if self.input.params['transfermode'] == 'sharedarray' and self.input.params['timeaxis'] == 1:
-            self.proxy_input = self.input
+        if sig_params['transfermode'] == 'sharedarray' and sig_params['timeaxis'] == 1:
+            self.proxy_input = self.inputs['signals']
             self.conv = None
         else:
             # if input is not transfermode creat a proxy
             self.conv = StreamConverter()
             self.conv.configure()
-            self.conv.input.connect(self.input.params)
-            if self.input.params['timeaxis']==0:
+            self.conv.input.connect(sig_params)
+            if sig_params['timeaxis']==0:
                 new_shape = (d1, d0)
             else:
                 new_shape = (d0, d1)
@@ -166,7 +170,7 @@ class BaseOscilloscope(WidgetNode):
     def reset_curves_data(self):
         xsize = self.params['xsize']
         decimate = self.params['decimate']
-        sr = self.input.params['sample_rate']
+        sr = self.inputs['signals'].params['sample_rate']
         self.full_size = int(xsize*sr)
         self.small_size = self.full_size//decimate
         if self.small_size%2!=0:  # ensure for min_max decimate
@@ -178,7 +182,7 @@ class BaseOscilloscope(WidgetNode):
 
     def estimate_decimate(self, nb_point=4000):
         xsize = self.params['xsize']
-        sr = self.input.params['sample_rate']
+        sr = self.inputs['signals'].params['sample_rate']
         self.params['decimate'] = max(int(xsize*sr)//nb_point, 1)
 
     def xsize_zoom(self, xmove):
@@ -328,7 +332,8 @@ class QOscilloscope(BaseOscilloscope):
 
     def _initialize(self):
         BaseOscilloscope._initialize(self)
-        self.params.param('xsize').setLimits([2./self.input.params['sample_rate'], self.max_xsize*.95])
+        sr = self.inputs['signals'].params['sample_rate']
+        self.params.param('xsize').setLimits([2./sr, self.max_xsize*.95])
         
         self.curves = []
         self.channel_labels = []
@@ -349,7 +354,7 @@ class QOscilloscope(BaseOscilloscope):
         gains = np.array([p['gain'] for p in self.by_channel_params.children()])
         offsets = np.array([p['offset'] for p in self.by_channel_params.children()])
         visibles = np.array([p['visible'] for p in self.by_channel_params.children()], dtype=bool)
-        sr = self.input.params['sample_rate']
+        sr = self.inputs['signals'].params['sample_rate']
         xsize = self.params['xsize'] 
         
         head = self._head
@@ -446,7 +451,7 @@ class QOscilloscope(BaseOscilloscope):
         if self._head is None:
             return None, None
         head = self._head
-        sr = self.input.params['sample_rate']
+        sr = self.inputs['signals'].params['sample_rate']
         xsize = self.params['xsize'] 
         np_arr = self.proxy_input.get_array_slice(head,self.full_size)
         self.all_sd = np.std(np_arr, axis=1)
