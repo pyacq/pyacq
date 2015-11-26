@@ -90,6 +90,7 @@ class ObjectProxy(object):
             #'auto_proxy_args': False, ## bool
             'defer_getattr': True,   ## True, False
             'no_proxy_types': [type(None), str, int, float, tuple, list, dict, ObjectProxy],
+            'auto_delete': False,
         }
         
         self._set_proxy_options(**kwds)
@@ -103,7 +104,7 @@ class ObjectProxy(object):
         Options are:
         
         =============  =============================================================
-        sync       'sync', 'async', 'off', or None. 
+        sync           'sync', 'async', 'off', or None. 
                        If 'async', then calling methods will return a Request object
                        which can be used to inquire later about the result of the 
                        method call.
@@ -113,21 +114,21 @@ class ObjectProxy(object):
                        is returned instead).
                        If 'off', then the remote process is instructed _not_ to 
                        reply and the method call will return None immediately.
-        return_type     'auto', 'proxy', 'value', or None. 
+        return_type    'auto', 'proxy', 'value', or None. 
                        If 'proxy', then the value returned when calling a method
                        will be a proxy to the object on the remote process.
                        If 'value', then attempt to pickle the returned object and
                        send it back.
                        If 'auto', then the decision is made by consulting the
                        'no_proxy_types' option.
-        auto_proxy      bool or None. If True, arguments to __call__ are 
+        auto_proxy     bool or None. If True, arguments to __call__ are 
                        automatically converted to proxy unless their type is 
                        listed in no_proxy_types (see below). If False, arguments
                        are left untouched. Use proxy(obj) to manually convert
                        arguments before sending. 
         timeout        float or None. Length of time to wait during synchronous 
                        requests before returning a Request object instead.
-        defer_getattr   True, False, or None. 
+        defer_getattr  True, False, or None. 
                        If False, all attribute requests will be sent to the remote 
                        process immediately and will block until a response is
                        received (or timeout has elapsed).
@@ -138,8 +139,10 @@ class ObjectProxy(object):
                        object. In this case, AttributeError will not be raised
                        until an attempt is made to look up the attribute on the
                        remote process.
-        no_proxy_types   List of object types that should _not_ be proxied when
+        no_proxy_types List of object types that should _not_ be proxied when
                        sent to the remote process.
+        auto_delete    bool. If True, then the proxy will automatically call
+                       `self._delete()` when it is collected by Python.
         =============  =============================================================
         """
         for k in kwds:
@@ -194,6 +197,10 @@ class ObjectProxy(object):
         no longer be usable.
         """
         self._client.delete(self, sync=sync, **kwds)
+        
+    def __del__(self):
+        if self._proxy_options['auto_delete'] is True:
+            self._delete()
         
     def __getattr__(self, attr):
         """

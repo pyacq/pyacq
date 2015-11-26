@@ -150,13 +150,23 @@ def test_rpc():
     assert obj2.add(3, 4) == 7
     
     obj2._delete()
-    handler.flush_records()  # records might have refs to the object
+    handler.flush_records()  # log records might have refs to the object
     assert class_proxy.count._get_value() == 1
     try:
         obj2.array()
         assert False, "Should have raised RemoteCallException"
     except RemoteCallException:
         pass
+
+    logger.info("-- Test proxy auto-delete --")
+    obj2 = class_proxy('obj2')
+    obj2._set_proxy_options(auto_delete=True)
+    assert class_proxy.count == 2
+    
+    del obj2
+    handler.flush_records()  # log records might have refs to the object
+    assert class_proxy.count._get_value() == 1
+
 
     logger.info("-- Test timeouts --")
     try:
