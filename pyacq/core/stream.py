@@ -17,7 +17,7 @@ default_stream = dict(protocol='tcp', interface='127.0.0.1', port='*',
                         transfermode='plaindata', streamtype='analogsignal',
                         dtype='float32', shape=(-1, 1), nb_channel = None, timeaxis = 0,  
                         compression ='', scale = None, offset = None, units = '',
-                        sample_rate = 1.)
+                        sample_rate = None)
 
 
 common_doc = """
@@ -423,18 +423,20 @@ class SharedArraySender:
             size2 = data.shape[self._timeaxis] - size1
             
             # part1
-            sl1 = [slice(None)] * self._ndim 
-            sl1[self._timeaxis] = slice(tail, None)
-            sl2 = [slice(None)] * self._ndim 
-            sl2[self._timeaxis] = slice(None, size1)
-            self._numpyarr[sl1] = data[sl2]
+            if size1>0:
+                sl1 = [slice(None)] * self._ndim 
+                sl1[self._timeaxis] = slice(tail, None)
+                sl2 = [slice(None)] * self._ndim 
+                sl2[self._timeaxis] = slice(None, size1)
+                self._numpyarr[sl1] = data[sl2]
             
             # part2
-            sl3 = [slice(None)] * self._ndim
-            sl3[self._timeaxis] = slice(None, size2)
-            sl4 = [slice(None)] * self._ndim
-            sl4[self._timeaxis] = slice(-size2, None)
-            self._numpyarr[sl3] = data[sl4]
+            if size2>0:
+                sl3 = [slice(None)] * self._ndim
+                sl3[self._timeaxis] = slice(None, size2)
+                sl4 = [slice(None)] * self._ndim
+                sl4[self._timeaxis] = slice(-size2, None)
+                self._numpyarr[sl3] = data[sl4]
                 
 
         self.socket.send(np.int64(index), copy=self.copy)
@@ -472,7 +474,7 @@ class SharedArraySender:
                 self._numpyarr[sl1] = data[sl2]
             
             # part2 : in the first ring
-            if size2:
+            if size2>0:
                 sl3 = [slice(None)] * self._ndim
                 sl3[self._timeaxis] = slice(None, size2)
                 sl4 = [slice(None)] * self._ndim
