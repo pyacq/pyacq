@@ -8,7 +8,7 @@ import time
 logger = logging.getLogger(__name__)
 logger.propagate = False
 
-from ..serializer import MsgpackSerializer
+from ..serializer import JsonSerializer
 
 # Provide access to process and thread names for logging purposes.
 # Python already has a notion of process and thread names, but these are
@@ -136,7 +136,7 @@ class LogSender(logging.Handler):
     """
     def __init__(self, address=None, logger=None):
         self.socket = None
-        self.serializer = MsgpackSerializer()
+        self.serializer = JsonSerializer()
         logging.Handler.__init__(self)
         
         if address is not None:
@@ -185,7 +185,7 @@ class LogServer(threading.Thread):
         self.socket = zmq.Context.instance().socket(zmq.PULL)
         self.socket.bind('tcp://*:*')
         self.address = self.socket.getsockopt(zmq.LAST_ENDPOINT)
-        self.serializer = MsgpackSerializer()
+        self.serializer = JsonSerializer()
         
     def run(self):
         while True:
