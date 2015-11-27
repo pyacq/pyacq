@@ -153,6 +153,7 @@ class BaseOscilloscope(WidgetNode):
         if self.conv is not None:
             self.conv.stop()
         self.poller.stop()
+        self.poller.wait()
         self.timer.stop()
     
     def _close(self):
