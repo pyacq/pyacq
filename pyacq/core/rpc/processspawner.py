@@ -44,6 +44,7 @@ logger.info("New process {procname} {class_name}({args}) log_addr:{logaddr} log_
 
 bootstrap_sock = zmq.Context.instance().socket(zmq.PAIR)
 bootstrap_sock.connect({bootstrap_addr})
+bootstrap_sock.linger = 1000
 
 # Create RPC server
 try:
@@ -65,6 +66,8 @@ while time.time() < start + 10.0:
     except zmq.error.Again:
         time.sleep(0.01)
         continue
+
+bootstrap_sock.close()
 
 # Run server until heat death of universe
 if 'addr' in status:
@@ -120,8 +123,9 @@ class ProcessSpawner(object):
         # temporary socket to allow the remote process to report its status.
         bootstrap_addr = 'tcp://127.0.0.1:*'
         bootstrap_sock = zmq.Context.instance().socket(zmq.PAIR)
-        bootstrap_sock.setsockopt(zmq.RCVTIMEO, 1000)
+        bootstrap_sock.setsockopt(zmq.RCVTIMEO, 10000)
         bootstrap_sock.bind(bootstrap_addr)
+        bootstrap_sock.linger = 1000
         bootstrap_addr = bootstrap_sock.getsockopt(zmq.LAST_ENDPOINT)
         
         # Spawn new process
@@ -158,9 +162,14 @@ class ProcessSpawner(object):
         logger.info("Spawned process: %d", self.proc.pid)
         
         # Receive status information (especially the final RPC address)
-        status = bootstrap_sock.recv_json()
+        try:
+            status = bootstrap_sock.recv_json()
+        except zmq.error.Again:
+            raise TimeoutError("Timed out waiting for response from spawned process.")
         logger.debug("recv status %s", status)
         bootstrap_sock.send(b'OK')
+        bootstrap_sock.close()
+        
         if 'addr' in status:
             self.addr = status['addr']
             self.client = RPCClient(self.addr.encode())
