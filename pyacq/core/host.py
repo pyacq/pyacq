@@ -1,62 +1,66 @@
-from .processspawner import ProcessSpawner
-from .rpc import RPCServer, RPCClient
+from .rpc import ProcessSpawner, RPCServer
 from .nodegroup import NodeGroup
 
-from logging import info
 
-
-class Host(RPCServer):
+class Host(object):
     """
-    RPC server class that serves as a pre-existing contact point for spawning
+    Host serves as a pre-existing contact point for spawning
     new processes on a remote machine. 
     
     One Host instance must be running on each machine that will be connected
     to by a Manager. The Host is only responsible for creating and destroying
     NodeGroups.
-       
-    Parameters
-    ----------
-    name : str
-        The identifier of the host server.
-    addr : URL
-        Address of RPC server to connect to.
     """
-    def __init__(self, name, addr):
-        RPCServer.__init__(self, name, addr)
-        self.nodegroup_process = {}
-
-    def close(self):
-        """
-        Close the Host and all of its NodeGroups.
-        """
-        self.close_all_nodegroups(force=True)
-        RPCServer.close(self)
+    @staticmethod
+    def spawn(name, **kwds):
+        proc = ProcessSpawner(name=name, **kwds)
+        host = proc.client._import('pyacq.core.host').Host(name)
+        return proc, host
     
-    def create_nodegroup(self, name, addr):
-        """Create a new NodeGroup in a new process.
+    def __init__(self, name):
+        self.name = name
+        self.spawners = set()
         
-        Return the RPC name and address of the new nodegroup.
+        # Publish this object so we can easily retrieve it from any other
+        # machine.
+        server = RPCServer.get_server()
+        if server is not None:
+            server['host'] = self
+
+    def create_nodegroup(self, name, manager=None, qt=True, **kwds):
+        """Create a new NodeGroup in a new process and return a proxy to it.
+        
+        Parameters:
+        -----------
+        name : str
+            The name of the new NodeGroup. This will also be used as the name
+            of the process in log records sent to the Manager.
+        manager : Manager | ObjectProxy<Manager> | None
+            The Manager to which this NodeGroup belongs.
+        qt : bool
+            Whether to start a QApplication in the new process. Default is True.
+            
+        All extra keyword arguments are passed to `ProcessSpawner()`.
         """
-        assert name not in self.nodegroup_process, 'This node group already exists'
-        # print(self._name, 'start_nodegroup', name)
-        ps = ProcessSpawner(NodeGroup, name, addr)
-        self.nodegroup_process[name] = ps
-        return ps.name, ps.addr
-    
-    def close_nodegroup(self, name, force=False):
-        """
-        Close a NodeGroup and stop its process.
-        """
-        client = self.nodegroup_process[name].client
-        if not force:
-            assert not client.any_node_running(), u'Try to close Host but Node are running'
-        self.nodegroup_process[name].stop()
-        del self.nodegroup_process[name]
+        ps = ProcessSpawner(name=name, qt=qt, **kwds)
+        rng = ps.client._import('pyacq.core.nodegroup')
+        
+        # create nodegroup in remote process
+        ps._nodegroup = rng.NodeGroup(host=self, manager=manager)
+        
+        # publish so others can easily connect to the nodegroup
+        ps.client['nodegroup'] = ps._nodegroup
+        
+        ps._manager = manager
+        self.spawners.add(ps)
+        return ps._nodegroup
 
     def close_all_nodegroups(self, force=False):
         """Close all NodeGroups belonging to this host.
         """
-        for name in list(self.nodegroup_process.keys()):
-            self.close_nodegroup(name, force=force)
-        
-    
+        for sp in self.spawners:
+            if force:
+                sp.kill()
+            else:
+                sp.stop()
+        self.spawners = set()

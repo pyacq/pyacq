@@ -29,6 +29,7 @@ class ThreadPollInput(QtCore.QThread):
         
         self.running = False
         self.running_lock = Mutex()
+        self.lock = Mutex()
         self._pos = None
     
     def run(self):
@@ -44,19 +45,28 @@ class ThreadPollInput(QtCore.QThread):
                     break
             ev = self.input_stream().poll(timeout=self.timeout)
             if ev>0:
-                self._pos, data = self.input_stream().recv()
+                pos, data = self.input_stream().recv()
+                with self.lock:
+                    self._pos = pos
                 self.process_data(self._pos, data)
     
     def process_data(self, pos, data):
-        # This can be override to chnage behavior
-        self.new_data.emit(self._pos, data)
+        """This method is called from the polling thread when a new data chunk
+        has been received. The default implementation emits the `new_data`
+        signal with the updated stream position and the data chunk as arguments.
+        
+        This method can be overriden.
+        """
+        self.new_data.emit(pos, data)
     
     def stop(self):
         with self.running_lock:
             self.running = False
     
     def pos(self):
-        return self._pos
+        with self.lock:
+            return self._pos
+
 
 class ThreadPollOutput(ThreadPollInput):
     """    

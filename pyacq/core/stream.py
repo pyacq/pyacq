@@ -2,6 +2,7 @@ import zmq
 import numpy as np
 import random
 import string
+import weakref
 try:
     import blosc
     HAVE_BLOSC = True
@@ -9,9 +10,8 @@ except ImportError:
     HAVE_BLOSC = False
 
 from .sharedarray import SharedArray
-from .client import OutputStreamProxy
+from .rpc import ObjectProxy
 
-import weakref
 
 default_stream = dict(protocol='tcp', interface='127.0.0.1', port='*',
                         transfermode='plaindata', streamtype='analogsignal',
@@ -172,9 +172,13 @@ class InputStream(object):
         """
         if isinstance(output, dict):
             self.params = output
-        elif isinstance(output, OutputStream) or isinstance(output, OutputStreamProxy):
+        elif isinstance(output, OutputStream):
             self.params = output.params
-
+        elif isinstance(output, ObjectProxy):
+            self.params = output.params._get_value()
+        else:
+            raise TypeError("Invalid type for stream: %s" % type(output))
+            
         if self.params['protocol'] in ('inproc', 'ipc'):
             self.url = '{protocol}://{interface}'.format(**self.params)
         else:
@@ -182,7 +186,7 @@ class InputStream(object):
 
         context = zmq.Context.instance()
         self.socket = context.socket(zmq.SUB)
-        self.socket.setsockopt(zmq.SUBSCRIBE,b'')
+        self.socket.setsockopt(zmq.SUBSCRIBE, b'')
         #~ self.socket.setsockopt(zmq.DELAY_ATTACH_ON_CONNECT,1)
         self.socket.connect(self.url)
         

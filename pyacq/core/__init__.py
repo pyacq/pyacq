@@ -1,6 +1,5 @@
-from .processspawner import ProcessSpawner
-from .rpc import RPCServer
-from .host import Host
+from .rpc import (RPCServer, RPCClient, ObjectProxy, QtRPCServer,
+                  RemoteCallException, ProcessSpawner)
 from .nodegroup import NodeGroup
 from .node import Node, WidgetNode
 from .nodelist import register_node_type
