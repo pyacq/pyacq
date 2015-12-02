@@ -141,8 +141,11 @@ class ProcessSpawner(object):
 
         if log_addr is not None:
             # start process with stdout/stderr piped
-            self.proc = subprocess.Popen((executable, '-c', bootstrap), 
+            self.proc = subprocess.Popen((executable,), stdin=subprocess.PIPE,
                                          stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+            
+            self.proc.stdin.write(bootstrap.encode())
+            self.proc.stdin.close()
             
             # create a logger for handling stdout/stderr and forwarding to log server
             self.logger = logging.getLogger(__name__ + '.' + str(id(self)))
