@@ -1,4 +1,5 @@
 # Sample script to install Python and pip under Windows
+# (used by AppVeyor for continuous integration on windows)
 # Authors: Olivier Grisel, Jonathan Helmus and Kyle Kastner
 # License: CC0 1.0 Universal: http://creativecommons.org/publicdomain/zero/1.0/
 

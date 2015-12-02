@@ -24,7 +24,7 @@ install:
   - "SET VISPY_GL_LIB=%CD%\\opengl32.dll"
 
   # Install the dependencies of the project.
-  - "conda install --yes --quiet numpy scipy pyqt pyzmq colorama msgpack-python pyaudio setuptools pytest coverage "
+  - "conda install --yes --quiet numpy scipy pyqt pyzmq colorama msgpack-python setuptools pytest coverage "
   - "pip install -q pytest-cov pyqtgraph"
   - "python setup.py develop"
 
