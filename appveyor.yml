@@ -25,7 +25,7 @@ install:
 
   # Install the dependencies of the project.
   - "conda install --yes --quiet numpy scipy pyqt pyzmq colorama msgpack-python setuptools pytest coverage "
-  - "pip install -q pytest-cov pyqtgraph vispy blosc"
+  - "pip install -q pytest-cov pyqtgraph vispy"
   - "python setup.py develop"
 
 build: false  # Not a C# project, build stuff at the test step instead.

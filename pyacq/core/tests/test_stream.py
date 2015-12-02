@@ -3,14 +3,18 @@ import timeit
 import pytest
 import sys
 
-from pyacq.core.stream import OutputStream, InputStream
+from pyacq.core.stream import OutputStream, InputStream, HAVE_BLOSC
 import numpy as np
 
 
 protocols = ['tcp', 'inproc', 'ipc']  # 'udp' is not working
 if sys.platform.startswith('win'):
     protocols.remove('ipc')
-compressions = ['', 'blosc-blosclz', 'blosc-lz4']
+    
+if HAVE_BLOSC:
+    compressions = ['', 'blosc-blosclz', 'blosc-lz4']
+else:
+    compressions = ['']
 
 
 def test_stream_plaindata():
