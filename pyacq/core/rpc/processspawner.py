@@ -1,4 +1,6 @@
 import sys
+import os
+import json
 import subprocess
 import atexit
 import zmq
@@ -11,71 +13,6 @@ from .log import get_logger_address, LogSender
 
 
 logger = logging.getLogger(__name__)
-
-
-bootstrap_template = """
-import zmq
-import time
-import sys
-import traceback
-import faulthandler
-import logging
-
-faulthandler.enable()
-logger = logging.getLogger()
-logger.level = {loglevel}
-
-from pyacq import {class_name}
-from pyacq.core.rpc import log
-
-if {qt}:
-    import pyqtgraph as pg
-    app = pg.mkQApp()
-    app.setQuitOnLastWindowClosed(False)
-
-if {procname} is not None:
-    log.set_process_name({procname})
-if {logaddr} is not None:
-    log.set_logger_address({logaddr})
-
-log.log_exceptions()
-
-logger.info("New process {procname} {class_name}({args}) log_addr:{logaddr} log_level:{loglevel}")
-
-bootstrap_sock = zmq.Context.instance().socket(zmq.PAIR)
-bootstrap_sock.connect({bootstrap_addr})
-bootstrap_sock.linger = 1000
-
-# Create RPC server
-try:
-    # Create server
-    server = {class_name}({args})
-    status = {{'address': server.address.decode()}}
-except:
-    logger.error("Error starting {class_name} with args: {args}:")
-    status = {{'error': traceback.format_exception(*sys.exc_info())}}
-    
-# Report server status to spawner
-start = time.time()
-while time.time() < start + 10.0:
-    # send status repeatedly until spawner gives a reply.
-    bootstrap_sock.send_json(status)
-    try:
-        bootstrap_sock.recv(zmq.NOBLOCK)
-        break
-    except zmq.error.Again:
-        time.sleep(0.01)
-        continue
-
-bootstrap_sock.close()
-
-# Run server until heat death of universe
-if 'address' in status:
-    server.run_forever()
-    
-if {qt}:
-    app.exec_()
-"""
 
 
 class ProcessSpawner(object):
@@ -130,21 +67,28 @@ class ProcessSpawner(object):
         
         # Spawn new process
         class_name = 'QtRPCServer' if qt else 'RPCServer'
-        args = "address='%s'" % address
-        bootstrap = bootstrap_template.format(class_name=class_name, args=args,
-                                              bootstrap_addr=bootstrap_addr,
-                                              loglevel=log_level, qt=str(qt),
-                                              logaddr=log_addr, procname=repr(name))
+        args = {'address': address}
+        bootstrap_conf = dict(
+            class_name=class_name, 
+            args=args,
+            bootstrap_addr=bootstrap_addr.decode(),
+            loglevel=log_level,
+            logaddr=log_addr.decode(), 
+            qt=qt,
+            procname=name,
+        )
+        
+        bootstrap_file = os.path.join(os.path.dirname(__file__), 'bootstrap.py')
         
         if executable is None:
             executable = sys.executable
 
         if log_addr is not None:
             # start process with stdout/stderr piped
-            self.proc = subprocess.Popen((executable,), stdin=subprocess.PIPE,
+            self.proc = subprocess.Popen((executable, bootstrap_file), stdin=subprocess.PIPE,
                                          stderr=subprocess.PIPE, stdout=subprocess.PIPE)
             
-            self.proc.stdin.write(bootstrap.encode())
+            self.proc.stdin.write(json.dumps(bootstrap_conf).encode())
             self.proc.stdin.close()
             
             # create a logger for handling stdout/stderr and forwarding to log server
