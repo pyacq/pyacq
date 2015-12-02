@@ -50,7 +50,7 @@ bootstrap_sock.linger = 1000
 try:
     # Create server
     server = {class_name}({args})
-    status = {{'addr': server.address.decode()}}
+    status = {{'address': server.address.decode()}}
 except:
     logger.error("Error starting {class_name} with args: {args}:")
     status = {{'error': traceback.format_exception(*sys.exc_info())}}
@@ -70,7 +70,7 @@ while time.time() < start + 10.0:
 bootstrap_sock.close()
 
 # Run server until heat death of universe
-if 'addr' in status:
+if 'address' in status:
     server.run_forever()
     
 if {qt}:
@@ -88,7 +88,7 @@ class ProcessSpawner(object):
     ----------
     name : str | None
         Optional process name that will be assigned to all remote log records.
-    addr : str
+    address : str
         ZMQ socket address that the new process's RPCServer will bind to.
         Default is 'tcp://*:*'.
     qt : bool
@@ -104,11 +104,11 @@ class ProcessSpawner(object):
     executable : str | None
         Optional python executable to invoke. The default value is `sys.executable`.
     """
-    def __init__(self, name=None, addr="tcp://*:*", qt=False, log_addr=None, 
+    def __init__(self, name=None, address="tcp://*:*", qt=False, log_addr=None, 
                  log_level=None, executable=None):
         #logger.warn("Spawning process: %s %s %s", name, log_addr, log_level)
         assert qt in (True, False)
-        assert isinstance(addr, (str, bytes))
+        assert isinstance(address, (str, bytes))
         assert name is None or isinstance(name, str)
         assert log_addr is None or isinstance(log_addr, (str, bytes)), "log_addr must be str or None; got %r" % log_addr
         if log_addr is None:
@@ -130,7 +130,7 @@ class ProcessSpawner(object):
         
         # Spawn new process
         class_name = 'QtRPCServer' if qt else 'RPCServer'
-        args = "addr='%s'" % addr
+        args = "address='%s'" % address
         bootstrap = bootstrap_template.format(class_name=class_name, args=args,
                                               bootstrap_addr=bootstrap_addr,
                                               loglevel=log_level, qt=str(qt),
@@ -170,9 +170,9 @@ class ProcessSpawner(object):
         bootstrap_sock.send(b'OK')
         bootstrap_sock.close()
         
-        if 'addr' in status:
-            self.addr = status['addr']
-            self.client = RPCClient(self.addr.encode())
+        if 'address' in status:
+            self.address = status['address']
+            self.client = RPCClient(self.address.encode())
         else:
             err = ''.join(status['error'])
             self.kill()

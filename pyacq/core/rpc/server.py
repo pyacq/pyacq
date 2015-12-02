@@ -26,7 +26,7 @@ class RPCServer(object):
     ----------
     name : str
         Name used to identify this server.
-    addr : URL
+    address : URL
         Address for RPC server to bind to.
 
     Basic usage::
@@ -115,7 +115,7 @@ class RPCServer(object):
         srv = RPCServer.get_server()
         return RPCClient.get_client(srv.address)
         
-    def __init__(self, addr="tcp://*:*"):
+    def __init__(self, address="tcp://*:*"):
         self._socket = zmq.Context.instance().socket(zmq.ROUTER)
         
         # socket will continue attempting to deliver messages up to 5 sec after
@@ -123,7 +123,7 @@ class RPCServer(object):
         # on exit)
         self._socket.linger = 5000
         
-        self._socket.bind(addr)
+        self._socket.bind(address)
         self.address = self._socket.getsockopt(zmq.LAST_ENDPOINT)
         self._closed = False
         
@@ -432,13 +432,13 @@ class QtRPCServer(RPCServer):
     
     Parameters
     ----------
-    addr : str
+    address : str
         ZMQ address to listen on. Default is "tcp://*:*".
     quit_on_close : bool
         If True, then call `QApplication.quit()` when the server is closed. 
     """
-    def __init__(self, addr="tcp://*:*", quit_on_close=True):
-        RPCServer.__init__(self, addr)
+    def __init__(self, address="tcp://*:*", quit_on_close=True):
+        RPCServer.__init__(self, address)
         self.quit_on_close = quit_on_close
         self.poll_thread = QtPollThread(self)
         

@@ -1,3 +1,5 @@
+import re
+
 from .rpc import ProcessSpawner, RPCServer
 from .nodegroup import NodeGroup
 
@@ -42,7 +44,9 @@ class Host(object):
             
         All extra keyword arguments are passed to `ProcessSpawner()`.
         """
-        ps = ProcessSpawner(name=name, qt=qt, **kwds)
+        server = RPCServer.get_server()
+        addr = re.sub(r':\d+$', ':*', server.address.decode())
+        ps = ProcessSpawner(name=name, qt=qt, address=addr, **kwds)
         rng = ps.client._import('pyacq.core.nodegroup')
         
         # create nodegroup in remote process
