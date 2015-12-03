@@ -4,6 +4,19 @@ import threading
 
 class Timer(threading.Thread):
     """Thread for making scheduled RPC calls.
+    
+    Parameters
+    ----------
+    callback : callable
+        Any callable object to be called on a timed schedule. Will be called
+        from a new thread, so this must be a thread-safe callable such as an
+        ObjectProxy.
+    interval : float
+        Minimum time to wait between callback invocations (start to start).
+    limit : int or None
+        Optional maximum number of times to invoke the callback.
+    start : bool
+        Whether to immediately start the timer.
     """
     def __init__(self, callback, interval, limit=None, start=False):
         threading.Thread.__init__(self, daemon=True)
@@ -18,6 +31,11 @@ class Timer(threading.Thread):
             self.start()
             
     def start(self):
+        """Start the timer.
+        
+        This method begins a new thread that will sleep between callback
+        invocations.
+        """
         with self._lock:
             self.running = True
             self._last_call_time = None
@@ -29,6 +47,8 @@ class Timer(threading.Thread):
             self.start()
         
     def stop(self):
+        """Stop the timer.
+        """
         with self._lock:
             self.running = False
         
@@ -45,12 +65,13 @@ class Timer(threading.Thread):
             with self._lock:
                 if not self.running:
                     return
-            
+                self._last_call_time = time.perf_counter()
+                
             self.callback()
             
             with self._lock:
                 self._call_count += 1
-                if self._call_count >= self.limit:
+                if self.limit is not None and self._call_count >= self.limit:
                     return
         finally:
             with self._lock:

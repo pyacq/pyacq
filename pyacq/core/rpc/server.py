@@ -423,6 +423,16 @@ class RPCServer(object):
         return self.get_proxy(obj)
     
     def start_timer(self, callback, interval, **kwds):
+        """Start a timer that invokes *callback* at regular intervals.
+        
+        Parameters
+        ----------
+        callback : callable
+            Callable object to invoke. This must either be an ObjectProxy or
+            an object that is safe to call from the server's thread.
+        interval : float
+            Minimum time to wait between callback invocations (start to start).
+        """
         kwds.setdefault('start', True)
         if not isinstance(callback, ObjectProxy):
             callback = self.get_proxy(callback)
