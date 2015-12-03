@@ -421,6 +421,12 @@ class RPCServer(object):
             if isinstance(obj, typ):
                 return obj
         return self.get_proxy(obj)
+    
+    def start_timer(self, callback, interval, **kwds):
+        kwds.setdefault('start', True)
+        if not isinstance(callback, ObjectProxy):
+            callback = self.get_proxy(callback)
+        return Timer(callback, interval, **kwds)
 
 
 class QtRPCServer(RPCServer):

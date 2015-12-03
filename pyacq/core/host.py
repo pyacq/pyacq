@@ -21,13 +21,15 @@ class Host(object):
     
     def __init__(self, name):
         self.name = name
-        self.spawners = set()
+        self.spawners = []
         
         # Publish this object so we can easily retrieve it from any other
         # machine.
         server = RPCServer.get_server()
         if server is not None:
             server['host'] = self
+            
+        self.timer = server.start_timer(self.check_spawners, interval=1.0)
 
     def create_nodegroup(self, name, manager=None, qt=True, **kwds):
         """Create a new NodeGroup in a new process and return a proxy to it.
@@ -56,7 +58,7 @@ class Host(object):
         ps.client['nodegroup'] = ps._nodegroup
         
         ps._manager = manager
-        self.spawners.add(ps)
+        self.spawners.append(ps)
         return ps._nodegroup
 
     def close_all_nodegroups(self, force=False):
@@ -67,4 +69,4 @@ class Host(object):
                 sp.kill()
             else:
                 sp.stop()
-        self.spawners = set()
+        self.spawners = []
