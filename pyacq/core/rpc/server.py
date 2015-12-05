@@ -13,6 +13,7 @@ from pyqtgraph.Qt import QtCore, QtGui
 
 from .serializer import all_serializers
 from .proxy import ObjectProxy
+from .timer import Timer
 from . import log
 
 
@@ -89,8 +90,10 @@ class RPCServer(object):
         This static method fails if another server is already registered for
         this thread.
         """
-        assert srv._thread is None, "Server has already been registered."
         key = threading.current_thread().ident
+        if srv._thread == key:
+            return
+        assert srv._thread is None, "Server has already been registered."
         with RPCServer.servers_by_thread_lock:
             if key in RPCServer.servers_by_thread:
                 raise KeyError("An RPCServer is already running in this thread.")

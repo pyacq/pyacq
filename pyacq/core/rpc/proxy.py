@@ -67,20 +67,16 @@ class ObjectProxy(object):
         object.__init__(self)
         ## can't set attributes directly because setattr is overridden.
         self.__dict__.update(dict(
-            _rpc_addr = rpc_id,
-            _obj_id = obj_id,
-            _type_str = type_str,
-            _attributes = attributes,
-            _parent_proxy = None,
-            _auto_delete = False,
-            _hash  = (rpc_id, obj_id, attributes),
+            _rpc_addr=rpc_id,
+            _obj_id=obj_id,
+            _type_str=type_str,
+            _attributes=attributes,
+            _parent_proxy=None,
+            _hash=(rpc_id, obj_id, attributes),
+            # identify local client/server instances this proxy belongs to
+            _client_=None,
+            _server_=None,
         ))
-        
-        # identify local client/server instances this proxy might belong to
-        from .client import RPCClient
-        self.__dict__['_client'] = RPCClient.get_client(self._rpc_addr)
-        from .server import RPCServer
-        self.__dict__['_server'] = RPCServer.get_server()
         
         ## attributes that affect the behavior of the proxy. 
         self.__dict__['_proxy_options'] = {
@@ -94,6 +90,27 @@ class ObjectProxy(object):
         }
         
         self._set_proxy_options(**kwds)
+    
+    def _copy(self):
+        # Return a copy of this proxy. 
+        # This is used for transferring proxies across threads (because an
+        # ObjectProxy should only be used in one thread.
+        prox = ObjectProxy(self._rpc_addr, self._obj_id, self._type_str, self._attributes, **self._proxy_options)
+        if self._parent_proxy is not None:
+            prox._parent_proxy = self._parent_proxy.copy()
+        return prox
+
+    def _client(self):
+        if self._client_ is None:
+            from .client import RPCClient
+            self.__dict__['_client_'] = RPCClient.get_client(self._rpc_addr)
+        return self._client_
+        
+    def _server(self):
+        if self._server_ is None:
+            from .server import RPCServer
+            self.__dict__['_server_'] = RPCServer.get_server()
+        return self._server_
     
     def _set_proxy_options(self, **kwds):
         """
@@ -170,10 +187,10 @@ class ObjectProxy(object):
         
         If the object is not serializable, then raise an exception.
         """
-        if self._client is None:
-            return self._server.unwrap_proxy(self)
+        if self._client() is None:
+            return self._server().unwrap_proxy(self)
         else:
-            return self._client.get_obj(self, return_type='value')
+            return self._client().get_obj(self, return_type='value')
         
     def __repr__(self):
         orep = '.'.join((self._type_str,) + self._attributes)
@@ -187,7 +204,7 @@ class ObjectProxy(object):
             return self
         # Transfer sends this object to the remote process and returns a new proxy.
         # In the process, this invokes any deferred attributes.
-        return self._client.get_obj(self, sync=sync, return_type=return_type, **kwds)
+        return self._client().get_obj(self, sync=sync, return_type=return_type, **kwds)
         
     def _delete(self, sync='sync', **kwds):
         """Ask the RPC server to release the reference held by this proxy.
@@ -196,7 +213,7 @@ class ObjectProxy(object):
         that its reference count will be reduced. Any copies of this proxy will
         no longer be usable.
         """
-        self._client.delete(self, sync=sync, **kwds)
+        self._client().delete(self, sync=sync, **kwds)
         
     def __del__(self):
         if self._proxy_options['auto_delete'] is True:
@@ -252,7 +269,7 @@ class ObjectProxy(object):
         }
         for k in opts:
             opts[k] = kwargs.pop('_'+k, opts[k])
-        return self._client.call_obj(obj=self, args=args, kwargs=kwargs, **opts)
+        return self._client().call_obj(obj=self, args=args, kwargs=kwargs, **opts)
 
     def __hash__(self):
         """Override __hash__ because we need to avoid comparing remote and local

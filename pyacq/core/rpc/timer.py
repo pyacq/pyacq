@@ -1,9 +1,12 @@
 import time
 import threading
 
+from .proxy import ObjectProxy
+import logging
+logger = logging.getLogger()
 
-class Timer(threading.Thread):
-    """Thread for making scheduled RPC calls.
+class Timer(object):
+    """Timer for making scheduled callbacks in a new thread.
     
     Parameters
     ----------
@@ -19,7 +22,7 @@ class Timer(threading.Thread):
         Whether to immediately start the timer.
     """
     def __init__(self, callback, interval, limit=None, start=False):
-        threading.Thread.__init__(self, daemon=True)
+        self.thread = threading.Thread(target=self._run, daemon=True)
         self.callback = callback
         self.interval = float(interval)
         self.limit = limit
@@ -41,10 +44,10 @@ class Timer(threading.Thread):
             self._last_call_time = None
             self._call_count = 0
         
-        if self.is_alive():
+        if self.thread.is_alive():
             return
         else:
-            self.start()
+            self.thread.start()
         
     def stop(self):
         """Stop the timer.
@@ -52,27 +55,33 @@ class Timer(threading.Thread):
         with self._lock:
             self.running = False
         
-    def run(self):
+    def _run(self):
         try:
-            if self._last_call_time is None:
-                sleep_time = 0
-            else:
-                sleep_time = self.interval - (time.perf_counter() - self._last_call_time)
+            callback = self.callback
+            if isinstance(callback, ObjectProxy):
+                # Make sure we are using a proxy owned by this thread
+                callback = callback._copy()
             
-            if sleep_time > 0:
-                time.sleep(sleep_time)
+            while True:
+                if self._last_call_time is None:
+                    sleep_time = 0
+                else:
+                    sleep_time = self.interval - (time.perf_counter() - self._last_call_time)
                 
-            with self._lock:
-                if not self.running:
-                    return
-                self._last_call_time = time.perf_counter()
+                if sleep_time > 0:
+                    time.sleep(sleep_time)
+                    
+                with self._lock:
+                    if not self.running:
+                        return
+                    self._last_call_time = time.perf_counter()
+                    
+                callback()
                 
-            self.callback()
-            
-            with self._lock:
-                self._call_count += 1
-                if self.limit is not None and self._call_count >= self.limit:
-                    return
+                with self._lock:
+                    self._call_count += 1
+                    if self.limit is not None and self._call_count >= self.limit:
+                        return
         finally:
             with self._lock:
                 self.running = False

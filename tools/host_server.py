@@ -20,8 +20,9 @@ if not re.match(r'tcp://(\*|([0-9\.]+)):(\*|[0-9]+)', address):
     sys.exit(-1)
 
 
-host = Host(name=socket.gethostname())
 server = RPCServer(address)
+server.run_lazy()
+host = Host(name=socket.gethostname(), poll_procs=True)
 server['host'] = host
 print("Running server at: %s" % server.address.decode())
 

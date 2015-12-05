@@ -165,6 +165,10 @@ class Manager(object):
         ng = host.create_nodegroup(name=name, manager=self, qt=qt, **kwds)
         self.nodegroups[name] = ng
         return ng
+
+    def nodegroup_closed(self, ng):
+        # Called by host when it detects that a nodegroup's process has exited.
+        pass
     
     def list_nodegroups(self):
         return list(self.nodegroups.values())

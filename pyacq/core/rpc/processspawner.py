@@ -129,9 +129,13 @@ class ProcessSpawner(object):
         atexit.register(self.stop)
         
     def wait(self):
-        self.proc.wait()
+        """Wait for the process to exit and return its return code.
+        """
+        return self.proc.wait()
 
     def kill(self):
+        """Kill the spawned process immediately.
+        """
         if self.proc.poll() is not None:
             return
         logger.info("Kill process: %d", self.proc.pid)
@@ -139,12 +143,20 @@ class ProcessSpawner(object):
         self.proc.wait()
 
     def stop(self):
+        """Stop the spawned process by asking its RPC server to close.
+        """
         if self.proc.poll() is not None:
             return
         logger.info("Close process: %d", self.proc.pid)
         closed = self.client.close_server()
         assert closed is True, "Server refused to close. (reply: %s)" % closed
         self.proc.wait()
+
+    def poll(self):
+        """Return the spawned process's return code, or None if it has not
+        exited yet.
+        """
+        return self.proc.poll()
 
 
 class PipePoller(threading.Thread):

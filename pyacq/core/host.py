@@ -1,7 +1,10 @@
 import re
+import logging
 
 from .rpc import ProcessSpawner, RPCServer
 from .nodegroup import NodeGroup
+
+logger = logging.getLogger()
 
 
 class Host(object):
@@ -19,7 +22,7 @@ class Host(object):
         host = proc.client._import('pyacq.core.host').Host(name)
         return proc, host
     
-    def __init__(self, name):
+    def __init__(self, name, poll_procs=False):
         self.name = name
         self.spawners = []
         
@@ -28,8 +31,8 @@ class Host(object):
         server = RPCServer.get_server()
         if server is not None:
             server['host'] = self
-            
-        self.timer = server.start_timer(self.check_spawners, interval=1.0)
+            if poll_procs:
+                self.timer = server.start_timer(self.check_spawners, interval=1.0)
 
     def create_nodegroup(self, name, manager=None, qt=True, **kwds):
         """Create a new NodeGroup in a new process and return a proxy to it.
@@ -48,18 +51,19 @@ class Host(object):
         """
         server = RPCServer.get_server()
         addr = re.sub(r':\d+$', ':*', server.address.decode())
-        ps = ProcessSpawner(name=name, qt=qt, address=addr, **kwds)
-        rng = ps.client._import('pyacq.core.nodegroup')
+        sp = ProcessSpawner(name=name, qt=qt, address=addr, **kwds)
+        logger.info("Process started: %s" % sp)
+        rng = sp.client._import('pyacq.core.nodegroup')
         
         # create nodegroup in remote process
-        ps._nodegroup = rng.NodeGroup(host=self, manager=manager)
+        sp._nodegroup = rng.NodeGroup(host=self, manager=manager)
         
         # publish so others can easily connect to the nodegroup
-        ps.client['nodegroup'] = ps._nodegroup
+        sp.client['nodegroup'] = ps._nodegroup
         
-        ps._manager = manager
-        self.spawners.append(ps)
-        return ps._nodegroup
+        sp._manager = manager
+        self.spawners.append(sp)
+        return sp._nodegroup
 
     def close_all_nodegroups(self, force=False):
         """Close all NodeGroups belonging to this host.
@@ -70,3 +74,18 @@ class Host(object):
             else:
                 sp.stop()
         self.spawners = []
+
+    def check_spawners(self):
+        """Check for any processes that have exited and report them to their
+        manager.
+        
+        This method is called by a timer if the host is created with *poll_procs*
+        True.
+        """
+        for sp in self.spawners[:]:
+            rval = sp.poll()
+            if sp.poll() is not None:
+                logger.info("Process exited: %s" % sp)
+                self.spawners.remove(sp)
+                sp._manager.nodegroup_closed(sp._nodegroup, _sync='off')
+        
