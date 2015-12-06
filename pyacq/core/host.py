@@ -59,7 +59,7 @@ class Host(object):
         sp._nodegroup = rng.NodeGroup(host=self, manager=manager)
         
         # publish so others can easily connect to the nodegroup
-        sp.client['nodegroup'] = ps._nodegroup
+        sp.client['nodegroup'] = sp._nodegroup
         
         sp._manager = manager
         self.spawners.append(sp)

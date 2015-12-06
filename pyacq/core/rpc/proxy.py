@@ -63,16 +63,17 @@ class ObjectProxy(object):
     
     """
     
-    def __init__(self, rpc_id, obj_id, type_str='', attributes=(), **kwds):
+    def __init__(self, rpc_addr, obj_id, ref_id, type_str='', attributes=(), **kwds):
         object.__init__(self)
         ## can't set attributes directly because setattr is overridden.
         self.__dict__.update(dict(
-            _rpc_addr=rpc_id,
+            _rpc_addr=rpc_addr,
             _obj_id=obj_id,
+            _ref_id=ref_id,
             _type_str=type_str,
             _attributes=attributes,
             _parent_proxy=None,
-            _hash=(rpc_id, obj_id, attributes),
+            _hash=(rpc_addr, obj_id, attributes),
             # identify local client/server instances this proxy belongs to
             _client_=None,
             _server_=None,
@@ -95,7 +96,8 @@ class ObjectProxy(object):
         # Return a copy of this proxy. 
         # This is used for transferring proxies across threads (because an
         # ObjectProxy should only be used in one thread.
-        prox = ObjectProxy(self._rpc_addr, self._obj_id, self._type_str, self._attributes, **self._proxy_options)
+        prox = ObjectProxy(self._rpc_addr, self._obj_id, self._ref_id, self._type_str, 
+                           self._attributes, **self._proxy_options)
         if self._parent_proxy is not None:
             prox._parent_proxy = self._parent_proxy.copy()
         return prox
@@ -171,8 +173,9 @@ class ObjectProxy(object):
         """Convert this proxy to a serializable structure.
         """
         state = {
-            'rpc_id': self._rpc_addr, 
-            'obj_id': self._obj_id, 
+            'rpc_addr': self._rpc_addr, 
+            'obj_id': self._obj_id,
+            'ref_id': self._ref_id,
             'type_str': self._type_str,
             'attributes': self._attributes,
         }
@@ -243,7 +246,8 @@ class ObjectProxy(object):
         """
         opts = self._proxy_options.copy()
         opts.update(kwds)
-        proxy = ObjectProxy(self._rpc_addr, self._obj_id, self._type_str, self._attributes + (attr,), **opts)
+        proxy = ObjectProxy(self._rpc_addr, self._obj_id, self._ref_id, 
+                            self._type_str, self._attributes + (attr,), **opts)
         # Keep a reference to the parent proxy so that the remote object cannot be
         # released as long as this proxy is alive.
         proxy.__dict__['_parent_proxy'] = self
@@ -352,6 +356,12 @@ class ObjectProxy(object):
         return self._deferred_attr('__ilshift__')(*args, _sync='off')
         
     def __eq__(self, *args):
+        # If checking equality between two proxies to the same object, then
+        # we can immediately return True.
+        if (isinstance(args[0], ObjectProxy) and 
+            args[0]._rpc_addr == self._rpc_addr and
+            args[0]._obj_id == self._obj_id):
+            return True
         return self._deferred_attr('__eq__')(*args)
     
     def __ne__(self, *args):

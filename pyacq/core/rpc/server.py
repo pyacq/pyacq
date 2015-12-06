@@ -149,9 +149,20 @@ class RPCServer(object):
         # Objects that may be retrieved by name using client['obj_name']
         self._namespace = {'self': self}
         
-        # Objects for which we have sent proxies to other machines.
-        self.next_object_id = 0
-        self._proxies = {}  # obj_id: object
+        # Information about objects for which we have sent proxies to other machines.
+        # "object ID" is an integer that uniquely identifies each object that
+        # has been proxied. Multiple requests for the same object will return
+        # proxies with the same object ID. We do _not_ use id(obj) here because
+        # Python may re-use these IDs over time.
+        self._next_object_id = 0  # uniquely identifies proxied objects
+        # "ref ID" is an integer that uniquely identifies a single proxy as it
+        # is sent. Multiple requests for the same object will each have a
+        # different ref ID. These are used for remote reference counting to
+        # ensure that local objects stay alive as long as a remote proxy might
+        # still exist for the object.
+        self._next_ref_id = 0  # uniquely identifies a proxy reference
+        self._proxy_refs = {}  # obj_id: [object, set(refs)]
+        self._proxy_id_map = {}  # id(obj): obj_id
         
         # Make sure we inform clients of closure
         atexit.register(self._atexit)
@@ -161,27 +172,37 @@ class RPCServer(object):
         
         This proxy can be sent via RPC to any other node.
         """
-        oid = self.next_object_id
-        self.next_object_id += 1
+        rid = self._next_ref_id
+        self._next_ref_id += 1
+        oid = self._get_object_id(obj)
         type_str = str(type(obj))
-        proxy = ObjectProxy(self.address, oid, type_str, attributes=(), **kwds)
-        self._proxies[oid] = obj
+        proxy = ObjectProxy(self.address, oid, rid, type_str, attributes=(), **kwds)
+        proxy_ref = self._proxy_refs.setdefault(oid, [obj, set()])
+        proxy_ref[1].add(rid)
         #logging.debug("server %s add proxy %d: %s", self.address, oid, obj)
         return proxy
+
+    def _get_object_id(self, obj):
+        oid = self._proxy_id_map.get(id(obj), None)
+        if oid is None:
+            oid = self._next_object_id
+            self._next_object_id += 1
+            self._proxy_id_map[id(obj)] = oid
+        return oid
     
     def unwrap_proxy(self, proxy):
         """Return the local python object referenced by *proxy*.
         """
         try:
             oid = proxy._obj_id
-            obj = self._proxies[oid]
-            for attr in proxy._attributes:
-                obj = getattr(obj, attr)
-            #logging.debug("server %s unwrap proxy %d: %s", self.address, oid, obj)
-            return obj
+            obj = self._proxy_refs[oid][0]
         except KeyError:
             raise KeyError("Invalid proxy object ID %r. The object may have "
                            "been released already." % proxy.obj_id)
+        for attr in proxy._attributes:
+            obj = getattr(obj, attr)
+        #logging.debug("server %s unwrap proxy %d: %s", self.address, oid, obj)
+        return obj
 
     def __getitem__(self, key):
         return self._namespace[key]
@@ -316,7 +337,11 @@ class RPCServer(object):
         elif action == 'get_obj':
             result = opts['obj']
         elif action == 'delete':
-            del self._proxies[opts['obj_id']]
+            proxy_ref = self._proxy_refs[opts['obj_id']]
+            proxy_ref[1].remove(opts['ref_id'])
+            if len(proxy_ref[1]) == 0:
+                del self._proxy_refs[opts['obj_id']]
+                del self._proxy_id_map[id(proxy_ref[0])]
             result = None
         elif action =='getitem':
             result = self[opts['name']]
