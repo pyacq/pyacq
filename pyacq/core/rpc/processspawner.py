@@ -73,7 +73,7 @@ class ProcessSpawner(object):
             args=args,
             bootstrap_addr=bootstrap_addr.decode(),
             loglevel=log_level,
-            logaddr=log_addr.decode(), 
+            logaddr=log_addr.decode() if log_addr is not None else None,
             qt=qt,
             procname=name,
         )
@@ -104,7 +104,9 @@ class ProcessSpawner(object):
             
         else:
             # don't intercept stdout/stderr
-            self.proc = subprocess.Popen((executable, '-c', bootstrap))
+            self.proc = subprocess.Popen((executable, bootstrap_file), stdin=subprocess.PIPE)
+            self.proc.stdin.write(json.dumps(bootstrap_conf).encode())
+            self.proc.stdin.close()
             
         logger.info("Spawned process: %d", self.proc.pid)
         
