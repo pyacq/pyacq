@@ -187,7 +187,7 @@ class Manager(object):
             if ng in self._closed_nodegroups:
                 continue
             try:
-                ng.close()
+                ng.close(_sync='off')
             except RuntimeError:
                 # If the server has already disconnected, then no need to close.
                 cli = RPCClient.get_client(ng._rpc_addr)

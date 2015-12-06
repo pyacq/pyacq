@@ -1,5 +1,6 @@
 import re
 import logging
+import atexit
 
 from .rpc import ProcessSpawner, RPCServer
 from .nodegroup import NodeGroup
@@ -33,6 +34,8 @@ class Host(object):
             server['host'] = self
             if poll_procs:
                 self.timer = server.start_timer(self.check_spawners, interval=1.0)
+                
+        atexit.register(self.close_all_nodegroups)
 
     def create_nodegroup(self, name, manager=None, qt=True, **kwds):
         """Create a new NodeGroup in a new process and return a proxy to it.
