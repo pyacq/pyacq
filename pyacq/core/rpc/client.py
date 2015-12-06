@@ -273,6 +273,10 @@ class RPCClient(object):
                     self._read_and_process_one(timeout=0)
                 elif len(socks) > 0: 
                     server = RPCServer.get_server()
+                    if server is None:
+                        # this can happen after server has unregistered itself 
+                        # at exit
+                        continue
                     server._read_and_process_one()
                 
     def _read_and_process_one(self, timeout):

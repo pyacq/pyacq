@@ -73,7 +73,7 @@ class ObjectProxy(object):
             _type_str=type_str,
             _attributes=attributes,
             _parent_proxy=None,
-            _hash=(rpc_addr, obj_id, attributes),
+            _hash=hash((rpc_addr, obj_id, attributes)),
             # identify local client/server instances this proxy belongs to
             _client_=None,
             _server_=None,
@@ -279,8 +279,8 @@ class ObjectProxy(object):
         """Override __hash__ because we need to avoid comparing remote and local
         hashes.
         """
-        return id(self)
-
+        #return id(self)
+        return self._hash
     
     # Explicitly proxy special methods. Is there a better way to do this??
     

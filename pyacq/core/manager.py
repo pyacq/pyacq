@@ -75,6 +75,7 @@ class Manager(object):
         logger.info('Creating new Manager..')
         self.hosts = {}  # addr:Host
         self.nodegroups = {}  # name:Nodegroup
+        self._closed_nodegroups = set()
         
         # Host used for starting nodegroups on the local machine
         self.default_host = Host('default_host')
@@ -168,7 +169,7 @@ class Manager(object):
 
     def nodegroup_closed(self, ng):
         # Called by host when it detects that a nodegroup's process has exited.
-        pass
+        self._closed_nodegroups.add(ng)
     
     def list_nodegroups(self):
         return list(self.nodegroups.values())
@@ -183,6 +184,8 @@ class Manager(object):
 
     def close_all_nodegroups(self):
         for ng in self.nodegroups.values():
+            if ng in self._closed_nodegroups:
+                continue
             try:
                 ng.close()
             except RuntimeError:
