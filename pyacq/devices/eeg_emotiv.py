@@ -123,11 +123,11 @@ class Emotiv(Node, QtCore.QObject):
         - For Windows, it's the hid object associated with the USB key
     """
     _output_specs = {'signals': dict(streamtype='analogsignal', dtype='int64',
-                                     shape=(-1, 14), sample_rate=128., timeaxis=0),
+                                     shape=(-1, 14), sample_rate=128., timeaxis=0, nb_channel = 14),
                      'impedances': dict(streamtype='analogsignal', dtype='float64',
-                                        shape=(-1, 14), sample_rate=128., time_axis=0),
+                                        shape=(-1, 14), sample_rate=128., time_axis=0, nb_channel = 14),
                      'gyro': dict(streamtype='analogsignal', dtype='int64',
-                                  shape=(-1, 2), sample_rate=128., time_axis=0)
+                                  shape=(-1, 2), sample_rate=128., time_axis=0, nb_channel = 2)
                      }  # TODO Why we don't keep channel names ??
 
     def __init__(self, **kargs):

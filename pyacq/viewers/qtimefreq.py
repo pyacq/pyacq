@@ -124,10 +124,7 @@ class QTimeFreq(WidgetNode):
     def _initialize(self, ):
         self.sample_rate = sr = self.input.params['sample_rate']
         d0, d1 = self.input.params['shape']
-        if self.input.params['timeaxis']==0:
-            self.nb_channel = d1
-        else:
-            self.nb_channel = d0
+        self.nb_channel = self.input.params['nb_channel']
         
         # create proxy input to ensure sharedarray with time axis 1
         if self.input.params['transfermode'] == 'sharedarray' and self.input.params['timeaxis'] == 1:
@@ -556,7 +553,7 @@ class ComputeThread(QtCore.QThread):
         
         if downsample_factor>1:
             head = head - head%downsample_factor
-        full_arr = self.in_stream().get_array_slice(head, sig_chunk_size)[self.channel, :]
+        full_arr = self.in_stream().get_array_slice(head, sig_chunk_size, autoswapaxes = False)[self.channel, :]
         
         #~ t2 = time.time()
         

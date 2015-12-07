@@ -39,10 +39,10 @@ def test_stream_plaindata():
                 # send
                 index += chunksize
                 arr = np.random.rand(1024, nb_channel).astype(stream_spec['dtype'])
-                outstream.send(index, arr)
+                outstream.send(index, arr, autoswapaxes=False)
                 
                 # recv
-                index2, arr2 = instream.recv()
+                index2, arr2 = instream.recv(autoswapaxes=False)
                 assert index2==index
                 assert np.all((arr-arr2)==0.)
         
@@ -52,6 +52,7 @@ def test_stream_plaindata():
 
 
 def test_stream_sharedarray():
+    # this test is perform with no autoswapaxes
     #~ nb_channel = 16
     nb_channel = 1
     
@@ -91,16 +92,16 @@ def test_stream_sharedarray():
                 elif timeaxis==1:
                     arr = np.tile(np.arange(index, index+chunksize)[None,:], (nb_channel, 1)).astype(stream_spec['dtype'])
                 index += chunksize
-                outstream.send(index, arr)
+                outstream.send(index, arr, autoswapaxes=False)
                 
-                index2, arr2 = instream.recv()
+                index2, arr2 = instream.recv(autoswapaxes=False, with_data = False)
                 
                 assert index2==index
                 assert arr2 is None
                 
                 # get a buffer of size chunksize*3
                 if ring_buffer_method == 'double' and index>chunksize*3:
-                    arr2 = instream.get_array_slice(index2, chunksize*3)
+                    arr2 = instream.get_array_slice(index2, chunksize*3, autoswapaxes=False)
                     if timeaxis==0:
                         assert np.all(arr2[:,0]==np.arange(index-chunksize*3, index).astype('float32'))
                     elif timeaxis==1:
@@ -164,12 +165,73 @@ instream.close()
         t = timeit.timeit(stmt, setup=setup2, number=1)
         print(chunksize, nloop, 'sharedarray', 'time =', t, 's.', 'speed', nloop*chunksize*16*4/t/1e6, 'Mo/s')
         
-        
-        
-        
+
+def test_autoswapaxes():
+    # the recv shape is alwas (10,2)
+    nb_channel = 2
+    l = 10
+    data = np.empty((10, nb_channel), dtype = 'float32')
+    assert data.flags['C_CONTIGUOUS']
+    
+    # timeaxis 0 / plaindata
+    outstream, instream  = OutputStream(),InputStream()
+    outstream.configure(transfermode = 'plaindata', timeaxis=0, shape = (-1,nb_channel))
+    instream.connect(outstream)
+    time.sleep(.5)
+    outstream.send(l, data)
+    pos, data2 = instream.recv()
+    assert data2.shape == (l,2)
+    assert data2.flags['C_CONTIGUOUS']
+    
+    # timeaxis 1 / plaindata
+    outstream, instream  = OutputStream(),InputStream()
+    outstream.configure(transfermode = 'plaindata', timeaxis=1, shape = (nb_channel, -1))
+    instream.connect(outstream)
+    time.sleep(.5)
+    outstream.send(l, data)
+    pos, data2 = instream.recv()
+    assert data2.shape == (l,2)
+    assert not data2.flags['C_CONTIGUOUS']
+    
+
+    # timeaxis 0 / sharedarray
+    outstream, instream  = OutputStream(),InputStream()
+    outstream.configure(transfermode = 'sharedarray', timeaxis=0, shape = (-1,nb_channel),
+                    sharedarray_shape = (l*5, nb_channel), ring_buffer_method = 'double')
+    instream.connect(outstream)
+    assert instream.receiver._numpyarr.flags['C_CONTIGUOUS']
+    assert not instream.receiver._numpyarr[:, 0].flags['C_CONTIGUOUS']
+    time.sleep(.5)
+    outstream.send(l, data)
+    pos, data2 = instream.recv(with_data = True)
+    assert data2.flags['C_CONTIGUOUS']
+    assert data2.shape == (l,2)
+    
+
+    # timeaxis 1 / sharedarray
+    outstream, instream  = OutputStream(),InputStream()
+    outstream.configure(transfermode = 'sharedarray', timeaxis=1, shape = (nb_channel, -1),
+                    sharedarray_shape = (nb_channel, l*5), ring_buffer_method = 'double')
+    instream.connect(outstream)
+    assert instream.receiver._numpyarr.flags['C_CONTIGUOUS']
+    assert  instream.receiver._numpyarr[0, :].flags['C_CONTIGUOUS']
+    time.sleep(.5)
+    outstream.send(l, data)
+    pos, data2 = instream.recv(with_data = True)
+    assert not data2.flags['C_CONTIGUOUS']
+    assert data2.shape == (l,2)
+    
+    
+    
+    
+    
+    
+    
+    
 
 if __name__ == '__main__':
     test_stream_plaindata()
     test_stream_sharedarray()
-    # benchmark_stream()
+    #benchmark_stream()
+    test_autoswapaxes()
 

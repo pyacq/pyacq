@@ -27,6 +27,7 @@ def test_local_app_in_out():
     
     def terminate():
         dev.stop()
+        dev.close()
         app.quit()
     
     # start for a while

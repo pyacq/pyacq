@@ -22,12 +22,12 @@ class PyAudio(Node):
     """
 
     _input_specs = {'signals': dict(streamtype='analogsignal',dtype='int16',
-                                                shape=(-1, 2), compression ='', time_axis=0,
+                                                shape=(-1, 2), compression ='', timeaxis=0,
                                                 sample_rate =44100.
                                                 )}
 
     _output_specs = {'signals': dict(streamtype='analogsignal',dtype='int16',
-                                                shape=(-1, 2), compression ='', time_axis=0,
+                                                shape=(-1, 2), compression ='', timeaxis=0,
                                                 sample_rate =44100.
                                                 )}
 
@@ -93,6 +93,7 @@ class PyAudio(Node):
                 raise ValueError(msg) from err
 
         self.output.spec['shape'] = (chunksize, self.nb_channel)
+        self.output.spec['nb_channel'] = self.nb_channel
         self.output.spec['dtype = '] = format
         self.output.spec['sample_rate'] = float(int(self.sample_rate))
         gains = {'int16': 1./2**15, 'int32': 1./2**31, 'float32':1.}

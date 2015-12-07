@@ -89,12 +89,12 @@ class TriggerThread(ThreadPollInput):
 
 class AnalogTriggerThread(TriggerThread):
     def get_buffer_from_channel(self, index, length):
-        return self.input_stream().get_array_slice(index, length)[self.channel, :]
+        return self.input_stream().get_array_slice(index, length)[:, self.channel, ]
 
 
 class DigitalTriggerThread(TriggerThread):
     def get_buffer_from_channel(self, index, length):
-        return self.input_stream().get_array_slice(index, length)[self.b, :] & self.mask
+        return self.input_stream().get_array_slice(index, length)[:, self.b] & self.mask
     
     def change_params(self, params):
         TriggerThread.change_params(self, params)
