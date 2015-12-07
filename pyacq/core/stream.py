@@ -20,77 +20,6 @@ default_stream = dict(protocol='tcp', interface='127.0.0.1', port='*',
                         sample_rate = 1.)
 
 
-common_doc = """
-    Parameters
-    ----------
-    protocol : 'tcp', 'udp', 'inproc' or 'inpc' (linux only)
-        The type of protocol used for the zmq.PUB socket
-    interface : str
-        The bind adress for the zmq.PUB socket
-    port : str
-        The port for the zmq.PUB socket
-    transfermode: 'plain_data', 'sharedarray', (not done 'shared_cuda_buffer' or 'share_opencl_buffer')
-        The method used for data transfer:
-            * 'plain_data': data are sent over a plain socket in two parts: (frame index, data).
-            * 'sharedarray': data are stored in shared memory in a ring buffer and the current frame index is sent over the socket.
-            * 'shared_cuda_buffer': data are stored in shared Cuda buffer and the current frame index is sent over the socket.
-            * 'share_opencl_buffer': data are stored in shared OpenCL buffer and the current frame index is sent over the socket.
-    streamtype: 'analogsignal', 'digitalsignal', 'event' or 'image/video'
-        The type of data to be transferred.
-    dtype: str ('float32','float64', [('r', 'uint16'), ('g', 'uint16'), , ('b', 'uint16')], ...)
-        The numpy.dtype of the data buffer. It can be a composed dtype for event or images.
-    shape: list
-        The shape of each data frame. If the stream will send chunks of variable length,
-        then use -1 for the unknown dimension.
-        
-        * For ``streamtype=image``, the shape should be (-1, H, W), (n_frames, H, W), or (H, W).
-        * For ``streamtype=analogsignal`` the shape should be (n_samples, n_channels) or (-1, n_channels)
-        Note that it is the internal shape, see autoswapaxes and footnotes.
-    nb_channel: int or None
-        Used for analogsignal, this redundant with shape[0] or shape[1] (depending timeaxis).
-    timeaxis: int
-        The index of the axis that represents time within a single data chunk, or
-        -1 if the chunk lacks this axis (in this case, each chunk represents exactly one
-        timepoint). Note that this describe internal buffer only.
-    compression: '', 'blosclz', 'blosc-lz4', 'mp4', 'h264'
-        The compression for the data stream. The default uses no compression.
-    scale: float
-        An optional scale factor + offset to apply to the data before it is sent over the stream.
-        ``output = offset + scale * input``
-    offset:
-        See scale.
-    units: str
-        Units of the stream data. Mainly used for 'analogsignal'.
-    sample_rate: float or None
-        Sample rate of the stream in Hz.
-    sample_interval: float or None
-    sharedarray_shape: tuple
-        Shape of the SharedArray when using `transfermode = 'sharedarray'`.
-    ring_buffer_method: 'double' or 'single'
-        Method for the ring buffer when using `transfermode = 'sharedarray'`:
-
-        * 'single': a standard ring buffer.
-        * 'double': 2 ring buffers concatenated together. This ensures that
-          a continuous chunk exists in memory regardless of the sample position.
-        
-        Note that, The ring buffer is along `timeaxis` for each case. And in case, of 'double', concatenated axis is also `timeaxis`.
-    shm_id : str or int (depending on platform)
-        id of the SharedArray when using `transfermode = 'sharedarray'`.
-
-.. note::
-    Streams are C order and CONTINUOUS. For efficiency reasons, you can choose differents timesaxis depending on the context.
-    For example, for a 16 signals stream (ndim=2), from dac device the natural shape=(time, channel), so timeaxis=0.
-    In that case each channel is not continuous in memory (because C order). For some processing, it is better to have continuous
-    channel so you could want  shape=(channel, time) so timeaxis=1. So from one Node to another the timeaxis can be differents.
-    To simplify this necessary mess : the send() and recv()  by default perform a transpose (swapaxis) to force a fake timeaxis to 0 (by convention).
-    This means that internaly if a timeaxis=1 (cahnnel are toninious inmemory), the numpy.array will be slicable on axis 0 for time.
-    Notes that internally numpy change the np.array.strides but not the memory itself.
-    You can disable this swapaxes by setting send(autoswapaxes=False)/recv(autoswapaxes=False), but this make internal code for Nodes more difficult.
-
-"""
-
-    
-
 class OutputStream(object):
     """Class for streaming data to an InputStream.
     
@@ -111,7 +40,72 @@ class OutputStream(object):
         """
         Configure the output stream.
         
-        """+common_doc
+        Parameters
+        ----------
+        protocol : 'tcp', 'udp', 'inproc' or 'inpc' (linux only)
+            The type of protocol used for the zmq.PUB socket
+        interface : str
+            The bind adress for the zmq.PUB socket
+        port : str
+            The port for the zmq.PUB socket
+        transfermode: 'plain_data', 'sharedarray', (not done 'shared_cuda_buffer' or 'share_opencl_buffer')
+            The method used for data transfer:
+                * 'plain_data': data are sent over a plain socket in two parts: (frame index, data).
+                * 'sharedarray': data are stored in shared memory in a ring buffer and the current frame index is sent over the socket.
+                * 'shared_cuda_buffer': data are stored in shared Cuda buffer and the current frame index is sent over the socket.
+                * 'share_opencl_buffer': data are stored in shared OpenCL buffer and the current frame index is sent over the socket.
+        streamtype: 'analogsignal', 'digitalsignal', 'event' or 'image/video'
+            The type of data to be transferred.
+        dtype: str ('float32','float64', [('r', 'uint16'), ('g', 'uint16'), , ('b', 'uint16')], ...)
+            The numpy.dtype of the data buffer. It can be a composed dtype for event or images.
+        shape: list
+            The shape of each data frame. If the stream will send chunks of variable length,
+            then use -1 for the unknown dimension.
+            
+            * For ``streamtype=image``, the shape should be (-1, H, W), (n_frames, H, W), or (H, W).
+            * For ``streamtype=analogsignal`` the shape should be (n_samples, n_channels) or (-1, n_channels)
+            Note that it is the internal shape, see autoswapaxes and footnotes.
+        nb_channel: int or None
+            Used for analogsignal, this redundant with shape[0] or shape[1] (depending timeaxis).
+        timeaxis: int
+            The index of the axis that represents time within a single data chunk, or
+            -1 if the chunk lacks this axis (in this case, each chunk represents exactly one
+            timepoint). Note that this describe internal buffer only.
+        compression: '', 'blosclz', 'blosc-lz4', 'mp4', 'h264'
+            The compression for the data stream. The default uses no compression.
+        scale: float
+            An optional scale factor + offset to apply to the data before it is sent over the stream.
+            ``output = offset + scale * input``
+        offset:
+            See scale.
+        units: str
+            Units of the stream data. Mainly used for 'analogsignal'.
+        sample_rate: float or None
+            Sample rate of the stream in Hz.
+        sample_interval: float or None
+        sharedarray_shape: tuple
+            Shape of the SharedArray when using `transfermode = 'sharedarray'`.
+        ring_buffer_method: 'double' or 'single'
+            Method for the ring buffer when using `transfermode = 'sharedarray'`:
+
+            * 'single': a standard ring buffer.
+            * 'double': 2 ring buffers concatenated together. This ensures that
+            a continuous chunk exists in memory regardless of the sample position.
+            
+            Note that, The ring buffer is along `timeaxis` for each case. And in case, of 'double', concatenated axis is also `timeaxis`.
+        shm_id : str or int (depending on platform)
+            id of the SharedArray when using `transfermode = 'sharedarray'`.
+
+        .. note::
+            Streams are C order and CONTINUOUS. For efficiency reasons, you can choose differents timesaxis depending on the context.
+            For example, for a 16 signals stream (ndim=2), from dac device the natural shape=(time, channel), so timeaxis=0.
+            In that case each channel is not continuous in memory (because C order). For some processing, it is better to have continuous
+            channel so you could want  shape=(channel, time) so timeaxis=1. So from one Node to another the timeaxis can be differents.
+            To simplify this necessary mess : the send() and recv()  by default perform a transpose (swapaxis) to force a fake timeaxis to 0 (by convention).
+            This means that internaly if a timeaxis=1 (cahnnel are toninious inmemory), the numpy.array will be slicable on axis 0 for time.
+            Notes that internally numpy change the np.array.strides but not the memory itself.
+            You can disable this swapaxes by setting send(autoswapaxes=False)/recv(autoswapaxes=False), but this make internal code for Nodes more difficult.
+        """
         
         self.params = dict(default_stream)
         self.params.update(self.spec)
