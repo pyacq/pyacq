@@ -1,6 +1,8 @@
 Pyacq Core
 ==========
 
+.. autofunction:: pyacq.core.create_manager
+
 .. autoclass:: pyacq.core.Manager
    :members:
 

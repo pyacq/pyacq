@@ -498,7 +498,7 @@ def generate_wavelet_fourier(len_wavelet, f_start, f_stop, deltafreq, sample_rat
     f0 : float
     normalisation : float
     
-    Returns:
+    Returns
     -------
     
     wf : array

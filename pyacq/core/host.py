@@ -30,8 +30,8 @@ class Host(object):
     def create_nodegroup(self, name, manager=None, qt=True, **kwds):
         """Create a new NodeGroup in a new process and return a proxy to it.
         
-        Parameters:
-        -----------
+        Parameters
+        ----------
         name : str
             The name of the new NodeGroup. This will also be used as the name
             of the process in log records sent to the Manager.

@@ -228,8 +228,8 @@ class InputStream(object):
         """
         Receive a chunk of data.
         
-        Returns:
-        ----
+        Returns
+        -------
         index: int
             The absolute sample index. If the chunk contains multiple samples,
             then this is the index of the last sample.

@@ -12,6 +12,10 @@ logger = logging.getLogger(__name__)
 def create_manager(mode='rpc', auto_close_at_exit=True):
     """Create a new Manager either in this process or in a new process.
     
+    This function also starts a log server to which all log records will be
+    forwarded from the manager and all processes started by the manager. See
+    `LogServer` for more information.
+    
     Parameters
     ----------
     mode : str
@@ -57,19 +61,10 @@ def create_manager(mode='rpc', auto_close_at_exit=True):
         
 
 class Manager(object):
-    """Manager is a central point of control for connecting to hosts, creating
-    Nodegroups and Nodes, and interacting with Nodes.
+    """Manager is a central point of control for connecting to hosts and creating
+    Nodegroups.
     
-    It can either be instantiated directly or in a subprocess and accessed
-    remotely by RPC using `create_manager()`.
-    
-       
-    Parameters
-    ----------
-    name : str
-        A unique identifier for this manager.
-    addr : str
-        The address for the manager's RPC server.
+    Manager instances should be created using `create_manager()`.
     """
     def __init__(self):
         logger.info('Creating new Manager..')
