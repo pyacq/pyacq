@@ -8,3 +8,6 @@ Contents:
 
    core
    rpc
+   devices
+   viewers
+   processors
