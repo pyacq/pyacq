@@ -29,6 +29,8 @@ class RPCServer(object):
     addr : URL
         Address for RPC server to bind to.
 
+    ..
+
     Basic usage::
     
         # In host/process/thread 1:

@@ -19,8 +19,8 @@ class NumpyDeviceBuffer(Node):
 
     def configure(self, *args, **kwargs):
         """
-        Parameters for configure
-        ---
+        Parameters
+        ----------
         nb_channel: int
             Number of output channels.
         sample_interval: float

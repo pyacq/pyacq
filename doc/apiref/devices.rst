@@ -21,7 +21,7 @@ Cameras
 EEG
 ---
 
-.. autoclass::  pyacq.devices.BrainAmpSocket
+.. autoclass::  pyacq.devices.brainampsocket.BrainAmpSocket
    :members:
 
 .. autoclass::  pyacq.devices.Emotiv

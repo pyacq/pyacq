@@ -117,7 +117,7 @@ class Emotiv(Node, QtCore.QObject):
     for more details
 
     Parameters for configure():
-    ----
+    ---------------------------
     device :
         - For Linux, it's the path to the usb hidraw used
         - For Windows, it's the hid object associated with the USB key
