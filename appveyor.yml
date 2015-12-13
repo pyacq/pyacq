@@ -31,4 +31,5 @@ install:
 build: false  # Not a C# project, build stuff at the test step instead.
 
 test_script:
+  - "netsh advfirewall firewall add rule name="pyacq" dir=in action=allow program="%PYTHON%\\python.exe" enable=yes"
   - "py.test -sv pyacq"
