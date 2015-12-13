@@ -179,11 +179,11 @@ class LogServer(threading.Thread):
     logger : Logger
         The python logger that should handle incoming messages.
     """
-    def __init__(self, logger, sort=True):
+    def __init__(self, logger, address='tcp://127.0.0.1:*', sort=True):
         threading.Thread.__init__(self, daemon=True)
         self.logger = logger
         self.socket = zmq.Context.instance().socket(zmq.PULL)
-        self.socket.bind('tcp://*:*')
+        self.socket.bind(address)
         self.address = self.socket.getsockopt(zmq.LAST_ENDPOINT)
         self.serializer = JsonSerializer()
         

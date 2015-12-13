@@ -90,7 +90,7 @@ class ProcessSpawner(object):
         Optional process name that will be assigned to all remote log records.
     addr : str
         ZMQ socket address that the new process's RPCServer will bind to.
-        Default is 'tcp://*:*'.
+        Default is 'tcp://127.0.0.1:*'.
     qt : bool
         If True, then start a Qt application in the remote process, and use
         a QtRPCServer.
@@ -104,8 +104,11 @@ class ProcessSpawner(object):
     executable : str | None
         Optional python executable to invoke. The default value is `sys.executable`.
     """
-    def __init__(self, name=None, addr="tcp://*:*", qt=False, log_addr=None, 
+    def __init__(self, name=None, addr="tcp://127.0.0.1:*", qt=False, log_addr=None, 
                  log_level=None, executable=None):
+
+
+
         #logger.warn("Spawning process: %s %s %s", name, log_addr, log_level)
         assert qt in (True, False)
         assert isinstance(addr, (str, bytes))
