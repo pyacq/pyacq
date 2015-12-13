@@ -22,6 +22,19 @@ logger = logging.getLogger(__name__)
 class RPCServer(object):
     """RPC server for invoking requests on proxied objects.
     
+    There may be at most one RPCServer per thread. RPCServers can be run in a
+    few different modes:
+    
+    * Exclusive event loop - call `run_forever()` to cause the server to listen
+      indefinitely for incoming request messages.
+    * Lazy event loop - call `run_lazy()` to register the server with the current
+      thread. The server's socket will be polled whenever an RPCClient is waiting
+      for a response (this allows reentrant function calls). You can also manually
+      listen for requests with `_read_and_process_one()` in this mode.
+    * Qt event loop - use QtRPCServer. In this mode, messages are polled in 
+      a separate thread, but then sent to the Qt event loop by signal and
+      processed there. The server is registered as running in the Qt thread.
+      
     Parameters
     ----------
     name : str
@@ -29,9 +42,16 @@ class RPCServer(object):
     addr : URL
         Address for RPC server to bind to.
 
-    ..
+    Notes
+    -----
+        
+    RPCServer is not a thread-safe class. Only use RPCClient to communicate
+    with RPCServer from other threads.
 
-    Basic usage::
+    Examples
+    --------
+
+    ::
     
         # In host/process/thread 1:
         server = RPCServer()
@@ -57,21 +77,6 @@ class RPCServer(object):
         # See ObjectProxy for more information on interacting with remote
         # objects, including (a)synchronous communication.
 
-    There may be at most one RPCServer per thread. RPCServers can be run in a
-    few different modes:
-    
-    * Exclusive event loop - call `run_forever()` to cause the server to listen
-      indefinitely for incoming request messages.
-    * Lazy event loop - call `run_lazy()` to register the server with the current
-      thread. The server's socket will be polled whenever an RPCClient is waiting
-      for a response (this allows reentrant function calls). You can also manually
-      listen for requests with `_read_and_process_one()` in this mode.
-    * Qt event loop - use QtRPCServer. In this mode, messages are polled in 
-      a separate thread, but then sent to the Qt event loop by signal and
-      processed there. The server is registered as running in the Qt thread.
-        
-    Note: RPCServer is not a thread-safe class. Only use RPCClient to communicate
-    with RPCServer from other threads.
     """
     
     servers_by_thread = {}
