@@ -13,6 +13,7 @@ from pyqtgraph.Qt import QtCore, QtGui
 
 from .serializer import all_serializers
 from .proxy import ObjectProxy
+from .timer import Timer
 from . import log
 
 
@@ -26,7 +27,7 @@ class RPCServer(object):
     ----------
     name : str
         Name used to identify this server.
-    addr : URL
+    address : URL
         Address for RPC server to bind to. Default is 'tcp://127.0.0.1:*'.
 
     Basic usage::
@@ -89,8 +90,10 @@ class RPCServer(object):
         This static method fails if another server is already registered for
         this thread.
         """
-        assert srv._thread is None, "Server has already been registered."
         key = threading.current_thread().ident
+        if srv._thread == key:
+            return
+        assert srv._thread is None, "Server has already been registered."
         with RPCServer.servers_by_thread_lock:
             if key in RPCServer.servers_by_thread:
                 raise KeyError("An RPCServer is already running in this thread.")
@@ -115,7 +118,7 @@ class RPCServer(object):
         srv = RPCServer.get_server()
         return RPCClient.get_client(srv.address)
         
-    def __init__(self, addr="tcp://127.0.0.1:*"):
+    def __init__(self, address="tcp://127.0.0.1:*"):
         self._socket = zmq.Context.instance().socket(zmq.ROUTER)
         
         # socket will continue attempting to deliver messages up to 5 sec after
@@ -123,7 +126,7 @@ class RPCServer(object):
         # on exit)
         self._socket.linger = 5000
         
-        self._socket.bind(addr)
+        self._socket.bind(address)
         self.address = self._socket.getsockopt(zmq.LAST_ENDPOINT)
         self._closed = False
         
@@ -146,9 +149,20 @@ class RPCServer(object):
         # Objects that may be retrieved by name using client['obj_name']
         self._namespace = {'self': self}
         
-        # Objects for which we have sent proxies to other machines.
-        self.next_object_id = 0
-        self._proxies = {}  # obj_id: object
+        # Information about objects for which we have sent proxies to other machines.
+        # "object ID" is an integer that uniquely identifies each object that
+        # has been proxied. Multiple requests for the same object will return
+        # proxies with the same object ID. We do _not_ use id(obj) here because
+        # Python may re-use these IDs over time.
+        self._next_object_id = 0  # uniquely identifies proxied objects
+        # "ref ID" is an integer that uniquely identifies a single proxy as it
+        # is sent. Multiple requests for the same object will each have a
+        # different ref ID. These are used for remote reference counting to
+        # ensure that local objects stay alive as long as a remote proxy might
+        # still exist for the object.
+        self._next_ref_id = 0  # uniquely identifies a proxy reference
+        self._proxy_refs = {}  # obj_id: [object, set(refs)]
+        self._proxy_id_map = {}  # id(obj): obj_id
         
         # Make sure we inform clients of closure
         atexit.register(self._atexit)
@@ -158,27 +172,37 @@ class RPCServer(object):
         
         This proxy can be sent via RPC to any other node.
         """
-        oid = self.next_object_id
-        self.next_object_id += 1
+        rid = self._next_ref_id
+        self._next_ref_id += 1
+        oid = self._get_object_id(obj)
         type_str = str(type(obj))
-        proxy = ObjectProxy(self.address, oid, type_str, attributes=(), **kwds)
-        self._proxies[oid] = obj
+        proxy = ObjectProxy(self.address, oid, rid, type_str, attributes=(), **kwds)
+        proxy_ref = self._proxy_refs.setdefault(oid, [obj, set()])
+        proxy_ref[1].add(rid)
         #logging.debug("server %s add proxy %d: %s", self.address, oid, obj)
         return proxy
+
+    def _get_object_id(self, obj):
+        oid = self._proxy_id_map.get(id(obj), None)
+        if oid is None:
+            oid = self._next_object_id
+            self._next_object_id += 1
+            self._proxy_id_map[id(obj)] = oid
+        return oid
     
     def unwrap_proxy(self, proxy):
         """Return the local python object referenced by *proxy*.
         """
         try:
             oid = proxy._obj_id
-            obj = self._proxies[oid]
-            for attr in proxy._attributes:
-                obj = getattr(obj, attr)
-            #logging.debug("server %s unwrap proxy %d: %s", self.address, oid, obj)
-            return obj
+            obj = self._proxy_refs[oid][0]
         except KeyError:
             raise KeyError("Invalid proxy object ID %r. The object may have "
                            "been released already." % proxy.obj_id)
+        for attr in proxy._attributes:
+            obj = getattr(obj, attr)
+        #logging.debug("server %s unwrap proxy %d: %s", self.address, oid, obj)
+        return obj
 
     def __getitem__(self, key):
         return self._namespace[key]
@@ -313,7 +337,11 @@ class RPCServer(object):
         elif action == 'get_obj':
             result = opts['obj']
         elif action == 'delete':
-            del self._proxies[opts['obj_id']]
+            proxy_ref = self._proxy_refs[opts['obj_id']]
+            proxy_ref[1].remove(opts['ref_id'])
+            if len(proxy_ref[1]) == 0:
+                del self._proxy_refs[opts['obj_id']]
+                del self._proxy_id_map[id(proxy_ref[0])]
             result = None
         elif action =='getitem':
             result = self[opts['name']]
@@ -421,6 +449,22 @@ class RPCServer(object):
             if isinstance(obj, typ):
                 return obj
         return self.get_proxy(obj)
+    
+    def start_timer(self, callback, interval, **kwds):
+        """Start a timer that invokes *callback* at regular intervals.
+        
+        Parameters
+        ----------
+        callback : callable
+            Callable object to invoke. This must either be an ObjectProxy or
+            an object that is safe to call from the server's thread.
+        interval : float
+            Minimum time to wait between callback invocations (start to start).
+        """
+        kwds.setdefault('start', True)
+        if not isinstance(callback, ObjectProxy):
+            callback = self.get_proxy(callback)
+        return Timer(callback, interval, **kwds)
 
 
 class QtRPCServer(RPCServer):
@@ -432,13 +476,13 @@ class QtRPCServer(RPCServer):
     
     Parameters
     ----------
-    addr : str
+    address : str
         ZMQ address to listen on. Default is "tcp://127.0.0.1:*".
     quit_on_close : bool
         If True, then call `QApplication.quit()` when the server is closed. 
     """
-    def __init__(self, addr="tcp://127.0.0.1:*", quit_on_close=True):
-        RPCServer.__init__(self, addr)
+    def __init__(self, address="tcp://127.0.0.1:*", quit_on_close=True):
+        RPCServer.__init__(self, address)
         self.quit_on_close = quit_on_close
         self.poll_thread = QtPollThread(self)
         
