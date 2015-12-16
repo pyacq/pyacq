@@ -285,17 +285,28 @@ class PlainDataSender:
     def __init__(self, socket, params):
         self.socket = socket
         self.params = params
-        self.copy = self.params['protocol'] == 'inproc'
+        self.copy = False
+        #self.copy = not self.params['protocol'] in ('inproc', 'tcp', 'ipc')
         
         self.funcs = []
         # compression
         if self.params['compression'] == '':
-            pass
+            self.funcs.append(self.to_bytes)
         elif self.params['compression'] == 'blosc-blosclz':
             # cname for ['blosclz', 'lz4', 'lz4hc', 'snappy', 'zlib']
             self.funcs.append(self.compress_blosclz)
         elif self.params['compression'] == 'blosc-lz4':
             self.funcs.append(self.compress_blosclz4)        
+    
+    def to_bytes(self, index, data):
+        if not data.flags['C_CONTIGUOUS']:
+            # if not C continuous return transform to bytes
+            # so this is a copy
+            return index, data.tostring(order='C')
+        else:
+            # if C continuous let's keep  data as numpy in case of copy=True
+            # zmq shoudla avoid copy
+            return index, data
     
     def compress_blosclz(self, index, data):
         assert HAVE_BLOSC, "Cannot use blosclz compression; blosc package is not importable."
@@ -311,8 +322,6 @@ class PlainDataSender:
         if isinstance(data, np.ndarray):
             if autoswapaxes and self.params['timeaxis']!=0:
                 data = data.swapaxes(0, self.params['timeaxis'])
-            if not data.flags['C_CONTIGUOUS']:
-                data = data.copy()
             for f in self.funcs:
                 index, data = f(index, data)
         self.socket.send_multipart([np.int64(index), data], copy=self.copy)
@@ -339,21 +348,20 @@ class PlainDataReceiver:
     def recv(self, autoswapaxes = True):
         m0,m1 = self.socket.recv_multipart()
         index = np.fromstring(m0, dtype='int64')[0]
-        return self.func(index, m1, autoswapaxes = autoswapaxes)
-        
+        index, data = self.func(index, m1)
+        if autoswapaxes and self.params['timeaxis']!=0:
+            data = data.swapaxes(0, self.params['timeaxis'])
+        return  index, data
+    
     def close(self):
         pass
 
-    def _numpy_fromstring(self, index, data, autoswapaxes = True):
+    def _numpy_fromstring(self, index, data):
         data = np.frombuffer(data, dtype=self.params['dtype']).reshape(self.params['shape'])
-        if autoswapaxes and self.params['timeaxis']!=0:
-            data = data.swapaxes(0, self.params['timeaxis'])
         return index, data
     
-    def _uncompress_blosc(self, index, data, autoswapaxes = True):
+    def _uncompress_blosc(self, index, data):
         data = blosc.unpack_array(data)
-        if autoswapaxes and self.params['timeaxis']!=0:
-            data = data.swapaxes(0, self.params['timeaxis'])
         return index, data
 
 
