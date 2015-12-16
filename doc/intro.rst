@@ -15,7 +15,25 @@ Example use case
 
   [figure: EEG input -> filter -> online analysis -> viewer, recorder]
 
-Code examples
+Code example::
+
+    import pyacq
+    
+    manager = pyacq.create_manager('rpc')
+    worker_host = manager.add_host('tcp://10.0.0.103:5678')
+    worker = worker_host.create_nodegroup()
+    
+    device = manager.create_node('BrainAmpSocket')
+    analyzer = worker.create_node('Spikesorter')
+    recorder = worker.create_node('HDF5Recorder')
+    viewer = pyacq.QOscilloscope()
+    
+    analyzer.input.connect(device.output)
+    recorder.input.connect(analyzer.output)
+    viewer.input.connect(analyzer.output)
+    
+    manager.start_all()
+    
 
 
 Architecture
@@ -32,10 +50,14 @@ Overview of node types
 ----------------------
 
 
-
-Acquisition nodes: pyaudio, webcam, ...
-Processing nodes:  spikesorter?
-Visualization nodes: oscilloscope, qtimefreq, ...
+============================================= ==================================== ==================================================
+**Acquisition**                               **Processing**                       **Visualization**
+--------------------------------------------- ------------------------------------ --------------------------------------------------
+:ref:`PyAudio <PyAudio_node>`                 :ref:`Triggering <triggering_nodes>` :ref:`Oscilloscope <analog_viewer_nodes>`
+:ref:`Webcam (libav, imageio) <camera_nodes>`                                      :ref:`Wavelet spectrogram <spectral_viewer_nodes>`
+:ref:`BrainAmp <BrainAmp_node>`                                                    
+:ref:`Emotiv <Emotiv_node>`
+============================================= ==================================== ==================================================
 
 
 

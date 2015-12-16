@@ -2,6 +2,8 @@ Signal Processing Nodes
 =======================
 
 
+.. _triggering_nodes:
+
 Triggering Nodes
 ----------------
 

@@ -5,9 +5,13 @@ Device Nodes
 Audio
 -----
 
+.. _PyAudio_node:
+
 .. autoclass::  pyacq.devices.PyAudio
    :members:
 
+
+.. _camera_nodes:
 
 Cameras
 -------
@@ -21,8 +25,12 @@ Cameras
 EEG
 ---
 
+.. _BrainAmp_node:
+
 .. autoclass::  pyacq.devices.brainampsocket.BrainAmpSocket
    :members:
+
+.. _Emotiv_node:
 
 .. autoclass::  pyacq.devices.Emotiv
    :members:
