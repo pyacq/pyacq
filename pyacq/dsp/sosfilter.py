@@ -41,6 +41,29 @@ class SosFilterThread(ThreadPollInput):
 
 
 class SosFilter(Node,  QtCore.QObject):
+    """
+    Node for filtering multi channel signals.
+    This uses Second Order filter, it is a casde of IIR filter of order 2.
+    It internally use scipy.signal.sosfilt which is available only on scipy >0.16
+    
+    Example:
+
+    dev = NumpyDeviceBuffer()
+    dev.configure(...)
+    dev.output.configure(...)
+    dev.initialize(...)
+    
+    f1, f2 = 40., 60.
+    coefficients = scipy.signal.iirfilter(7, [f1/sample_rate*2, f2/sample_rate*2],
+                btype = 'bandpass', ftype = 'butter', output = 'sos')
+    filter = SosFilter()
+    filter.configure(coefficients = coefficients)
+    filter.input.connect(dev.output)
+    filter.output.configure(...)
+    filter.initialize()
+    
+    """
+    
     _input_specs = {'signals' : dict(streamtype = 'signals')}
     _output_specs = {'signals' : dict(streamtype = 'signals')}
     
@@ -50,6 +73,10 @@ class SosFilter(Node,  QtCore.QObject):
         assert HAVE_SCIPY, "SosFilter need scipy>0.16"
     
     def _configure(self, coefficients = None):
+        """
+        Set the coefficient of the filter.
+        See http://scipy.github.io/devdocs/generated/scipy.signal.sosfilt.html for details.
+        """
         self.set_coefficients(coefficients)
 
     def after_input_connect(self, inputname):
@@ -58,7 +85,7 @@ class SosFilter(Node,  QtCore.QObject):
             self.output.spec[k] = self.input.params[k]
     
     def after_output_configure(self, outputname):
-        print(self.output.params)
+        pass
 
     def _initialize(self):
         self.thread = SosFilterThread(self.input, self.output)

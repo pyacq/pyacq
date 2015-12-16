@@ -27,13 +27,14 @@ buffer = buffer.astype('float32')
 
 
 
+stream_spec = dict(protocol='tcp', interface='127.0.0.1', transfermode='sharedarray',
+                        sharedarray_shape=(nb_channel, 2048*50), ring_buffer_method = 'double',
+                        dtype = 'float32',)
+                        # timeaxis = 1, shape = (nb_channel, -1), 
 
 def test_sosfilter():
     app = pg.mkQApp()
     
-    stream_spec = dict(protocol='tcp', interface='127.0.0.1', transfermode='sharedarray',
-                            sharedarray_shape=(nb_channel, 2048*50), ring_buffer_method = 'double', timeaxis = 1,
-                            dtype = 'float32', shape = (nb_channel, -1), )
                             
     dev = NumpyDeviceBuffer()
     dev.configure(nb_channel=nb_channel, sample_interval=1./sample_rate, chunksize=chunksize,
@@ -73,19 +74,74 @@ def test_sosfilter():
     
     def terminate():
         dev.stop()
-        trigger.stop()
+        filter.stop()
         viewer.stop()
         viewer2.stop()
         app.quit()
     
     # start for a while
-    timer = QtCore.QTimer(singleShot=True, interval=5000)
+    timer = QtCore.QTimer(singleShot=True, interval=3000)
     timer.timeout.connect(terminate)
-    #~ timer.start()
+    timer.start()
     
     app.exec_()
 
+
+def test_compare_online_offline():
+    #~ man = create_manager(auto_close_at_exit=True)
+    man = create_manager(auto_close_at_exit=False)
+    ng = man.create_nodegroup()
+
+    dev = ng.create_node('NumpyDeviceBuffer')
+    dev.configure(nb_channel=nb_channel, sample_interval=1./sample_rate, chunksize=chunksize,
+                    buffer=buffer, timeaxis=1,)
+    dev.output.configure(**stream_spec)
+    dev.initialize()
+
+    coefficients = scipy.signal.iirfilter(7, [f1/sample_rate*2, f2/sample_rate*2],
+                btype = 'bandpass', ftype = 'butter', output = 'sos')
+    
+    filter = ng.create_node('SosFilter')
+    filter.configure(coefficients = coefficients)
+    filter.input.connect(dev.output)
+    filter.output.configure(**stream_spec)
+    filter.initialize()
+    
+    filter.start()
+    dev.start()
+    
+    time.sleep(2.)
+    dev.stop()
+    time.sleep(.1)
+    filter.stop()
+    
+    
+    head = dev.head._get_value()
+    output_arr = filter.output.sender._numpyarr._get_value()
+    output_arr = output_arr[:, :head]
+    
+    
+    offline_arr =  scipy.signal.sosfilt(coefficients, buffer[:, :head], axis=1, zi=None)
+    
+    assert np.max(np.abs(output_arr-offline_arr))<1e-6, 'online differt from offline'
+    
+    #~ from matplotlib import pyplot
+    #~ fig, ax = pyplot.subplots()
+    #~ ax.plot(output_arr[0,:], color = 'r')
+    #~ ax.plot(offline_arr[0,:], color = 'g')
+    #~ fig, ax = pyplot.subplots()
+    #~ for c in range(nb_channel):
+        #~ ax.plot(output_arr[c,:]-offline_arr[c,:], color = 'k')
+    #~ pyplot.show()
+    
+    
+    man.close()
+    
+    
+    
+
 if __name__ == '__main__':
     test_sosfilter()
+    test_compare_online_offline()
 
  
