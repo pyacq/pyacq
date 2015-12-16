@@ -186,7 +186,7 @@ def test_qtimefreq_distributed_worker():
 
 
 if __name__ == '__main__':
-    test_TimeFreqWorker()
+    #~ test_TimeFreqWorker()
     test_qtimefreq_local_worker()
     test_qtimefreq_distributed_worker()
 

@@ -149,7 +149,7 @@ class QTimeFreq(WidgetNode):
                 new_shape = (d0, d1)
             self.conv.output.configure(protocol='tcp', interface='127.0.0.1', port='*', dtype='float32',
                    transfermode='sharedarray', streamtype='analogsignal', shape=new_shape, timeaxis=1, 
-                   compression='', scale=None, offset=None, units='',
+                   compression='', scale=None, offset=None, units='', sample_rate = sr,
                    sharedarray_shape=(self.nb_channel, int(sr*self.max_xsize)), ring_buffer_method = 'double',
                    )
             self.conv.initialize()
@@ -613,10 +613,9 @@ class TimeFreqWorker(Node, QtCore.QObject):
         assert len(self.input.params['shape']) == 2, 'Wrong shape: TimeFreqWorker'
         assert self.input.params['timeaxis'] == 1, 'Wrong timeaxis: TimeFreqWorker'
         assert self.input.params['transfermode'] == 'sharedarray', 'Wrong shape: sharedarray'
-        
+        self.sample_rate = sr = self.input.params['sample_rate']
         
     def _initialize(self):
-        self.sample_rate = sr = self.input.params['sample_rate']
         self.thread = ComputeThread(self.input, self.output, self.channel, self.local)
         self.thread.finished.connect(self.on_thread_done)
 
