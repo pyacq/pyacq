@@ -42,7 +42,7 @@ install:
     - conda install numpy pyqt flake8 scipy vispy --yes
     
     # not provided by conda (or conda version is too old):
-    - pip install pyzmq pytest pytest-xdist pytest-cov blosc pyqtgraph
+    - pip install pyzmq pytest pytest-xdist pytest-cov blosc pyqtgraph msgpack-python
 
 before_script:
     - which python

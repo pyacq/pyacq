@@ -454,7 +454,7 @@ class QOscilloscope(BaseOscilloscope):
         head = self._head
         sr = self.inputs['signals'].params['sample_rate']
         xsize = self.params['xsize'] 
-        np_arr = self.proxy_input.get_array_slice(head,self.full_size)
+        np_arr = self.proxy_input.get_array_slice(head,self.full_size, autoswapaxes = False)
         self.all_sd = np.std(np_arr, axis=1)
         # self.all_mean = np.mean(np_arr, axis = 1)
         self.all_mean = np.median(np_arr, axis=1)

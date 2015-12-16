@@ -1,11 +1,12 @@
 import atexit
-
-from .rpc import RPCServer, RPCClientSocket, RPCClient
-from .client import ManagerProxy
-from .processspawner import ProcessSpawner
-from .host import Host
-
 import logging
+
+from .rpc import RPCServer, RPCClient, ProcessSpawner
+from .host import Host
+from .rpc import log as rpc_log
+
+
+logger = logging.getLogger(__name__)
 
 
 def create_manager(mode='rpc', auto_close_at_exit=True):
@@ -22,17 +23,40 @@ def create_manager(mode='rpc', auto_close_at_exit=True):
         process exits (only used when ``mode=='rpc'``).
     """
     assert mode in ('local', 'rpc'), "mode must be either 'local' or 'rpc'"
+    rpc_log.set_process_name('main_process')
+    
+    # make nice local log output
+    root_logger = logging.getLogger()
+    log_handler = rpc_log.RPCLogHandler()
+    # for some reason the root logger already has a handler..
+    while len(root_logger.handlers) > 0:
+        root_logger.removeHandler(root_logger.handlers[0])
+    root_logger.addHandler(log_handler)
+    
+    # Send local uncaught exceptions through logger for nice formatting
+    rpc_log.log_exceptions()
+        
+    # start a global log server
+    if rpc_log.get_logger_address() is None:
+        rpc_log.start_log_server(logger)
+    
+    # start the manager
     if mode == 'local':
-        return Manager(name='manager', addr='tcp://*:*')
+        if RPCServer.get_server() is None:
+            server = RPCServer()
+            server.run_lazy()
+        man = Manager()
     else:
-        proc = ProcessSpawner(Manager, name='manager', addr='tcp://127.0.0.1:*')
-        man = ManagerProxy(proc.name, proc.addr, manager_process=proc)
+        logger.info('Spawning remote manager process..')
+        proc = ProcessSpawner(name='manager_proc', log_addr=rpc_log.get_logger_address())
+        man = proc.client._import('pyacq.core.manager').Manager()
         if auto_close_at_exit:
             atexit.register(man.close)
-        return man
+            
+    return man
         
 
-class Manager(RPCServer):
+class Manager(object):
     """Manager is a central point of control for connecting to hosts, creating
     Nodegroups and Nodes, and interacting with Nodes.
     
@@ -47,188 +71,127 @@ class Manager(RPCServer):
     addr : str
         The address for the manager's RPC server.
     """
-    
-    # Classes used internally for bookkeeping
-    class _Host(object):
-        def __init__(self, name, addr):
-            self.rpc_address = addr
-            self.rpc_name = name
-            self.client = RPCClient(name, addr)
-            self.nodegroups = {}
-            self.rpc_hostname = addr.partition('//')[2].rpartition(':')[0]
-
-        def add_nodegroup(self, ng):
-            self.nodegroups[ng.rpc_name] = ng
+    def __init__(self):
+        logger.info('Creating new Manager..')
+        self.hosts = {}  # addr:Host
+        self.nodegroups = {}  # name:Nodegroup
         
-        def list_nodegroups(self):
-            return list(self.nodegroups.keys())
-
-
-    class _NodeGroup(object):
-        def __init__(self, host, name, addr):
-            self.host = host
-            self.rpc_address = addr
-            self.rpc_name = name
-            self.client = RPCClient(name, addr)
-            self.nodes = {}
-
-        def add_node(self, name, node):
-            self.nodes[name] = node
-
-        def list_nodes(self):
-            return list(self.nodes.keys())
-
-        def delete_node(self, name):
-            del self.nodes[name]
-        
-            
-    class _Node(object):
-        def __init__(self, nodegroup, name, classname):
-            self.nodegroup = nodegroup
-            self.name = name
-            self.classname = classname
-            self.outputs = []  # list of StreamDef
-    
-    
-    def __init__(self, name, addr, manager_process=None):
-        RPCServer.__init__(self, name, addr)
-        
-        self.hosts = {}  # name:HostProxy
-        self.nodegroups = {}  # name:NodegroupProxy
-        self.nodes = {}  # name:NodeProxy
-        
-        # auto-generated host on the local machine
-        self._default_host = None
+        # Host used for starting nodegroups on the local machine
+        self.default_host = Host('default_host')
         
         # for auto-generated node / nodegroup names
         self._next_nodegroup_name = 0
         self._next_node_name = 0
         
-        # shared socket for all RPC client connections
-        self._rpc_socket = RPCClientSocket()
+        # publish with the RPC server if there is one
+        server = RPCServer.get_server()
+        if server is not None:
+            server['manager'] = self
+            
+        # If the manager shuts down, then all spawned nodegroups should be
+        # closed as well.
+        atexit.register(self.close)
+
+    def get_logger_info(self):
+        """Return the address of the log server and the level of the root logger.
+        """
+        return rpc_log.get_logger_address(), logging.getLogger().level
     
-    def connect_host(self, name, addr):
-        """Connect the manager to a Host.
+    def get_host(self, addr):
+        """Connect the manager to a Host's RPC server and return a proxy to the
+        host.
         
         Hosts are used as a stable service on remote machines from which new
         Nodegroups can be spawned or closed.
         """
-        if name not in self.hosts:
-            hp = Manager._Host(name, addr)
-            self.hosts[name] = hp
-
-    def disconnect_host(self, name):
-        """Disconnect the Manager from the Host identified by *name*.
-        """
-        for ng in self.hosts[name]:
-            self.nodegroups.pop(ng.name)
-        self.hosts.pop(name)
+        if addr not in self.hosts:
+            try:
+                cli = RPCClient.get_client(addr)
+            except TimeoutError:
+                raise TimeoutError("No response from host at %s" % addr)
+                
+            try:
+                self.hosts[addr] = cli['host']
+            except KeyError:
+                raise ValueError("Contacted %s, but found no Host there." % addr)
+        return self.hosts[addr]
     
-    def default_host(self):
-        """Return the RPC name and address of a default Host created by the
-        Manager.
-        """
-        if self._default_host is None:
-            addr = self._addr.rpartition(b':')[0] + b':*'
-            proc = ProcessSpawner(Host, name='default-host', addr=addr)
-            self._default_host = proc
-            self.connect_host(proc.name, proc.addr)
-        return self._default_host.name, self._default_host.addr
-    
-    def close_host(self, name):
-        """Close the Host identified by *name*.
-        """
-        self.hosts[name].client.close()
-    
-    def close(self):
-        """Close the Manager.
-        
-        If a default host was created by this Manager, then it will be closed 
-        as well.
-        """
-        if self._default_host is not None:
-            self._default_host.stop()
-        RPCServer.close(self)
+    def disconnect_host(self, host):
+        host.close_nodegroups(self)
+        self.hosts.pop(host._rpc_addr)
 
     def list_hosts(self):
-        """Return a list of the identifiers for Hosts that the Manager is
-        connected to.
+        """Return a list of the Hosts that the Manager is connected to.
         """
-        return list(self.hosts.keys())
+        return list(self.hosts.values())
     
-    def create_nodegroup(self, host, name):
-        """Create a new NodeGroup.
+    def create_nodegroup(self, name=None, host=None, qt=True, **kwds):
+        """Create a new NodeGroup process and return a proxy to the NodeGroup.
         
         A NodeGroup is a process that manages one or more Nodes for device
         interaction, computation, or GUI.
         
         Parameters
         ----------
-        host : str
-            The identifier of the Host that should be used to spawn the new
-            Nodegroup.
         name : str
-            A unique identifier for the new Nodegroup.
+            A name for the new NodeGroup's process. This name is used to uniquely
+            identify log messages originating from this nodegroup.
+        host : None | str | ObjectProxy<Host>
+            Optional address of the Host that should be used to spawn the new
+            NodeGroup, or a proxy to the Host itself. If omitted, then the
+            NodeGroup is spawned from the Manager's default host.
+        qt : bool
+            Whether to start a QApplication in the new process. Default is True.
+            
+        All extra keyword arguments are passed to `Host.create_nodegroup()`.
         """
+        if name is None:
+            name = "nodegroup_%d" % self._next_nodegroup_name
+            self._next_nodegroup_name += 1
+        assert isinstance(name, str)
         if name in self.nodegroups:
             raise KeyError("Nodegroup named %s already exists" % name)
-        host = self.hosts[host]
-        addr = 'tcp://%s:*' % (host.rpc_hostname)
-        _, addr = host.client.create_nodegroup(name, addr)
-        ng = Manager._NodeGroup(host, name, addr)
-        host.add_nodegroup(ng)
-        self.nodegroups[name] = ng
-        return name, addr
-    
-    #~ def close_nodegroup(self, name):
-        #~ self.nodegroups[name].host.client.close_nodegroup(name)
-
-    def list_nodegroups(self, host=None):
+        if isinstance(host, str):
+            host = self.hosts[host]
         if host is None:
-            return list(self.nodegroups.keys())
-        else:
-            return self.hosts[host].list_nodegroups()
-
-    def create_node(self, nodegroup, name, classname, **kwargs):
-        if name in self.nodes:
-            raise KeyError("Node named %s already exists" % name)
-        ng = self.nodegroups[nodegroup]
-        ng.client.create_node(name, classname, **kwargs)
-        node = Manager._Node(ng, name, classname)
-        self.nodes[name] = node
-        ng.add_node(name, node)
-
-    def list_nodes(self, nodegroup=None):
-        if nodegroup is None:
-            return list(self.nodes.keys())
-        else:
-            return self.nodegroups[nodegroup].list_nodes()
-
-    def control_node(self, name, method, **kwargs):
-        ng = self.nodes[name].nodegroup
-        return ng.client.control_node(name, method, **kwargs)
+            host = self.default_host
+            
+        # Ask nodegroup to send log records to our server
+        if 'log_addr' not in kwds:
+            kwds['log_addr'] = rpc_log.get_logger_address()
+        if 'log_level' not in kwds:
+            kwds['log_level'] = logger.getEffectiveLevel()
+        
+        ng = host.create_nodegroup(name=name, manager=self, qt=qt, **kwds)
+        self.nodegroups[name] = ng
+        return ng
     
-    def delete_node(self, name):
-        ng = self.nodes[name].nodegroup
-        ng.client.delete_node(name)
-        del self.nodes[name]
-        ng.delete_node(name)
+    def list_nodegroups(self):
+        return list(self.nodegroups.values())
 
-    def suggest_nodegroup_name(self):
-        name = 'nodegroup-%d' % self._next_nodegroup_name
-        self._next_nodegroup_name += 1
-        return name
-    
-    def suggest_node_name(self):
-        name = 'node-%d' % self._next_node_name
-        self._next_node_name += 1
-        return name
-    
     def start_all_nodes(self):
         for ng in self.nodegroups.values():
-            ng.client.start_all_nodes()
+            ng.start_all_nodes()
     
     def stop_all_nodes(self):
         for ng in self.nodegroups.values():
-            ng.client.stop_all_nodes()
+            ng.stop_all_nodes()
 
+    def close_all_nodegroups(self):
+        for ng in self.nodegroups.values():
+            try:
+                ng.close()
+            except RuntimeError:
+                # If the server has already disconnected, then no need to close.
+                cli = RPCClient.get_client(ng._rpc_addr)
+                if not cli.disconnected():
+                    raise
+        self.nodegroups = {}
+
+    def close(self):
+        """Close the Manager.
+        
+        If a default host was created by this Manager, then it will be closed 
+        as well.
+        """
+        self.close_all_nodegroups()
