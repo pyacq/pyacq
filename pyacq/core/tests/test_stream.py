@@ -230,8 +230,8 @@ def test_autoswapaxes():
     
 
 if __name__ == '__main__':
-    #~ test_stream_plaindata()
-    #~ test_stream_sharedarray()
-    benchmark_stream()
-    #~ test_autoswapaxes()
+    test_stream_plaindata()
+    test_stream_sharedarray()
+    #benchmark_stream()
+    test_autoswapaxes()
 
