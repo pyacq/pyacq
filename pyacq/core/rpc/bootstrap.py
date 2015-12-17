@@ -10,6 +10,12 @@ import logging
 
 # Load configuration options for this process from stdin
 conf = json.loads(sys.stdin.read())
+# process name is passed in argv to make it easier to identify processes
+# from the outside.
+if len(sys.argv) > 1:
+    conf['procname'] = sys.argv[1]
+else:
+    conf['procname'] = None
 
 # Set up some basic debugging support before importing pyacq
 faulthandler.enable()

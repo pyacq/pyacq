@@ -75,18 +75,19 @@ class ProcessSpawner(object):
             loglevel=log_level,
             logaddr=log_addr.decode() if log_addr is not None else None,
             qt=qt,
-            procname=name,
         )
-        
-        bootstrap_file = os.path.join(os.path.dirname(__file__), 'bootstrap.py')
         
         if executable is None:
             executable = sys.executable
 
+        cmd = (executable, '-m', 'pyacq.core.rpc.bootstrap')
+        if name is not None:
+            cmd = cmd + (name,)
+
         if log_addr is not None:
             # start process with stdout/stderr piped
-            self.proc = subprocess.Popen((executable, bootstrap_file), stdin=subprocess.PIPE,
-                                         stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+            self.proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=subprocess.PIPE,
+                                         stdout=subprocess.PIPE)
             
             self.proc.stdin.write(json.dumps(bootstrap_conf).encode())
             self.proc.stdin.close()
@@ -104,7 +105,7 @@ class ProcessSpawner(object):
             
         else:
             # don't intercept stdout/stderr
-            self.proc = subprocess.Popen((executable, bootstrap_file), stdin=subprocess.PIPE)
+            self.proc = subprocess.Popen(cmd, stdin=subprocess.PIPE)
             self.proc.stdin.write(json.dumps(bootstrap_conf).encode())
             self.proc.stdin.close()
             
