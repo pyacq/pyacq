@@ -174,7 +174,10 @@ class QTimeFreq(WidgetNode):
                 worker = ng.create_node('TimeFreqWorker')
                 worker.ng_proxy = ng
             worker.configure(max_xsize=self.max_xsize, channel=i, local=self.local_workers)
-            worker.input.connect(self.conv.output)
+            if self.conv is None:
+                worker.input.connect(self.input.params)
+            else:
+                worker.input.connect(self.conv.output)
             if self.local_workers:
                 protocol = 'inproc'
             else:
@@ -244,7 +247,8 @@ class QTimeFreq(WidgetNode):
         if not self.local_workers:
             for i in range(self.nb_channel):
                 self.map_pollers[i].start()
-        self.conv.start()
+        if self.conv is not None:
+            self.conv.start()
     
     def _stop(self):
         self.global_timer.stop()
@@ -256,7 +260,8 @@ class QTimeFreq(WidgetNode):
             for i in range(self.nb_channel):
                 self.map_pollers[i].stop()
                 self.map_pollers[i].wait()
-        self.conv.stop()
+        if self.conv is not None:
+            self.conv.stop()
     
     def _close(self):
         if self.running():
@@ -265,7 +270,8 @@ class QTimeFreq(WidgetNode):
             self.params_controller.close()
         for worker in self.workers:
             worker.close()
-        self.conv.close()
+        if self.conv is not None:
+            self.conv.close()
         if not self.local_workers:
             # remove from NodeGroup
             self.conv.ng_proxy.remove_node(self.conv)
@@ -433,8 +439,9 @@ class QTimeFreq(WidgetNode):
                     self.workers[i].compute_one_map(head, _sync='off')
     
     def on_new_map_local(self, chan):
-        head, wt_map = self.input_maps[chan].recv()
-        self.update_image(chan, head, wt_map)
+        if self.running():
+            head, wt_map = self.input_maps[chan].recv()
+            self.update_image(chan, head, wt_map)
     
     def on_new_map_socket(self, head, wt_map):
         chan = self.sender().chan
