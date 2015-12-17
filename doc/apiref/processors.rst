@@ -7,9 +7,6 @@ Signal Processing Nodes
 Triggering Nodes
 ----------------
 
-.. autoclass::  pyacq.dsp.trigger.TriggerBase
-   :members:
-
 .. autoclass::  pyacq.dsp.AnalogTrigger
    :members:
 
