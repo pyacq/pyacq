@@ -1,56 +1,55 @@
-import timeit
+import time
+import numpy as np
 from test_stream import protocols, compressions
 
-setup = """
 from pyacq.core.stream  import OutputStream, InputStream
-import numpy as np
-import time
 
-nb_channel = 16
-chunksize = {chunksize}
-ring_size = chunksize*20
-nloop = {nloop}
-stream_spec = dict(protocol = {protocol}, interface = '127.0.0.1', port = '*',
-                    transfertmode = {transfertmode}, streamtype = 'analogsignal',
-                    dtype = 'float32', shape = (-1, nb_channel), compression ={compression},
-                    scale = None, offset = None, units = '', copy={copy},
-                    # for sharedarray
-                    sharedarray_shape = ( ring_size, nb_channel), timeaxis = 0,
-                    ring_buffer_method = 'double',
-                        )
-outstream = OutputStream()
-outstream.configure(**stream_spec)
-time.sleep(.5)
-instream = InputStream()
-instream.connect(outstream)
 
-arr = np.random.rand(chunksize, nb_channel).astype(stream_spec['dtype'])
-def start_loop(outstream, instream):
+def benchmark_stream(protocol, transfertmode, compression, chunksize, nb_channels=16, nloop=10):
+    ring_size = chunksize*20
+    stream_spec = dict(protocol=protocol, interface='127.0.0.1', port='*',
+                       transfertmode=transfertmode, streamtype = 'analogsignal',
+                       dtype='float32', shape=(-1, nb_channels), compression=compression,
+                       scale=None, offset=None, units='',
+                       # for sharedarray
+                       sharedarray_shape = ( ring_size, nb_channels), timeaxis = 0,
+                       ring_buffer_method = 'double',
+                  )
+    outstream = OutputStream()
+    outstream.configure(**stream_spec)
+    time.sleep(.5)
+    instream = InputStream()
+    instream.connect(outstream)
+
+    arr = np.random.rand(chunksize, nb_channels).astype(stream_spec['dtype'])
+    
     index = 0
+    perf = []
     for i in range(nloop):
-        index += chunksize
+        start = time.perf_counter()
+        index += chunksize        
         outstream.send(index, arr)
         index2, arr2 = instream.recv()
-"""
-    
-stmt = """
-start_loop(outstream, instream)
-outstream.close()
-instream.close()
-"""
+        perf.append(time.perf_counter() - start)
 
     
-for chunksize, nloop in [(2**10, 10), (2**14, 1), (2**16, 10)]:
-    print('#'*5)
-    for protocol in protocols:            
-        for compression in compressions:
-            for copy in ('True ', 'False'):
-                setup2 = setup.format(compression=repr(compression), protocol=repr(protocol), transfertmode="'plaindata'",
-                            chunksize=chunksize, nloop=nloop, copy=repr(copy))
-                t = timeit.timeit(stmt, setup=setup2, number=1)
-                print(chunksize, nloop, 'plaindata  ', protocol.ljust(6), compression.ljust(13), 'copy =', copy, 'time = %0.05f' % t, 's.', 'speed', nloop*chunksize*16*4/t/1e6, 'MB/s')
+    outstream.close()
+    instream.close()
     
-    setup2 = setup.format(compression="''", protocol="'tcp'", transfertmode="'sharedarray'",
-                chunksize=chunksize, nloop=nloop, copy="'False'")
-    t = timeit.timeit(stmt, setup=setup2, number=1)
-    print(chunksize, nloop, 'sharedarray', 'time =', t, 's.', 'speed', nloop*chunksize*16*4/t/1e6, 'MB/s')
+    dt = np.min(perf)
+    print(chunksize, nloop, transfertmode, protocol.ljust(6), compression.ljust(13), 'time = %0.02f ms' % (dt*1000), 'speed = ', chunksize*nb_channels*4*1e-6/dt, 'MB/s')
+    
+    return dt
+
+
+nb_channels = 16
+for chunksize in [2**10, 2**14, 2**16]:
+    print('#'*5)
+    for compression in compressions:
+        for protocol in protocols:            
+            benchmark_stream(protocol=protocol, transfertmode='plaindata', 
+                             compression=compression,
+                             chunksize=chunksize, nb_channels=nb_channels)
+
+    benchmark_stream(protocol='tcp', transfertmode='sharedarray', compression='',
+                     chunksize=chunksize, nb_channels=nb_channels)
