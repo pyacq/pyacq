@@ -285,7 +285,7 @@ class PlainDataSender:
     def __init__(self, socket, params):
         self.socket = socket
         self.params = params
-        self.copy = False
+        self.copy = self.params.get('copy', False)
         #self.copy = not self.params['protocol'] in ('inproc', 'tcp', 'ipc')
         
         self.funcs = []

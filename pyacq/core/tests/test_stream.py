@@ -112,60 +112,6 @@ def test_stream_sharedarray():
             #~ print()
 
 
-def benchmark_stream():
-    setup = """
-from pyacq.core.stream  import OutputStream, InputStream
-import numpy as np
-import time
-
-nb_channel = 16
-chunksize = {chunksize}
-ring_size = chunksize*20
-nloop = {nloop}
-stream_spec = dict(protocol = {protocol}, interface = '127.0.0.1', port = '*',
-                    transfertmode = {transfertmode}, streamtype = 'analogsignal',
-                    dtype = 'float32', shape = (-1, nb_channel), compression ={compression},
-                    scale = None, offset = None, units = '',
-                    # for sharedarray
-                    sharedarray_shape = ( ring_size, nb_channel), timeaxis = 0,
-                    ring_buffer_method = 'double',
-                        )
-outstream = OutputStream()
-outstream.configure(**stream_spec)
-time.sleep(.5)
-instream = InputStream()
-instream.connect(outstream)
-
-arr = np.random.rand(chunksize, nb_channel).astype(stream_spec['dtype'])
-def start_loop(outstream, instream):
-    index = 0
-    for i in range(nloop):
-        index += chunksize
-        outstream.send(index, arr)
-        index2, arr2 = instream.recv()
-    """
-    
-    stmt = """
-start_loop(outstream, instream)
-outstream.close()
-instream.close()
-    """
-    
-    for chunksize, nloop in [(2**10, 10), (2**14, 1), (2**16, 10)]:
-        print('#'*5)
-        for protocol in protocols:            
-            for compression in compressions:
-                setup2 = setup.format(compression=repr(compression), protocol=repr(protocol), transfertmode="'plaindata'",
-                            chunksize=chunksize, nloop=nloop)
-                t = timeit.timeit(stmt, setup=setup2, number=1)
-                print(chunksize, nloop, 'plaindata', protocol, compression, 'time =', t, 's.', 'speed', nloop*chunksize*16*4/t/1e6, 'Mo/s')
-        
-        setup2 = setup.format(compression="''", protocol="'tcp'", transfertmode="'sharedarray'",
-                    chunksize=chunksize, nloop=nloop)
-        t = timeit.timeit(stmt, setup=setup2, number=1)
-        print(chunksize, nloop, 'sharedarray', 'time =', t, 's.', 'speed', nloop*chunksize*16*4/t/1e6, 'Mo/s')
-        
-
 def test_autoswapaxes():
     # the recv shape is alwas (10,2)
     nb_channel = 2
@@ -232,6 +178,5 @@ def test_autoswapaxes():
 if __name__ == '__main__':
     test_stream_plaindata()
     test_stream_sharedarray()
-    #benchmark_stream()
     test_autoswapaxes()
 
