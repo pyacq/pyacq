@@ -60,4 +60,24 @@ Overview of node types
 ============================================= ==================================== ==================================================
 
 
+Installation
+------------
+
+* Pyacq requires Python 3; support for Python 2 is not planned.
+* Several packages are required, but most can be installed with pip::
+    
+      $ pip install pyzmq pytest numpy scipy pyqtgraph vispy colorama msgpack-python pyaudio blosc
+
+* One final dependency, PyQt4, cannot be installed with pip. Linux distributions
+  typically provide this package. OSX users can get PyQt4 (and most other
+  dependencies usinf the Anaconda Python distribution. Windows users can also
+  use Anaconda or download PyQt4 directly from the
+  `Riverbank Computing <https://www.riverbankcomputing.com/software/pyqt/download>`_
+  website.
+
+* To install Pyacq, use the standard distutils approach::
+    
+      $ python setup.py install
+
+
 

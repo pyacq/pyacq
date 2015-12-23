@@ -1,3 +1,5 @@
+.. _apiref_rpc:
+
 Remote Process Control
 ======================
 

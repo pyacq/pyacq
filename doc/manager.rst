@@ -1,3 +1,5 @@
+.. _managing_distributed_nodes:
+
 Managing distributed nodes
 ==========================
 
