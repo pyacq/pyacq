@@ -21,6 +21,29 @@ import os
 sys.path.insert(0, os.path.abspath('./numpydoc-0.5'))
 sys.path.insert(0, os.path.abspath('..'))
 
+
+# Mock-import dependencies so that documentation can be built even without
+# a complete runtime environment (this is needed for readthedocs.org). See:
+# http://read-the-docs.readthedocs.org/en/latest/faq.html#i-get-import-errors-on-libraries-that-depend-on-c-modules
+from unittest.mock import Mock, MagicMock
+
+class Mock(MagicMock):
+    @classmethod
+    def __getattr__(cls, name):
+        return Mock()
+        
+    def __iter__(self):
+        for i in []:
+            yield i
+
+    QWidget = MagicMock
+    QObject = MagicMock
+
+MOCK_MODULES = ['numpy', 'scipy', 'zmq', 'blosc', 'msgpack', 'pyaudio', 'vispy',
+                'vispy.color', 'pyqtgraph', 'pyqtgraph.Qt', 'pyqtgraph.util.mutex', 'PyQt4']
+sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
+
+
 # -- General configuration ------------------------------------------------
 
 # If your documentation needs a minimal Sphinx version, state it here.
