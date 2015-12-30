@@ -19,16 +19,14 @@ processes and the nodes hosted within them:
 
 The general procedure for running a set of distributed nodes looks like:
     
-1. Run ``Host`` servers on each remote machine (these can be left running indefinitely).
-2. Create a ``Manger`` from the main process.
-3. Ask the ``Manager`` to connect to each ``Host`` server.
-4. Create ``NodeGroups`` as needed. Each ``NodeGroup`` appears inside a newly spawned
+1. Run Host servers on each remote machine (these can be left running indefinitely).
+2. Create a Manger from the main process.
+3. Ask the Manager to connect to each Host server.
+4. Create NodeGroups as needed. Each NodeGroup appears inside a newly spawned
    process on any of the available hosts.
-5. Create ``Nodes`` as needed within each ``NodeGroup``.
-6. Configure, start, and stop ``Nodes``.
-7. Close the ``Manager``. This will shut down all ``NodeGroups`` across all hosts.
-
-[figure]
+5. Create Nodes as needed within each NodeGroup.
+6. Configure, start, and stop Nodes.
+7. Close the Manager. This will shut down all NodeGroups across all hosts.
 
 
 Creating a manager
@@ -79,11 +77,30 @@ records, exceptions, and stdout/stderr output back to the manager's log server.
 
 
 
-Creating nodes
---------------
+Creating remote nodes
+---------------------
 
-The manager itself also creates a local Host that it uses to create nodegroups
-on its own machine.
+Although there are few differences between interacting with remote versus local
+Nodes, a little more effort is required to create a Node on a remote host. To
+start, we need to create a new process with a NodeGroup on the remote host::
+    
+    nodegroup = manager.create_nodegroup(host)
+    
+In this line, the manager requests that the host spawn a new process with a
+NodeGroup. We can then request the NodeGroup to create a new Node::
+    
+    node = nodegroup.create_node('PyAudio', **kwargs)
+    
+We now have a proxy to a Node that has been created in the remote process.
+We can use this proxy to configure, initialize, start, and stop the Node,
+exactly as we would with a locally instantiated Node::
+    
+    node.configure(...)
+    node.initialize(...)
+    node.start()
+    node.stop()
 
-example
+Optionally, we can also request the NodeGroup to remove the Node::
+    
+    nodegroup.remove_node(node)
 
