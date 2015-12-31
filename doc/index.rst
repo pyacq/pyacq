@@ -11,7 +11,7 @@ Contents:
    manager
    streams
    apiref/index
-   
+   examples/index
 
 
 
