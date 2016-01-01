@@ -99,19 +99,24 @@ through the streams. This functionality is mostly hidden from Node users;
 however, if you plan to write custom Node classes, then it is
 necessary to understand this process in more detail.
 
-Node subclasses must declare their input and output streams through the
-``_input_specs`` and ``_output_specs`` class attributes. Each attribute is a
-dict whose keys are the names of the streams and whose values provide the
-default configuration arguments for the stream.
+Node subclasses may declare any required properties for their input and output
+streams through the ``_input_specs`` and ``_output_specs`` class attributes.
+Each attribute is a dict whose keys are the names of the streams and whose
+values provide the default configuration arguments for the stream (for example,
+see ``pyacq/devices/audio_pyaudio.py``). When the user calls 
+:func:`Node.configure() <pyacq.core.Node.configure()>`, the Node will have its
+last opportunity to create extra streams (if any) and apply
+all configuration options to its streams.
 
-[example]
+Nodes call :func:`OutputStream.send()` to send new data via their output streams,
+and :func:`InputStream.recv()` to receive data from their input streams. If the
+stream is a plaindata type, then calling :func:`recv() <InputStream.recv()>` 
+will return the next data chunk. In contrast, sharedmem streams only return the
+poisition within the shared memory array of the next data chunk. In this case,
+it may be more useful to call :func:`InputStream.get_array_slice()` to return
+part of the shared memory buffer.
 
-how to piece together stream on the far end
+[examples]
 
-example code
-    
-How to use poller threads
-
-
-* How to specify input/output streams
-* How to configure
+.. seealso:: :class:`pyacq.core.ThreadPollInput`, :class:`pyacq.core.StreamConverter`,
+   :class:`pyacq.core.ChannelSplitter`
