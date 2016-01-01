@@ -1,3 +1,7 @@
+.. currentmodule:: pyacq.core
+
+.. _interacting_with_nodes:
+
 Interacting with nodes
 ======================
 
