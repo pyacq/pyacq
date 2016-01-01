@@ -1,4 +1,4 @@
-.. currentmodule:: pyacq.core.stream
+.. currentmodule:: pyacq.core
 
 
 Data streams
@@ -87,7 +87,7 @@ When transmitting plain data streams, Pyacq tries to maximize throughput by
 avoiding any unnecessary data copies. In most cases, a copy is required only if
 the input array does not occupy a contiguous block of memory.
 
-.. seealso:: :func:`OutputStream.configure` 
+.. seealso:: :func:`OutputStream.configure()` 
 
 
 Using Streams in Custom Node Types
@@ -102,8 +102,9 @@ necessary to understand this process in more detail.
 Node subclasses must declare their input and output streams through the
 ``_input_specs`` and ``_output_specs`` class attributes. Each attribute is a
 dict whose keys are the names of the streams and whose values provide the
-default configuration arguments for the stream (for example, the
-:ref:`PyAudio Node <>` declares one input and one output stream). 
+default configuration arguments for the stream.
+
+[example]
 
 how to piece together stream on the far end
 
