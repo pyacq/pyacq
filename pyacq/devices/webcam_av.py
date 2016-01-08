@@ -1,3 +1,7 @@
+# -*- coding: utf-8 -*-
+# Copyright (c) 2016, French National Center for Scientific Research (CNRS)
+# Distributed under the (new) BSD License. See LICENSE for more info.
+
 """
 av is python binding to libav or ffmpeg and this is so great (except the poor doc for the moment)
 http://mikeboers.github.io/PyAV/index.html
