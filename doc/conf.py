@@ -77,7 +77,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'pyacq'
-copyright = u'2015, Samuel Garcia, Alexandra Corneyllie, Luke Campagnola'
+copyright = u'2016, French National Center for Scientific Research (CNRS)'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
