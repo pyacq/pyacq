@@ -51,7 +51,9 @@ part of the graph shown above::
 License
 -------
 
-???
+Pyacq is supported by the French National Center for Scientific Research (CNRS)
+and the Lyon Neuroscience Research Center (CRNL). It is distributed under the
+`BSD 3-clause license <https://opensource.org/licenses/BSD-3-Clause>`_.
 
 
 Architecture
