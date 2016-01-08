@@ -54,7 +54,7 @@ def create_some_node_group(man):
         sender = nodegroup.create_node('FakeSender', name='sender{}'.format(i))
         sender.configure()
         stream_spec = dict(protocol='tcp', interface='127.0.0.1', port='*',
-                            transfertmode='plaindata', streamtype='analogsignal',
+                            transfermode='plaindata', streamtype='analogsignal',
                             dtype='float32', shape=(-1, 16), compression ='',
                             scale = None, offset = None, units = '')
         sender.outputs['signals'].configure(**stream_spec)

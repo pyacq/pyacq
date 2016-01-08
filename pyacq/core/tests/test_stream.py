@@ -127,7 +127,7 @@ chunksize = {chunksize}
 ring_size = chunksize*20
 nloop = {nloop}
 stream_spec = dict(protocol = {protocol}, interface = '127.0.0.1', port = '*',
-                    transfertmode = {transfertmode}, streamtype = 'analogsignal',
+                    transfermode = {transfermode}, streamtype = 'analogsignal',
                     dtype = 'float32', shape = (-1, nb_channel), compression ={compression},
                     scale = None, offset = None, units = '',
                     # for sharedarray
@@ -159,12 +159,12 @@ instream.close()
         print('#'*5)
         for protocol in protocols:            
             for compression in compressions:
-                setup2 = setup.format(compression=repr(compression), protocol=repr(protocol), transfertmode="'plaindata'",
+                setup2 = setup.format(compression=repr(compression), protocol=repr(protocol), transfermode="'plaindata'",
                             chunksize=chunksize, nloop=nloop)
                 t = timeit.timeit(stmt, setup=setup2, number=1)
                 print(chunksize, nloop, 'plaindata', protocol, compression, 'time =', t, 's.', 'speed', nloop*chunksize*16*4/t/1e6, 'Mo/s')
         
-        setup2 = setup.format(compression="''", protocol="'tcp'", transfertmode="'sharedarray'",
+        setup2 = setup.format(compression="''", protocol="'tcp'", transfermode="'sharedarray'",
                     chunksize=chunksize, nloop=nloop)
         t = timeit.timeit(stmt, setup=setup2, number=1)
         print(chunksize, nloop, 'sharedarray', 'time =', t, 's.', 'speed', nloop*chunksize*16*4/t/1e6, 'Mo/s')

@@ -20,7 +20,7 @@ def test_webcam_imageio():
     
     dev = WebCamImageIO(name='cam0')
     dev.configure(camera_num=0)
-    dev.output.configure(protocol='tcp', interface='127.0.0.1',transfertmode='plaindata',)
+    dev.output.configure(protocol='tcp', interface='127.0.0.1',transfermode='plaindata',)
     dev.initialize()
     
     viewer = ImageViewer()

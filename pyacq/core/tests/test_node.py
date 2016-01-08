@@ -20,7 +20,7 @@ def test_stream_between_local_nodes():
 
     sender = FakeSender()
     stream_spec = dict(protocol='tcp', interface='127.0.0.1', port='*',
-                        transfertmode='plaindata', streamtype='analogsignal',
+                        transfermode='plaindata', streamtype='analogsignal',
                         dtype='float32', shape=(-1, 16), compression ='',
                         scale = None, offset = None, units = '')
     sender.configure(sample_interval=0.001)
@@ -61,7 +61,7 @@ def test_stream_between_remote_nodes():
     # create ndoes
     sender = nodegroup.create_node('FakeSender', name='sender')
     stream_spec = dict(protocol='tcp', interface='127.0.0.1', port='*',
-                       transfertmode='plaindata', streamtype='analogsignal',
+                       transfermode='plaindata', streamtype='analogsignal',
                        dtype='float32', shape=(-1, 16), compression='',
                        scale=None, offset=None, units='')
     sender.configure(sample_interval=0.001)
@@ -97,7 +97,7 @@ def test_stream_between_local_and_remote_nodes():
     # create ndoes
     sender = nodegroup.create_node('FakeSender', name='sender')
     stream_spec = dict(protocol='tcp', interface='127.0.0.1', port='*',
-                        transfertmode='plaindata', streamtype='analogsignal',
+                        transfermode='plaindata', streamtype='analogsignal',
                         dtype='float32', shape=(-1, 16), compression ='',
                         scale = None, offset = None, units = '')
     sender.configure(sample_interval=0.001)
@@ -143,7 +143,7 @@ def test_visual_node_both_in_main_qapp_and_remote_qapp():
     # create ndoes
     sender = nodegroup.create_node('FakeSender', name='sender')
     stream_spec = dict(protocol='tcp', interface='127.0.0.1', port='*',
-                        transfertmode='plaindata', streamtype='analogsignal',
+                        transfermode='plaindata', streamtype='analogsignal',
                         dtype='float32', shape=(-1, 16), compression ='',
                         scale = None, offset = None, units = '')
     sender.configure(sample_interval=0.001)
