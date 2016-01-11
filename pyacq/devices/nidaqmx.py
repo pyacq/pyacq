@@ -90,9 +90,41 @@ class NIDAQmx(Node):
         
     def read(self):
         read = int32()
-        data = np.zeros((1000,), dtype=numpy.float64)
+        nchan = len(self._conf['aichannels'])
+        data = np.empty((1000, nchan), dtype=numpy.float64)
         self.aitask.ReadAnalogF64(1000, 10.0, DAQmx_Val_GroupByChannel, data,
-                                  1000, byref(read), None)            
+                                  1000, byref(read), None)
+        return data[:read]
+
+
+class DAQmxPollThread(QtCore.QThread):
+    def __init__(self, node):
+        QtCore.QThread.__init__(self)
+        self.node = node
+
+        self.lock = Mutex()
+        self.running = False
+        
+    def run(self):
+        with self.lock:
+            self.running = True
+        n = 0
+        node = self.node
+        stream = node.outputs['aichannels']
+        
+        while True:
+            with self.lock:
+                if not self.running:
+                    break
+            data = node.read()
+            if data.shape[0] == 0:
+                time.sleep(0.05)
+            stream.send(n, data)
+            n += data.shape[0]
+
+    def stop(self):
+        with self.lock:
+            self.running = False
 
 
 register_node_type(NIDAQmx)
