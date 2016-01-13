@@ -5,7 +5,7 @@ viewer.
 Both device and viewer nodes are created locally without a manager.
 """
 
-from pyacq.devices.nidaq import NIDAQmx
+from pyacq.devices.nidaqmx import NIDAQmx
 from pyacq.viewers import QOscilloscope
 import pyqtgraph as pg
 

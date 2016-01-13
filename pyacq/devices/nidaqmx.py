@@ -1,6 +1,7 @@
 import numpy as np
 import collections
 import logging
+import ctypes
 
 from ..core import Node, register_node_type, ThreadPollInput
 from pyqtgraph.Qt import QtCore, QtGui
@@ -8,10 +9,15 @@ from pyqtgraph.util.mutex import Mutex
 
 try:
     import PyDAQmx
-    from PyDAQmx.DAQmxFunctions import TaskHandle, DAQmxCreateTask, DAQmxCreateAIVoltageChan, byref
-    from PyDAQmx.DAQmxConstants import DAQmx_Val_RSE, DAQmx_Val_NRSE, DAQmx_Val_DIFF
+    from PyDAQmx.DAQmxFunctions import TaskHandle, DAQmxCreateTask, DAQmxCreateAIVoltageChan, byref, int32
+    from PyDAQmx import DAQmxConstants as const
     HAVE_DAQMX = True
-    _ai_modes = {'rse': DAQmx_Val_RSE, 'nrse': DAQmx_Val_NRSE, 'diff': DAQmx_Val_DIFF}
+    _ai_modes = {
+        'rse': const.DAQmx_Val_RSE, 
+        'nrse': const.DAQmx_Val_NRSE, 
+        'diff': const.DAQmx_Val_Diff,
+        'pseudodiff': const.DAQmx_Val_PseudoDiff
+    }
 except ImportError:
     HAVE_DAQMX = False
 
@@ -19,14 +25,14 @@ except ImportError:
 class NIDAQmx(Node):
     """Simple wrapper around PyDAQmx for analog/digital input.
     """
-    _output_spec = {
+    _output_specs = {
         'aichannels': {}
     }
 
     def __init__(self, **kargs):
         Node.__init__(self, **kargs)
         assert HAVE_DAQMX, "NIDAQmx node depends on the `PyDAQmx` package, but it could not be imported."
-        self.poll_thread = DQmxPollThread(self)
+        self.poll_thread = DAQmxPollThread(self)
 
     def configure(self, *args, **kwargs):
         """
@@ -55,11 +61,12 @@ class NIDAQmx(Node):
             'aiclocksource': aiclocksource,
         }
 
-        self.aichannels.spec.update({
+        self.outputs['aichannels'].spec.update({
             'chunksize': chunksize,
             'shape': (chunksize, len(aichannels)),
             'dtype': 'float64',
-            'sample_rate': samplerate,
+            'sample_rate': aisamplerate,
+            'nb_channel': len(aichannels),
         })
     
     def check_input_specs(self):
@@ -73,10 +80,10 @@ class NIDAQmx(Node):
         aitask = PyDAQmx.Task()
         for chan, mode in self._conf['aichannels'].items():
             chan = chan.encode()
-            aitask.CreateAIVoltageChan(chan, '', _ai_modes[mode],
-                                       -10, 10, DAQmx_Val_Volts, None)
-        aitask.CfgSampClkTiming("", 10000.0, DAQmx_Val_Rising, 
-                                DAQmx_Val_ContSamps, chunksize)
+            aitask.CreateAIVoltageChan(chan, '', _ai_modes[mode.lower()],
+                                       -10, 10, const.DAQmx_Val_Volts, None)
+        aitask.CfgSampClkTiming("", 10000.0, const.DAQmx_Val_Rising, 
+                                const.DAQmx_Val_ContSamps, chunksize)
         
         self.aitask = aitask
         
@@ -94,15 +101,17 @@ class NIDAQmx(Node):
     def read(self):
         read = int32()
         nchan = len(self._conf['aichannels'])
-        data = np.empty((1000, nchan), dtype=numpy.float64)
-        self.aitask.ReadAnalogF64(1000, 10.0, DAQmx_Val_GroupByChannel, data,
-                                  1000, byref(read), None)
-        return data[:read]
+        data = np.empty((self._chunksize, nchan), dtype=np.float64)
+        self.aitask.ReadAnalogF64(self._chunksize, 10.0, const.DAQmx_Val_GroupByChannel, data,
+                                  data.size, byref(read), None)
+
+        # what to do if read is < chunksize?
+        return data
 
 
 class DAQmxPollThread(QtCore.QThread):
     def __init__(self, node):
-                QtCore.QThread.__init__(self)
+        QtCore.QThread.__init__(self)
         self.node = node
 
         self.lock = Mutex()
@@ -125,8 +134,8 @@ class DAQmxPollThread(QtCore.QThread):
             
             if data.shape[0] == 0:
                 time.sleep(0.05)
-            stream.send(n, data)
             n += data.shape[0]
+            stream.send(n, data)
 
     def stop(self):
         with self.lock:
