@@ -26,6 +26,7 @@ class NIDAQmx(Node):
     def __init__(self, **kargs):
         Node.__init__(self, **kargs)
         assert HAVE_DAQMX, "NIDAQmx node depends on the `PyDAQmx` package, but it could not be imported."
+        self.poll_thread = DQmxPollThread(self)
 
     def configure(self, *args, **kwargs):
         """
@@ -81,8 +82,10 @@ class NIDAQmx(Node):
         
     def _start(self):
         self.aitask.StartTask()
+        self.poll_thread.start()
 
     def _stop(self):
+        self.poll_thread.stop()
         self.aitask.StopTask()
 
     def _close(self):
@@ -99,7 +102,7 @@ class NIDAQmx(Node):
 
 class DAQmxPollThread(QtCore.QThread):
     def __init__(self, node):
-        QtCore.QThread.__init__(self)
+                QtCore.QThread.__init__(self)
         self.node = node
 
         self.lock = Mutex()
@@ -116,7 +119,10 @@ class DAQmxPollThread(QtCore.QThread):
             with self.lock:
                 if not self.running:
                     break
+                
+            # are NI functions thread safe?
             data = node.read()
+            
             if data.shape[0] == 0:
                 time.sleep(0.05)
             stream.send(n, data)
