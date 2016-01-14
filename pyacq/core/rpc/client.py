@@ -23,7 +23,13 @@ logger = logging.getLogger(__name__)
 
 
 class RPCClient(object):
-    """Connection to an RPC server.
+    """Connection to an :class:`RPCServer`.
+    
+    Each RPCClient connects to only one server, and may be used from only one
+    thread. RPCClient instances are created automatically either through
+    :class:`ProcessSpawner` or by requesting attributes form an :class:`ObjectProxy`.
+    In general, it is not necessary for the user to interact directly with
+    RPCClient.
     
     Parameters
     ----------
@@ -46,6 +52,11 @@ class RPCClient(object):
         
         If no client exists already, then a new one will be created. If the 
         server is running in the current thread, then return None.
+        
+        See also
+        --------
+        
+        RPCServer.address
         """
         if isinstance(address, str):
             address = address.encode()
@@ -137,6 +148,9 @@ class RPCClient(object):
 
     def send(self, action, opts=None, return_type='auto', sync='sync', timeout=10.0):
         """Send a request to the remote process.
+
+        The request is given a unique ID that is included in the response from
+        the server (if any).
         
         Parameters
         ----------
@@ -155,7 +169,8 @@ class RPCClient(object):
             return None immediately.
         timeout : float
             The amount of time to wait for a response when in synchronous
-            operation (sync='sync').
+            operation (sync='sync'). If the timeout elapses before a response is
+            received, then raise TimeoutError.
         """
         # This is nice, but very expensive!
         #if self.disconnected():
@@ -197,27 +212,108 @@ class RPCClient(object):
             raise ValueError('Invalid sync value: %s' % sync)
 
     def call_obj(self, obj, args=None, kwargs=None, **kwds):
+        """Invoke a remote callable object.
+        
+        Parameters
+        ----------
+        obj : :class:`ObjectProxy`
+            A proxy that references an object owned by the connected RPCServer.
+        args : tuple
+            Arguments to pass to the remote call.
+        kwargs : dict
+            Keyword arguments to pass to the remote call.
+        kwds :
+            All extra keyword arguments are passed to :func:`send() <RPCClient.send>`.
+        """
         opts = {'obj': obj, 'args': args, 'kwargs': kwargs} 
         return self.send('call_obj', opts=opts, **kwds)
 
     def get_obj(self, obj, **kwds):
+        """Return a copy of a remote object.
+        
+        Parameters
+        ----------
+        obj : :class:`ObjectProxy`
+            A proxy that references an object owned by the connected RPCServer.
+            The object will be serialized and returned if possible, otherwise
+            a new proxy is returned.
+        kwds :
+            All extra keyword arguments are passed to :func:`send() <RPCClient.send>`.
+        """
         return self.send('get_obj', opts={'obj': obj}, **kwds)
 
     def transfer(self, obj, **kwds):
+        """Send an object to the remote process and return a proxy to it.
+        
+        Parameters
+        ----------
+        obj : object
+            Any object to send to the remote process. If the object is not
+            serializable then a proxy will be sent if possible.
+        kwds :
+            All extra keyword arguments are passed to :func:`send() <RPCClient.send>`.
+        """
         kwds['return_type'] = 'proxy'
         return self.send('get_obj', opts={'obj': obj}, **kwds)
 
     def _import(self, module, **kwds):
+        """Import a module in the remote process and return a proxy to it.
+        
+        Parameters
+        ----------
+        module : str
+            The name of the module to import.
+        kwds :
+            All extra keyword arguments are passed to :func:`send() <RPCClient.send>`.
+        """
         return self.send('import', opts={'module': module}, **kwds)
 
     def delete(self, obj, **kwds):
+        """Delete an object proxy.
+        
+        This informs the remote process that an :class:`ObjectProxy` is no longer
+        needed. The remote process will decrement a reference counter and 
+        delete the referenced object if it is no longer held by any proxies.
+        
+        Parameters
+        ----------
+        obj : :class:`ObjectProxy`
+            A proxy that references an object owned by the connected RPCServer.
+        kwds :
+            All extra keyword arguments are passed to :func:`send() <RPCClient.send>`.
+            
+        Notes
+        -----
+        
+        After a proxy is deleted, it cannot be used to access the remote object
+        even if the server has not released the remote object yet. This also
+        applies to proxies that are sent to a third process. For example, consider
+        three processes A, B, C: first A acquires a proxy to an object owned by
+        B. A sends the proxy to C, and then deletes the proxy. If C attempts to
+        access this proxy, an exception will be raised because B has already
+        remoted the reference held by this proxy. However, if C independently
+        acquires a proxy to the same object owned by B, then that proxy will
+        continue to function even after A deletes its proxy.
+        """
         assert obj._rpc_addr == self.address
         return self.send('delete', opts={'obj_id': obj._obj_id}, **kwds)
 
     def __getitem__(self, name):
+        """Return a named item published by the remote server.
+        
+        This provides a sort of "global namespace" for clients to access objects
+        that are explicitly published using either :func:`RPCServer.__setitem__`
+        or :func:`RPCClient.__setitem__`.
+        """
         return self.send('getitem', opts={'name': name}, sync='sync')
 
     def __setitem__(self, name, obj):
+        """Publish an object as a named item on the server.
+        
+        The item can be retrieved by the remote process using
+        :func:`RPCServer.__getitem__`, or by any client connected to the remote
+        server using :func:`RPCClient.__getitem__`.
+        """
         # We could make this sync='off', but probably it's safer to block until
         # the transaction is complete.
         return self.send('setitem', opts={'name': name, 'obj': obj}, sync='sync')
@@ -250,6 +346,14 @@ class RPCClient(object):
         
         While waiting, the RPCServer for this thread (if any) is also allowed to process
         requests.
+        
+        Parameters
+        ----------
+        future : concurrent.Future instance
+            The Future to wait for. When the response for this Future arrives
+            from the server, the method returns.
+        timeout : float
+            Maximum time (seconds) to wait for a response.
         """
         start = time.perf_counter()
         while not future.done():
@@ -283,6 +387,15 @@ class RPCClient(object):
                     server._read_and_process_one()
                 
     def _read_and_process_one(self, timeout):
+        """Read a single message from the remote server and process it by
+        calling :func:`process_msg()`.
+        
+        Parameters
+        ----------
+        timeout : float
+            Maximum time (seconds) to wait for a message.
+        
+        """
         # timeout is in seconds; convert to ms
         # use timeout=None to block indefinitely
         if timeout is None:
@@ -386,6 +499,8 @@ class RPCClient(object):
         return self.send('close', sync=sync, **kwds)
 
     def measure_clock_diff(self):
+        """Measure the clock offset between this host and the remote host.
+        """
         rcounter = self._import('time').perf_counter
         ltimes = []
         rtimes = []
@@ -419,9 +534,16 @@ class Future(concurrent.futures.Future):
     """Represents a return value from a remote procedure call that has not
     yet arrived.
     
-    Use `done()` to determine whether the return value (or an error message)
-    has arrived, and `result()` to get the return value (or raise an
-    exception).
+    Instances of Future are returned from :func:`ObjectProxy.__call__()` when
+    used with ``_sync='async'``. This is the mechanism through which remote
+    functions may be called asynchronously.
+    
+    Use :func:`done()` to determine whether the return value (or an error message)
+    has arrived, and :func:`result()` to get the return value. If the remote
+    call raised an exception, then calling :func:`result()` will raise 
+    RemoteCallException with a transcript of the original exception.
+    
+    See `concurrent.futures.Future` in the Python documentation for more information.
     """
     def __init__(self, client, call_id):
         concurrent.futures.Future.__init__(self)

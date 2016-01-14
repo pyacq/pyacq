@@ -42,7 +42,7 @@ only ProcessSpawner and ObjectProxy are directly visible to the user::
     proc = ProcessSpawner()
     
     # Ask the remote process to import a module and return a proxy to it
-    remote_col = proc._import('collections')
+    remote_col = proc.client._import('collections')
     
     # Create a new object (an ordered dict) in the remote process
     remote_dict = remote_col.OrderedDict()
@@ -56,18 +56,19 @@ Using object proxies allows remote objects to be accessed using the same syntax
 as if they were local. However, there are two major differences to consider when
 using remote objects:
 
-* First, function arguments and return values in Python are passed by reference.
-  This means that both the caller and the callee operate on the *same* Python
-  object. Since it is not possible to share python objects between processes, 
-  we are restricted to sending them either by copy or by proxy. By default,
-  arguments and return values for remote functions are serialized if possible, or
-  passed by proxy otherwise.
+First, function arguments and return values in Python are passed by reference.
+This means that both the caller and the callee operate on the *same* Python
+object. Since it is not possible to share python objects between processes, 
+we are restricted to sending them either by copy or by proxy. By default,
+arguments and return values for remote functions are serialized if possible, or
+passed by proxy otherwise.
 
-* Second, remote functions can be called asynchronously. By default, calling
-  a remote function will block until the return value has arrived. However, any
-  remote function call can be made asynchronous by adding a special argument:
-  ``_sync='async'``. In this case, the function call will immediately return a
-  Future object that can be used to access the return value when it arrives.
+Second, remote functions can be called asynchronously. By default, calling
+a remote function will block until the return value has arrived. However, any
+remote function call can be made asynchronous by adding a special argument:
+``_sync='async'``. In this case, the function call will immediately return a
+:class:`Future` object that can be used to
+access the return value when it arrives.
 
 
 
@@ -81,9 +82,12 @@ RPC Classes
    :members:
 
 .. autoclass::  pyacq.core.rpc.ObjectProxy
-   :members:
+   :members: _set_proxy_options, __getattr__, __setattr__, __call__, __getitem__, __setitem__, _delete 
 
 .. autoclass::  pyacq.core.rpc.ProcessSpawner
+   :members:
+
+.. autoclass:: pyacq.core.rpc.Future
    :members:
 
 

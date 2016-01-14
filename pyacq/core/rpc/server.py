@@ -135,6 +135,7 @@ class RPCServer(object):
         self._socket.linger = 5000
         
         self._socket.bind(addr)
+        #: The zmq address where this server is listening (e.g. 'tcp:///127.0.0.1:5678')
         self.address = self._socket.getsockopt(zmq.LAST_ENDPOINT)
         self._closed = False
         
