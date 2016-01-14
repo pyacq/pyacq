@@ -123,9 +123,6 @@ class RPCClient(object):
         self.establishing_connect = False
         self._disconnected = False
 
-        # Proxies we have received from other machines. 
-        self.proxies = {}
-
         # For unserializing results returned from servers. This cannot be
         # used to send proxies of local objects unless there is also a server
         # for this thread..
@@ -296,7 +293,7 @@ class RPCClient(object):
         continue to function even after A deletes its proxy.
         """
         assert obj._rpc_addr == self.address
-        return self.send('delete', opts={'obj_id': obj._obj_id}, **kwds)
+        return self.send('delete', opts={'obj_id': obj._obj_id, 'ref_id': obj._ref_id}, **kwds)
 
     def __getitem__(self, name):
         """Return a named item published by the remote server.
@@ -384,6 +381,10 @@ class RPCClient(object):
                     self._read_and_process_one(timeout=0)
                 elif len(socks) > 0: 
                     server = RPCServer.get_server()
+                    if server is None:
+                        # this can happen after server has unregistered itself 
+                        # at exit
+                        continue
                     server._read_and_process_one()
                 
     def _read_and_process_one(self, timeout):

@@ -42,6 +42,12 @@ def test_manager():
     ng1.remove_node(n1)
     assert ng1.list_nodes() == []
 
+    # Need to close manager here because otherwise atexit hooks will kill the
+    # host, which results in the manager complaining that it was unable to
+    # kill the nodegroup. In real situations, we do not expect the host to
+    # disappear before the manager does. 
+    mgr.close()
+
 
 def create_some_node_group(man):
     nodegroups = []
@@ -81,7 +87,6 @@ def test_close_manager_explicit():
         ng.stop_all_nodes()
     
     man.close()
-    #time.sleep(2.)
 
 
 #@pytest.mark.skipif(True, reason='atexit not work at travis')

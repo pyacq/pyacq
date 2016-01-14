@@ -74,6 +74,7 @@ class Manager(object):
         logger.info('Creating new Manager..')
         self.hosts = {}  # addr:Host
         self.nodegroups = {}  # name:Nodegroup
+        self._closed_nodegroups = set()
         
         # Host used for starting nodegroups on the local machine
         self.default_host = Host('default_host')
@@ -164,6 +165,10 @@ class Manager(object):
         ng = host.create_nodegroup(name=name, manager=self, qt=qt, **kwds)
         self.nodegroups[name] = ng
         return ng
+
+    def nodegroup_closed(self, ng):
+        # Called by host when it detects that a nodegroup's process has exited.
+        self._closed_nodegroups.add(ng)
     
     def list_nodegroups(self):
         return list(self.nodegroups.values())
@@ -178,8 +183,10 @@ class Manager(object):
 
     def close_all_nodegroups(self):
         for ng in self.nodegroups.values():
+            if ng in self._closed_nodegroups:
+                continue
             try:
-                ng.close()
+                ng.close(_sync='off')
             except RuntimeError:
                 # If the server has already disconnected, then no need to close.
                 cli = RPCClient.get_client(ng._rpc_addr)

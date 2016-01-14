@@ -85,6 +85,16 @@ def test_rpc():
     obj = client['my_object']
     assert isinstance(obj, ObjectProxy)
     
+    # check equality with duplicate proxy
+    obj2 = client['my_object']
+    assert obj == obj2
+    assert obj._obj_id == obj2._obj_id
+    assert obj._ref_id != obj2._ref_id    
+
+    # check hashability
+    assert obj in {obj2: None}
+    assert obj in set([obj2])
+    
     logger.info("-- Test call with sync return --")
     add = obj.add
     assert isinstance(add, ObjectProxy)
