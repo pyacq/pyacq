@@ -82,7 +82,7 @@ RPC Classes
    :members:
 
 .. autoclass::  pyacq.core.rpc.ObjectProxy
-   :members: _set_proxy_options, __getattr__, __setattr__, __call__, __getitem__, __setitem__, _delete 
+   :members: _set_proxy_options, _get_value, __getattr__, __setattr__, __call__, __getitem__, __setitem__, _delete 
 
 .. autoclass::  pyacq.core.rpc.ProcessSpawner
    :members:

@@ -24,7 +24,11 @@ class ObjectProxy(object):
       Most basic types can be serialized, including numpy arrays. All other
       objects are automatically proxied, but there are some cases when this will
       not work well.
-    * `__repr__` is overridden on proxies to allow safe debugging.
+    * :func:`__repr__` and :func:`__str__` are overridden on proxies to allow
+      safe debugging.
+    * :func:`__hash__` is overridden to ensure that remote hash values are not
+      used locally.
+
     
     For the most part, object proxies can be used exactly as if they are
     local objects::
