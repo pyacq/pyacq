@@ -40,13 +40,13 @@ Each application should only start one Manager at most by calling the
     import pyacq
     manager = pyacq.create_manager()
 
-By default, the Manager is created in a new process and a :ref:`proxy <object_proxies>`
+By default, the Manager is created in a new process and a :class:`proxy <rpc.ObjectProxy>`
 to the Manager
 is returned. This allows the Manager to listen and respond in the background 
 to requests made by the Hosts, NodeGroups, and Nodes associated with the
 application.
 
-Calling :func:`create_manager` also starts a :ref:`log server <remote_logging>`
+Calling :func:`create_manager` also starts a :ref:`log server <apiref_rpc_logging>`
 to which all error messages will be sent. Any spawned processes that are
 associated with this application will forward their log messages, uncaught
 exceptions, and stdout/stderr output back to the log server. 
@@ -95,7 +95,7 @@ will start by creating a new process on the remote host using
     # Next, request the NodeGroup to create a new Node    
     node = nodegroup.create_node('PyAudio', **kwargs)
     
-We now have a :ref:`proxy <object_proxies>` to a :class:`Node` that has been created in the remote process.
+We now have a :class:`proxy <rpc.ObjectProxy>` to a :class:`Node` that has been created in the remote process.
 We can use this proxy to configure, initialize, start, and stop the Node,
 :ref:`exactly as we would with a locally instantiated Node <interacting_with_nodes>`::
     

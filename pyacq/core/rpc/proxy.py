@@ -36,21 +36,22 @@ class ObjectProxy(object):
                                      # and returns the result (None)
     
     When calling a proxy to a remote function, the call can be made synchronous
-    (result of call is returned immediately), asynchronous (result is returned later),
-    or return can be disabled entirely::
+    (caller is blocked until result can be returned), asynchronous (Future is
+    returned immediately and result can be accessed later), or return can be
+    disabled entirely::
     
         ros = proc._import('os')
         
-        ## synchronous call; result is returned immediately
+        # synchronous call; caller blocks until result is returned
         pid = ros.getpid()
         
-        ## asynchronous call
+        # asynchronous call
         request = ros.getpid(_sync='async')
         while not request.hasResult():
             time.sleep(0.01)
         pid = request.result()
         
-        ## disable return when we know it isn't needed
+        # disable return when we know it isn't needed.
         rsys.stdout.write('hello', _sync='off')
     
     Additionally, values returned from a remote function call are automatically
@@ -64,6 +65,17 @@ class ObjectProxy(object):
     The default sync and return_type behaviors (as well as others) can be set 
     for each proxy individually using ObjectProxy._set_proxy_options() or globally using 
     proc.set_proxy_options(). 
+    
+    It is also possible to send arguments by proxy if an RPCServer is running
+    in the caller's thread (this can be used, for example, to connect Qt
+    signals across network connections)::
+    
+        def callback():
+            print("called back.")
+            
+        # Remote process can invoke our callback function as long as there is 
+        # a server running here to process the request.
+        remote_object.set_callback(proxy(callback))
     
     """
     
@@ -241,9 +253,9 @@ class ObjectProxy(object):
         Attempts to call the proxied object from the remote process.
         Accepts extra keyword arguments:
         
-            _sync    'off', 'sync', or 'async'
-            _return_type  'value', 'proxy', or 'auto'
-            _timeout      float 
+            * _sync:    'off', 'sync', or 'async'
+            * _return_type:  'value', 'proxy', or 'auto'
+            * _timeout:      float 
         
         If the remote call raises an exception on the remote process,
         it will be re-raised on the local process.

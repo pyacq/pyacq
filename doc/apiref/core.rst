@@ -9,11 +9,17 @@ Pyacq Core
 .. autoclass:: pyacq.core.NodeGroup
    :members:
 
+.. autoclass:: pyacq.core.host.Host
+   :members:
+
 .. autoclass:: pyacq.core.Node
    :members:
 
-.. autoclass:: pyacq.core.host.Host
-   :members:
+
+.. _apiref_streams:
+
+Stream Classes
+--------------
 
 .. autoclass:: pyacq.core.InputStream
    :members:

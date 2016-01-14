@@ -1,11 +1,12 @@
 .. currentmodule:: pyacq.core
 
+.. _streams:
 
 Data streams
 ============
 
 As data is acquired in Pyacq, it is transmitted from Node to Node within the
-:ref:`graph <introduction>` using :ref:`Stream classes <api_streams>`. Each Node
+:ref:`graph <introduction>` using :ref:`Stream classes <apiref_streams>`. Each Node
 has one or more input and/or output streams that may be connected together, and
 each stream can be configured to transmit different types and shapes of data::
     

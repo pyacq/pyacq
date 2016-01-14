@@ -1,5 +1,5 @@
 PyAudio Time-Frequency Analyzer
 ===============================
 
-.. literalinclude:: ../../example/pyaudio_tfr.py
+.. literalinclude:: ../../examples/pyaudio_tfr.py
    :language: python

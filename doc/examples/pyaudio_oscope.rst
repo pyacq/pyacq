@@ -1,5 +1,5 @@
 PyAudio Oscilloscope
 ====================
 
-.. literalinclude:: ../../example/pyaudio_oscope.py
+.. literalinclude:: ../../examples/pyaudio_oscope_local.py
    :language: python
