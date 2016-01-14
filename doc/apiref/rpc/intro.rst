@@ -1,10 +1,7 @@
 .. currentmodule:: pyacq.core.rpc
 
-.. _apiref_rpc:
-
-
-Remote Process Control
-======================
+Overview: Remote Process Control
+================================
 
 Pyacq implements a system for spawning and controlling remote processes through
 object proxies. This allows remote objects to be treated almost exactly as if 
@@ -30,7 +27,7 @@ The remote process control system consists of several components:
   python types for transfer over ZeroMQ sockets. Clients are free to pick
   whichever serializer they prefer. List of data types:
 * :ref:`Logging tools <apiref_rpc_logging>` that allow log records, uncaught excaptions, and stdout/stderr
-  data to be sent to a remote log server. This is essential for debugging
+  data to be sent to a remote log server. These are essential for debugging
   multiprocess applications.
 
 The following simple example makes use of most of these components, although 
@@ -69,66 +66,4 @@ remote function call can be made asynchronous by adding a special argument:
 ``_sync='async'``. In this case, the function call will immediately return a
 :class:`Future` object that can be used to
 access the return value when it arrives.
-
-
-
-RPC Classes
------------
-
-.. autoclass::  pyacq.core.rpc.RPCClient
-   :members:
-
-.. autoclass::  pyacq.core.rpc.RPCServer
-   :members:
-
-.. autoclass::  pyacq.core.rpc.ObjectProxy
-   :members: _set_proxy_options, _get_value, __getattr__, __setattr__, __call__, __getitem__, __setitem__, _delete 
-
-.. autoclass::  pyacq.core.rpc.ProcessSpawner
-   :members:
-
-.. autoclass:: pyacq.core.rpc.Future
-   :members:
-
-
-.. _apiref_rpc_serializers:
-
-Serializers
------------
-
-- which are available
-- serializable data types
-    tuple/list
-    bytes/ndarray efficiency
-- adding new serializers
-
-
-.. _apiref_rpc_logging:
-
-Logging tools
--------------
-
-.. autofunction:: pyacq.core.rpc.log.start_log_server
-
-.. autoclass::  pyacq.core.rpc.log.LogServer
-   :members:
-
-.. autoclass::  pyacq.core.rpc.log.LogSender
-   :members:
-
-.. autofunction:: pyacq.core.rpc.log.set_host_name
-
-.. autofunction:: pyacq.core.rpc.log.get_host_name
-
-.. autofunction:: pyacq.core.rpc.log.set_process_name
-
-.. autofunction:: pyacq.core.rpc.log.get_process_name
-
-.. autofunction:: pyacq.core.rpc.log.set_thread_name
-
-.. autofunction:: pyacq.core.rpc.log.get_thread_name
-
-.. autofunction:: pyacq.core.rpc.log.set_logger_address
-
-.. autofunction:: pyacq.core.rpc.log.get_logger_address
 

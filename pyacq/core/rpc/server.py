@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 
 class RPCServer(object):
-    """RPC server for invoking requests on proxied objects.
+    """Remote procedure call server for invoking requests on proxied objects.
     
     RPCServer instances are automatically created when using :class:`ProcessSpawner`.
     It is rarely necessary for the user to interact directly with RPCServer.
@@ -51,12 +51,20 @@ class RPCServer(object):
         Name used to identify this server.
     address : URL
         Address for RPC server to bind to. Default is ``'tcp://127.0.0.1:*'``.
+        
+        **Note:** binding RPCServer to a public IP address is a potential
+        security hazard.
 
     Notes
     -----
+    
+    **RPCServer is not a secure server.** It is intended to be used only on trusted
+    networks; anyone with tcp access to the server can execute arbitrary code
+    on the server.
         
     RPCServer is not a thread-safe class. Only use :class:`RPCClient` to communicate
     with RPCServer from other threads.
+    
 
     Examples
     --------
@@ -486,19 +494,49 @@ class RPCServer(object):
 
 class QtRPCServer(RPCServer):
     """RPCServer that lives in a Qt GUI thread.
-    
+
     This server may be used to create and manage QObjects, QWidgets, etc. It
     uses a separate thread to poll for RPC requests, which are then sent to the
-    Qt event loop using by signal (see QtPollThread).
+    Qt event loop using by signal. This allows the RPC actions to be executed
+    in a Qt GUI thread without using a timer to poll the RPC socket. Responses
+    are sent back to the poller thread by a secondary socket.
+    
+    QtRPCServer may be started in newly spawned processes using
+    :class:`ProcessSpawner`.
     
     Parameters
     ----------
     address : str
-        ZMQ address to listen on. Default is "tcp://*:*".
+        ZMQ address to listen on. Default is ``'tcp://127.0.0.1:*'``.
+        
+        **Note:** binding RPCServer to a public IP address is a potential
+        security hazard. See :class:`RPCServer`.
     quit_on_close : bool
         If True, then call `QApplication.quit()` when the server is closed. 
+        
+    Examples
+    --------
+    
+    Spawning in a new process::
+        
+        # Create new process.
+        proc = ProcessSpawner(qt=True)
+        
+        # Display a widget from the new process.
+        qtgui = proc._import('PyQt4.QtGui')
+        w = qtgui.QWidget()
+        w.show()
+        
+    Starting in an existing Qt application::
+    
+        # Create server.
+        server = QtRPCServer()
+        
+        # Start listening for requests in a background thread (this call
+        # returns immediately).
+        server.run_forever()
     """
-    def __init__(self, address="tcp://*:*", quit_on_close=True):
+    def __init__(self, address="tcp://127.0.0.1:*", quit_on_close=True):
         RPCServer.__init__(self, address)
         self.quit_on_close = quit_on_close
         self.poll_thread = QtPollThread(self)

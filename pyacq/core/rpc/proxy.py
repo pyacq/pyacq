@@ -8,7 +8,7 @@ import weakref
 
 class ObjectProxy(object):
     """
-    Proxy to an object stored by a remote RPCServer.
+    Proxy to an object stored by a remote :class:`RPCServer`.
     
     A proxy behaves in most ways like the object that it wraps--you can request
     the same attributes, call methods, etc. There are a few important

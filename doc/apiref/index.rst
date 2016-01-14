@@ -7,7 +7,7 @@ Contents:
    :maxdepth: 2
 
    core
-   rpc
+   rpc/index
    devices
    viewers
    processors
