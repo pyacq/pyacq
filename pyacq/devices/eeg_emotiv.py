@@ -140,10 +140,8 @@ class Emotiv(Node, QtCore.QObject):
         '''
         Parameters
         ----------
-        device_handle : str for Linux, hid object for windows 
-            Linux   : path to the usb hidraw used
-            Windows : hid object associated with the USB key
-            see get_available_devices() in tests/test_eeg_emotiv.py for a scan example of Emotiv device
+        device_handle : str
+            Path to the usb hidraw used
         '''
         self.device_path = device_handle
 

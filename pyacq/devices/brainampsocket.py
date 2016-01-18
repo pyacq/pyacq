@@ -98,7 +98,6 @@ class BrainAmpSocket(Node):
     
     This class is a bridge between pyacq and the socket-based data streaming
     provided by the Vision recorder acquisition software.
-    (configuration)
     """
     _output_specs = {'signals': dict(streamtype='analogsignal',dtype='float32',
                                                 shape=(-1, 32), compression ='', timeaxis=0,
