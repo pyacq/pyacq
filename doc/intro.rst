@@ -96,7 +96,7 @@ Installation
 
 * One final dependency, PyQt4, cannot be installed with pip. Linux distributions
   typically provide this package. OSX users can get PyQt4 (and most other
-  dependencies using the `Anaconda Python distribution <https://www.continuum.io/downloads>`_. 
+  dependencies using the `Anaconda Python distribution <https://www.continuum.io/downloads>`_). 
   Windows users can also use Anaconda or download PyQt4 directly from the
   `Riverbank Computing <https://www.riverbankcomputing.com/software/pyqt/download>`_
   website.

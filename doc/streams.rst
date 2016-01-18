@@ -113,7 +113,7 @@ Nodes call :func:`OutputStream.send()` to send new data via their output streams
 and :func:`InputStream.recv()` to receive data from their input streams. If the
 stream is a plaindata type, then calling :func:`recv() <InputStream.recv()>` 
 will return the next data chunk. In contrast, sharedmem streams only return the
-poisition within the shared memory array of the next data chunk. In this case,
+position within the shared memory array of the next data chunk. In this case,
 it may be more useful to call :func:`InputStream.get_array_slice()` to return
 part of the shared memory buffer.
 
