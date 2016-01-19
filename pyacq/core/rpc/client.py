@@ -146,16 +146,21 @@ class RPCClient(object):
     def send(self, action, opts=None, return_type='auto', sync='sync', timeout=10.0):
         """Send a request to the remote process.
 
+        It is not necessary to call this method directly; instead use 
+        :func:`call_obj`, :func:`get_obj`, :func:`__getitem__`, :func:`__setitem__`,
+        :func:`transfer`, :func:`delete`, :func:`import`, or :func:`ping`.
+
         The request is given a unique ID that is included in the response from
         the server (if any).
         
         Parameters
         ----------
         action : str
-            The action to invoke on the remote process.
+            The action to invoke on the remote process. See list of actions
+            below.
         opts : None or dict
             Extra options to be sent with the request. Each action requires a
-            different set of options.
+            different set of options. See list of actions below.
         return_type : 'auto' | 'proxy'
             If 'proxy', then the return value is sent by proxy. If 'auto', then
             the server decides based on the return type whether to send a proxy.
@@ -168,6 +173,31 @@ class RPCClient(object):
             The amount of time to wait for a response when in synchronous
             operation (sync='sync'). If the timeout elapses before a response is
             received, then raise TimeoutError.
+            
+        Notes
+        -----
+        
+        The following table lists the actions that are recognized by RPCServer. 
+        The *action* argument to `send()` may be any string from the *Action*
+        column below, and the *opts* argument must be a dict with the keys listed
+        in the *Options* column.
+        
+        ======== ======================================= ==========================================
+        Action   Description                             Options
+        -------- --------------------------------------- ------------------------------------------
+        call_obj Invoke a callable                       | obj: a proxy to the callable object
+                                                         | args: a tuple of positional arguments
+                                                         | kwargs: a dict of keyword arguments
+        get_obj  Return the object referenced by a proxy | obj: a proxy to the object to return
+        get_item Return a named object                   | name: string name of the object to return
+        set_item Set a named object                      | name: string name to set
+                                                         | value: object to assign to name
+        delete   Delete a proxy reference                | obj_id: proxy object ID
+                                                         | ref_id: proxy reference ID
+        import   Import and return a proxy to a module   | module: name of module to import
+        ping     Return 'pong'                           | 
+        ======== ======================================= ==========================================
+        
         """
         # This is nice, but very expensive!
         #if self.disconnected():
@@ -302,7 +332,7 @@ class RPCClient(object):
         that are explicitly published using either :func:`RPCServer.__setitem__`
         or :func:`RPCClient.__setitem__`.
         """
-        return self.send('getitem', opts={'name': name}, sync='sync')
+        return self.send('get_item', opts={'name': name}, sync='sync')
 
     def __setitem__(self, name, obj):
         """Publish an object as a named item on the server.
@@ -313,7 +343,7 @@ class RPCClient(object):
         """
         # We could make this sync='off', but probably it's safer to block until
         # the transaction is complete.
-        return self.send('setitem', opts={'name': name, 'obj': obj}, sync='sync')
+        return self.send('set_item', opts={'name': name, 'obj': obj}, sync='sync')
 
     def ensure_connection(self, timeout=1.0):
         """Make sure RPC server is connected and available.

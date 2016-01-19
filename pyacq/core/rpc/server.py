@@ -347,8 +347,8 @@ class RPCServer(object):
         """
         if action == 'call_obj':
             obj = opts['obj']
-            fnargs = opts['args']
-            fnkwds = opts['kwargs']
+            fnargs = opts.get('args', ())
+            fnkwds = opts.get('kwargs', {})
             
             if len(fnkwds) == 0:  ## need to do this because some functions do not allow keyword arguments.
                 try:
@@ -368,9 +368,9 @@ class RPCServer(object):
                 del self._proxy_refs[opts['obj_id']]
                 del self._proxy_id_map[id(proxy_ref[0])]
             result = None
-        elif action =='getitem':
+        elif action =='get_item':
             result = self[opts['name']]
-        elif action =='setitem':
+        elif action =='set_item':
             self[opts['name']] = opts['obj']
             result = None
         elif action == 'import':
