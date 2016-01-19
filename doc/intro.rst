@@ -36,10 +36,10 @@ part of the graph shown above::
     worker = worker_host.create_nodegroup()
     
     # Create nodes for data acquisition, analysis, storage, and display
-    device = manager.create_node('BrainAmpSocket')
-    analyzer = worker.create_node('Spikesorter')
-    recorder = worker.create_node('HDF5Recorder')
-    viewer = pyacq.QOscilloscope()
+    device = manager.create_node('NiDAQmx')
+    analyzer = manager.create_node('Spikesorter', host=worker)
+    recorder = manager.create_node('HDF5Recorder', host=worker)
+    viewer = manager.create_node('QOscilloscope')
     
     # Connect all nodes together
     analyzer.input.connect(device.output)
