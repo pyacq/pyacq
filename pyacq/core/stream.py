@@ -1,3 +1,7 @@
+# -*- coding: utf-8 -*-
+# Copyright (c) 2016, French National Center for Scientific Research (CNRS)
+# Distributed under the (new) BSD License. See LICENSE for more info.
+
 import zmq
 import numpy as np
 import random
@@ -228,8 +232,8 @@ class InputStream(object):
         """
         Receive a chunk of data.
         
-        Returns:
-        ----
+        Returns
+        -------
         index: int
             The absolute sample index. If the chunk contains multiple samples,
             then this is the index of the last sample.

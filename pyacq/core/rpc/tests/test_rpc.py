@@ -1,3 +1,7 @@
+# -*- coding: utf-8 -*-
+# Copyright (c) 2016, French National Center for Scientific Research (CNRS)
+# Distributed under the (new) BSD License. See LICENSE for more info.
+
 import threading, atexit, time, logging
 from pyacq.core.rpc import RPCClient, RemoteCallException, RPCServer, QtRPCServer, ObjectProxy, ProcessSpawner
 from pyacq.core.rpc.log import RPCLogHandler, set_process_name, set_thread_name, start_log_server
@@ -80,6 +84,16 @@ def test_rpc():
     # get proxy to TestClass instance
     obj = client['my_object']
     assert isinstance(obj, ObjectProxy)
+    
+    # check equality with duplicate proxy
+    obj2 = client['my_object']
+    assert obj == obj2
+    assert obj._obj_id == obj2._obj_id
+    assert obj._ref_id != obj2._ref_id    
+
+    # check hashability
+    assert obj in {obj2: None}
+    assert obj in set([obj2])
     
     logger.info("-- Test call with sync return --")
     add = obj.add

@@ -1,3 +1,7 @@
+# -*- coding: utf-8 -*-
+# Copyright (c) 2016, French National Center for Scientific Research (CNRS)
+# Distributed under the (new) BSD License. See LICENSE for more info.
+
 import atexit
 import logging
 
@@ -11,6 +15,10 @@ logger = logging.getLogger(__name__)
 
 def create_manager(mode='rpc', auto_close_at_exit=True):
     """Create a new Manager either in this process or in a new process.
+    
+    This function also starts a log server to which all log records will be
+    forwarded from the manager and all processes started by the manager. See
+    `LogServer` for more information.
     
     Parameters
     ----------
@@ -57,24 +65,16 @@ def create_manager(mode='rpc', auto_close_at_exit=True):
         
 
 class Manager(object):
-    """Manager is a central point of control for connecting to hosts, creating
-    Nodegroups and Nodes, and interacting with Nodes.
+    """Manager is a central point of control for connecting to hosts and creating
+    Nodegroups.
     
-    It can either be instantiated directly or in a subprocess and accessed
-    remotely by RPC using `create_manager()`.
-    
-       
-    Parameters
-    ----------
-    name : str
-        A unique identifier for this manager.
-    addr : str
-        The address for the manager's RPC server.
+    Manager instances should be created using `create_manager()`.
     """
     def __init__(self):
         logger.info('Creating new Manager..')
         self.hosts = {}  # addr:Host
         self.nodegroups = {}  # name:Nodegroup
+        self._closed_nodegroups = set()
         
         # Host used for starting nodegroups on the local machine
         self.default_host = Host('default_host')
@@ -165,6 +165,10 @@ class Manager(object):
         ng = host.create_nodegroup(name=name, manager=self, qt=qt, **kwds)
         self.nodegroups[name] = ng
         return ng
+
+    def nodegroup_closed(self, ng):
+        # Called by host when it detects that a nodegroup's process has exited.
+        self._closed_nodegroups.add(ng)
     
     def list_nodegroups(self):
         return list(self.nodegroups.values())
@@ -179,8 +183,10 @@ class Manager(object):
 
     def close_all_nodegroups(self):
         for ng in self.nodegroups.values():
+            if ng in self._closed_nodegroups:
+                continue
             try:
-                ng.close()
+                ng.close(_sync='off')
             except RuntimeError:
                 # If the server has already disconnected, then no need to close.
                 cli = RPCClient.get_client(ng._rpc_addr)

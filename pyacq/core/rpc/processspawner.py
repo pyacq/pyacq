@@ -1,4 +1,10 @@
+# -*- coding: utf-8 -*-
+# Copyright (c) 2016, French National Center for Scientific Research (CNRS)
+# Distributed under the (new) BSD License. See LICENSE for more info.
+
 import sys
+import os
+import json
 import subprocess
 import atexit
 import zmq
@@ -13,87 +19,25 @@ from .log import get_logger_address, LogSender
 logger = logging.getLogger(__name__)
 
 
-bootstrap_template = """
-import zmq
-import time
-import sys
-import traceback
-import faulthandler
-import logging
-
-faulthandler.enable()
-logger = logging.getLogger()
-logger.level = {loglevel}
-
-from pyacq import {class_name}
-from pyacq.core.rpc import log
-
-if {qt}:
-    import pyqtgraph as pg
-    app = pg.mkQApp()
-    app.setQuitOnLastWindowClosed(False)
-
-if {procname} is not None:
-    log.set_process_name({procname})
-if {logaddr} is not None:
-    log.set_logger_address({logaddr})
-
-log.log_exceptions()
-
-logger.info("New process {procname} {class_name}({args}) log_addr:{logaddr} log_level:{loglevel}")
-
-bootstrap_sock = zmq.Context.instance().socket(zmq.PAIR)
-bootstrap_sock.connect({bootstrap_addr})
-bootstrap_sock.linger = 1000
-
-# Create RPC server
-try:
-    # Create server
-    server = {class_name}({args})
-    status = {{'addr': server.address.decode()}}
-except:
-    logger.error("Error starting {class_name} with args: {args}:")
-    status = {{'error': traceback.format_exception(*sys.exc_info())}}
-    
-# Report server status to spawner
-start = time.time()
-while time.time() < start + 10.0:
-    # send status repeatedly until spawner gives a reply.
-    bootstrap_sock.send_json(status)
-    try:
-        bootstrap_sock.recv(zmq.NOBLOCK)
-        break
-    except zmq.error.Again:
-        time.sleep(0.01)
-        continue
-
-bootstrap_sock.close()
-
-# Run server until heat death of universe
-if 'addr' in status:
-    server.run_forever()
-    
-if {qt}:
-    app.exec_()
-"""
-
-
 class ProcessSpawner(object):
-    """Utility for spawning and bootstrapping a new process with an RPC server.
+    """Utility for spawning and bootstrapping a new process with an :class:`RPCServer`.
     
-    `ProcessSpawner.client` is an RPCClient that is connected to the remote
-    server.
+    Automatically creates an :class:`RPCClient` that is connected to the remote 
+    process (``spawner.client``).
     
     Parameters
     ----------
     name : str | None
         Optional process name that will be assigned to all remote log records.
-    addr : str
+    address : str
         ZMQ socket address that the new process's RPCServer will bind to.
-        Default is 'tcp://*:*'.
+        Default is ``'tcp://127.0.0.1:*'``.
+        
+        **Note:** binding RPCServer to a public IP address is a potential
+        security hazard (see :class:`RPCServer`).
     qt : bool
         If True, then start a Qt application in the remote process, and use
-        a QtRPCServer.
+        a :class:`QtRPCServer`.
     log_addr : str
         Optional log server address to which the new process will send its log
         records. This will also cause the new process's stdout and stderr to be
@@ -103,12 +47,28 @@ class ProcessSpawner(object):
         process.
     executable : str | None
         Optional python executable to invoke. The default value is `sys.executable`.
+        
+    Examples
+    --------
+    
+    ::
+    
+        # start a new process
+        proc = ProcessSpawner()
+        
+        # ask the child process to do some work
+        mod = proc._import('my.module')
+        mod.do_work()
+        
+        # close the child process
+        proc.close()
+        proc.wait()
     """
-    def __init__(self, name=None, addr="tcp://*:*", qt=False, log_addr=None, 
+    def __init__(self, name=None, address="tcp://127.0.0.1:*", qt=False, log_addr=None, 
                  log_level=None, executable=None):
         #logger.warn("Spawning process: %s %s %s", name, log_addr, log_level)
         assert qt in (True, False)
-        assert isinstance(addr, (str, bytes))
+        assert isinstance(address, (str, bytes))
         assert name is None or isinstance(name, str)
         assert log_addr is None or isinstance(log_addr, (str, bytes)), "log_addr must be str or None; got %r" % log_addr
         if log_addr is None:
@@ -130,19 +90,30 @@ class ProcessSpawner(object):
         
         # Spawn new process
         class_name = 'QtRPCServer' if qt else 'RPCServer'
-        args = "addr='%s'" % addr
-        bootstrap = bootstrap_template.format(class_name=class_name, args=args,
-                                              bootstrap_addr=bootstrap_addr,
-                                              loglevel=log_level, qt=str(qt),
-                                              logaddr=log_addr, procname=repr(name))
+        args = {'address': address}
+        bootstrap_conf = dict(
+            class_name=class_name, 
+            args=args,
+            bootstrap_addr=bootstrap_addr.decode(),
+            loglevel=log_level,
+            logaddr=log_addr.decode() if log_addr is not None else None,
+            qt=qt,
+        )
         
         if executable is None:
             executable = sys.executable
 
+        cmd = (executable, '-m', 'pyacq.core.rpc.bootstrap')
+        if name is not None:
+            cmd = cmd + (name,)
+
         if log_addr is not None:
             # start process with stdout/stderr piped
-            self.proc = subprocess.Popen((executable, '-c', bootstrap), 
-                                         stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+            self.proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=subprocess.PIPE,
+                                         stdout=subprocess.PIPE)
+            
+            self.proc.stdin.write(json.dumps(bootstrap_conf).encode())
+            self.proc.stdin.close()
             
             # create a logger for handling stdout/stderr and forwarding to log server
             self.logger = logging.getLogger(__name__ + '.' + str(id(self)))
@@ -157,7 +128,9 @@ class ProcessSpawner(object):
             
         else:
             # don't intercept stdout/stderr
-            self.proc = subprocess.Popen((executable, '-c', bootstrap))
+            self.proc = subprocess.Popen(cmd, stdin=subprocess.PIPE)
+            self.proc.stdin.write(json.dumps(bootstrap_conf).encode())
+            self.proc.stdin.close()
             
         logger.info("Spawned process: %d", self.proc.pid)
         
@@ -170,9 +143,10 @@ class ProcessSpawner(object):
         bootstrap_sock.send(b'OK')
         bootstrap_sock.close()
         
-        if 'addr' in status:
-            self.addr = status['addr']
-            self.client = RPCClient(self.addr.encode())
+        if 'address' in status:
+            self.address = status['address']
+            #: An RPCClient instance that is connected to the RPCServer in the remote process
+            self.client = RPCClient(self.address.encode())
         else:
             err = ''.join(status['error'])
             self.kill()
@@ -182,9 +156,13 @@ class ProcessSpawner(object):
         atexit.register(self.stop)
         
     def wait(self):
-        self.proc.wait()
+        """Wait for the process to exit and return its return code.
+        """
+        return self.proc.wait()
 
     def kill(self):
+        """Kill the spawned process immediately.
+        """
         if self.proc.poll() is not None:
             return
         logger.info("Kill process: %d", self.proc.pid)
@@ -192,12 +170,20 @@ class ProcessSpawner(object):
         self.proc.wait()
 
     def stop(self):
+        """Stop the spawned process by asking its RPC server to close.
+        """
         if self.proc.poll() is not None:
             return
         logger.info("Close process: %d", self.proc.pid)
         closed = self.client.close_server()
         assert closed is True, "Server refused to close. (reply: %s)" % closed
         self.proc.wait()
+
+    def poll(self):
+        """Return the spawned process's return code, or None if it has not
+        exited yet.
+        """
+        return self.proc.poll()
 
 
 class PipePoller(threading.Thread):
