@@ -81,7 +81,7 @@ Overview of node types
 --------------------------------------------- ------------------------------------ --------------------------------------------------
 :ref:`PyAudio <PyAudio_node>`                 :ref:`Triggering <triggering_nodes>` :ref:`Oscilloscope <analog_viewer_nodes>`
 :ref:`Webcam (libav, imageio) <camera_nodes>`                                      :ref:`Wavelet spectrogram <spectral_viewer_nodes>`
-:ref:`BrainAmp <BrainAmp_node>`                                                    
+:ref:`BrainAmp <BrainAmp_node>`                                                    :ref:`Video display <image_viewer_nodes>`
 :ref:`Emotiv <Emotiv_node>`
 ============================================= ==================================== ==================================================
 

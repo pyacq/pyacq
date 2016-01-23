@@ -1,3 +1,5 @@
+.. currentmodule:: pyacq.viewers
+
 Visualization Nodes
 ===================
 
@@ -7,10 +9,10 @@ Visualization Nodes
 Analog signal visualizers
 -------------------------
 
-.. autoclass::  pyacq.viewers.QOscilloscope
+.. autoclass::  QOscilloscope
    :members:
 
-.. autoclass::  pyacq.viewers.QTriggeredOscilloscope
+.. autoclass::  QTriggeredOscilloscope
    :members:
 
 
@@ -19,5 +21,14 @@ Analog signal visualizers
 Spectral visualizers
 --------------------
 
-.. autoclass::  pyacq.viewers.QTimeFreq
+.. autoclass::  QTimeFreq
+   :members:
+
+
+.. _image_viewer_nodes:
+
+Image visualizers
+-----------------
+
+.. autoclass:: ImageViewer
    :members:
