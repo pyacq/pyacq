@@ -134,6 +134,12 @@ class FakeSpikeSource(NumpyDeviceBuffer):
         #   * some cells shared between adjacent electrodes
         import scipy.ndimage
         
+        if nb_channel is None:
+            nb_channel = 1
+            flatten = True
+        else:
+            flatten = False
+        
         # allow multidimensional channel array
         if isinstance(nb_channel, tuple):
             channel_shape = nb_channel
@@ -170,6 +176,9 @@ class FakeSpikeSource(NumpyDeviceBuffer):
             
         # add some hf noise back in
         buf += np.random.normal(size=buf.shape, loc=0, scale=1e-4)
+        
+        if flatten:
+            buf = np.ravel(buf)
         buf = buf.astype(np.float32)
         
         self.configure(buffer=buf, sample_interval=sample_interval,
