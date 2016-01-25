@@ -91,14 +91,30 @@ class FakeSpectralSource(NumpyDeviceBuffer):
     
     Creates and configures a node that outputs a multi-channel analog signal
     composed of random noise and sine waves.
+    
+    Parameters
+    ----------
+    nb_channel : int or None
+        Number of channels in the data. If None, then one channel is generated
+        and the stream shape will be 1D.
     """
     def __init__(self, nb_channel=16, sample_interval=1e-3, chunksize=256):
         NumpyDeviceBuffer.__init__(self)
-        length = 40 * self.chunksize
+        if nb_channel is None:
+            nb_channel = 1
+            flatten = True
+        else:
+            flatten = False
+        
+        length = 40 * chunksize
         t = np.arange(length) * sample_interval
         buf = np.random.rand(length, nb_channel) * 0.05
-        buf += np.sin(2 * np.pi * 440. * t)[:, None] * 0.5
+        buf += np.sin(2 * np.pi * (200. + 50*np.sin(t)) * t)[:, None] * 0.5
+        
         buf = buf.astype('float32')
+        if flatten:
+            buf = np.ravel(buf)
+        
         self.configure(buffer=buf, sample_interval=sample_interval,
                        chunksize=chunksize, streamtype='analogsignal')
 
@@ -126,13 +142,14 @@ class FakeSpikeSource(NumpyDeviceBuffer):
 
         duration = 5.0
         samples = int(duration / sample_interval)
+        samples = chunksize * (samples // chunksize)
         
         # generate single spike waveform
         spike = np.zeros(int(4e-3 / sample_interval))
-        spike[int(1.7 / sample_interval)] += 2e-3
-        spike = scpiy.ndimage.gaussian_filter(spike, 5)
-        spike[int(1.1 / sample_interval)] -= 5e-3
-        spike = scpiy.ndimage.gaussian_filter(spike, 3)
+        spike[int(1.7e-3 / sample_interval)] += 2e-3
+        spike = scipy.ndimage.gaussian_filter(spike, 5)
+        spike[int(1.1e-3 / sample_interval)] -= 5e-3
+        spike = scipy.ndimage.gaussian_filter(spike, 3)
         spike /= -spike.min()
         
         # start all data with random noise
@@ -146,7 +163,7 @@ class FakeSpikeSource(NumpyDeviceBuffer):
             spikeinds = (spiketimes / sample_interval).astype(np.int)
             spikeinds = spikeinds[spikeinds < samples]
         
-            spikeamps = np.random.normal(len(spikeinds), loc=4e-3, scale=0.5e-3)
+            spikeamps = np.random.normal(size=len(spikeinds), loc=4e-3, scale=0.5e-3)
             sl = (slice(None),) + ind  # how to select all samples in this chnnel
             buf[sl][spikeinds] += spikeamps
             buf[sl] = np.convolve(buf[sl], spike, mode='same')
