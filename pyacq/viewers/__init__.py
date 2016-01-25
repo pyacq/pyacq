@@ -3,3 +3,4 @@ from .qoscilloscope import QOscilloscope
 from .qtimefreq import TimeFreqWorker, QTimeFreq
 from .qtriggeredoscilloscope import QTriggeredOscilloscope
 from .spectrogram import Spectrogram
+from .scrollplot import ScrollPlot
