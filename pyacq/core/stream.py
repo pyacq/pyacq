@@ -14,10 +14,10 @@ from .rpc import ObjectProxy
 
 
 default_stream = dict(protocol='tcp', interface='127.0.0.1', port='*',
-                        transfermode='plaindata', streamtype='analogsignal',
-                        dtype='float32', shape=(-1, 1), nb_channel = None, timeaxis = 0,  
-                        compression ='', scale = None, offset = None, units = '',
-                        sample_rate = 1.)
+                      transfermode='plaindata', streamtype='analogsignal',
+                      dtype='float32', shape=(-1, 1), nb_channel = None, timeaxis = 0,  
+                      compression ='', scale = None, offset = None, units = '',
+                      sample_rate = 1.)
 
 
 class OutputStream(object):
@@ -191,6 +191,7 @@ class InputStream(object):
         if isinstance(output, dict):
             self.params = output
         elif isinstance(output, OutputStream):
+            assert output.configured, "Output stream has not been configured yet."
             self.params = output.params
         elif isinstance(output, ObjectProxy):
             self.params = output.params._get_value()
