@@ -27,7 +27,8 @@ class OutputStream(object):
     threads, processes, or machines. They offer a variety of transfer methods
     including TCP for remote connections and IPC for local connections.
     """
-    def __init__(self, spec={}, node=None, name=None):
+    def __init__(self, spec=None, node=None, name=None):
+        spec = {} if spec is None else spec
         self.configured = False
         self.spec = spec  # this is a priori stream params, and must be change when Node.configure
         if node is not None:
@@ -173,7 +174,8 @@ class InputStream(object):
     threads, processes, or machines. They offer a variety of transfer methods
     including TCP for remote connections and IPC for local connections.
     """
-    def __init__(self, spec={}, node=None, name=None):
+    def __init__(self, spec=None, node=None, name=None):
+        spec = {} if spec is None else spec
         self.configured = False
         self.spec = spec
         if node is not None:
