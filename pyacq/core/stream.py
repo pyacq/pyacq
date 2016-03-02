@@ -1,3 +1,4 @@
+import struct
 import zmq
 import numpy as np
 import random
@@ -9,15 +10,24 @@ try:
 except ImportError:
     HAVE_BLOSC = False
 
-from .sharedarray import SharedArray
+from .sharedarray import SharedMem, SharedArray
 from .rpc import ObjectProxy
 
 
-default_stream = dict(protocol='tcp', interface='127.0.0.1', port='*',
-                        transfermode='plaindata', streamtype='analogsignal',
-                        dtype='float32', shape=(-1, 1), nb_channel = None, timeaxis = 0,  
-                        compression ='', scale = None, offset = None, units = '',
-                        sample_rate = 1.)
+default_stream = dict(
+    protocol='tcp',
+    interface='127.0.0.1',
+    port='*',
+    transfermode='plaindata',
+    streamtype='analogsignal',
+    dtype='float32',
+    shape=(-1, 1),
+    compression='',
+    scale=None,
+    offset=None,
+    units='',
+    sample_rate=1.
+)
 
 
 class OutputStream(object):
@@ -64,13 +74,6 @@ class OutputStream(object):
             then use -1 for the unknown dimension.
             * For ``streamtype=image``, the shape should be (-1, H, W), (n_frames, H, W), or (H, W).
             * For ``streamtype=analogsignal`` the shape should be (n_samples, n_channels) or (-1, n_channels)
-            Note that it is the internal shape, see autoswapaxes and footnotes.
-        nb_channel: int or None
-            Used for analogsignal, this redundant with shape[0] or shape[1] (depending timeaxis).
-        timeaxis: int
-            The index of the axis that represents time within a single data chunk, or
-            -1 if the chunk lacks this axis (in this case, each chunk represents exactly one
-            timepoint). Note that this describe internal buffer only.
         compression: '', 'blosclz', 'blosc-lz4', 'mp4', 'h264'
             The compression for the data stream. The default uses no compression.
         scale: float
@@ -94,18 +97,6 @@ class OutputStream(object):
         shm_id : str or int (depending on platform)
             id of the SharedArray when using `transfermode = 'sharedarray'`.
 
-        Notes
-        -----
-        
-        Streams are C order and CONTINUOUS. For efficiency reasons, you can choose differents timesaxis depending on the context.
-        For example, for a 16 signals stream (ndim=2), from dac device the natural shape=(time, channel), so timeaxis=0.
-        In that case each channel is not continuous in memory (because C order). For some processing, it is better to have continuous
-        channel so you could want  shape=(channel, time) so timeaxis=1. So from one Node to another the timeaxis can be differents.
-        To simplify this necessary mess : the send() and recv()  by default perform a transpose (swapaxis) to force a fake timeaxis to 0 (by convention).
-        
-        This means that internaly if a timeaxis=1 (cahnnel are toninious inmemory), the numpy.array will be slicable on axis 0 for time.
-        Notes that internally numpy change the np.array.strides but not the memory itself.
-        You can disable this swapaxes by setting send(autoswapaxes=False)/recv(autoswapaxes=False), but this make internal code for Nodes more difficult.
         """
         
         self.params = dict(default_stream)
@@ -113,13 +104,13 @@ class OutputStream(object):
         for k in kargs:
             if k in self.spec:
                 assert kargs[k]==self.spec[k], \
-                    'You cannot configure {}={}, already in fixed in self.spec {}={}'.format(k, kargs[k], k, self.spec[k])
+                    'Cannot configure {}={}; already in fixed in self.spec {}={}'.format(k, kargs[k], k, self.spec[k])
         self.params.update(kargs)
         
-        if self.params['nb_channel'] is not None:
-            channelaxis = { 0:1, 1:0}[self.params['timeaxis']]
-            assert self.params['shape'][channelaxis] == self.params['nb_channel'], \
-                    'Mismatch between nb_channel and shape {} {}'.format(self.params['nb_channel'], self.params['shape'])
+        shape = self.params['shape']
+        assert shape[0] == -1 or shape[0] > 0, "First element in shape must be -1 or > 0."
+        for i in range(1, len(shape)):
+            assert shape[i] > 0, "Shape index %d must be > 0." % i
         
         if self.params['protocol'] in ('inproc', 'ipc'):
             pipename = u'pyacq_pipe_'+''.join(random.SystemRandom().choice(string.ascii_uppercase + string.digits) for _ in range(24))
@@ -138,6 +129,8 @@ class OutputStream(object):
             self.sender = PlainDataSender(self.socket, self.params)
         elif self.params['transfermode'] == 'sharedarray':
             self.sender = SharedArraySender(self.socket, self.params)
+        elif self.params['transfermode'] == 'sharedmem':
+            self.sender = SharedMemSender(self.socket, self.params)
 
         self.configured = True
         if self.node and self.node():
@@ -214,8 +207,10 @@ class InputStream(object):
             self.receiver = PlainDataReceiver(self.socket, self.params)
         elif self.params['transfermode'] == 'sharedarray':
             self.receiver = SharedArrayReceiver(self.socket, self.params)
+        elif self.params['transfermode'] == 'sharedmem':
+            self.receiver = SharedMemReceiver(self.socket, self.params)
         else:
-            raise
+            raise ValueError('Unsupported transfermode "%s"' % self.params['transfermode'])
         
         self.connected = True
         if self.node and self.node():
@@ -287,46 +282,31 @@ class PlainDataSender:
     def __init__(self, socket, params):
         self.socket = socket
         self.params = params
-        self.copy = self.params.get('copy', False)
-        #self.copy = not self.params['protocol'] in ('inproc', 'tcp', 'ipc')
-        
         self.funcs = []
-        # compression
-        if self.params['compression'] == '':
-            self.funcs.append(self.to_bytes)
-        elif self.params['compression'] == 'blosc-blosclz':
-            # cname for ['blosclz', 'lz4', 'lz4hc', 'snappy', 'zlib']
-            self.funcs.append(self.compress_blosclz)
-        elif self.params['compression'] == 'blosc-lz4':
-            self.funcs.append(self.compress_blosclz4)        
     
-    def to_bytes(self, index, data):
-        if not data.flags['C_CONTIGUOUS']:
-            # if not C continuous return transform to bytes
-            # so this is a copy
-            return index, data.tostring(order='C')
-        else:
-            # if C continuous let's keep  data as numpy in case of copy=True
-            # zmq shoudla avoid copy
-            return index, data
-    
-    def compress_blosclz(self, index, data):
-        assert HAVE_BLOSC, "Cannot use blosclz compression; blosc package is not importable."
-        data = blosc.pack_array(data, cname='blosclz')
-        return index, data
-    
-    def compress_blosclz4(self, index, data):
-        assert HAVE_BLOSC, "Cannot use blosclz4 compression; blosc package is not importable."
-        data = blosc.pack_array(data, cname='lz4')
-        return index, data
-    
-    def send(self, index, data, autoswapaxes = True):
+    def send(self, index, data):
+        # optional pre-processing before send
         if isinstance(data, np.ndarray):
-            if autoswapaxes and self.params['timeaxis']!=0:
-                data = data.swapaxes(0, self.params['timeaxis'])
             for f in self.funcs:
                 index, data = f(index, data)
-        self.socket.send_multipart([np.int64(index), data], copy=self.copy)
+                
+        # serialize
+        dtype = data.dtype
+        shape = data.shape
+        buf, offset, strides = decompose_array(data)
+        
+        # compress
+        comp = self.params['compression']
+        if comp.startswith('blosc-'):
+            assert HAVE_BLOSC, "Cannot use blosclz4 compression; blosc package is not importable."
+            buf = blosc.compress(buf, data.itemsize, cname=comp[6:])
+        elif comp != '':
+            raise ValueError("Unknown compression method '%s'" % comp)
+        
+        # Pack and send
+        stat = struct.pack('!' + 'Q' * (3+len(shape)) + 'q' * len(strides), len(shape), index, offset, *(shape + strides))
+        copy = self.params.get('copy', False)
+        self.socket.send_multipart([stat, buf], copy=copy)
     
     def close(self):
         pass
@@ -341,30 +321,98 @@ class PlainDataReceiver:
     def __init__(self, socket, params):
         self.socket = socket
         self.params = params
-        
-        if self.params['compression'] == '':
-            self.func = self._numpy_fromstring
-        elif self.params['compression'] in ['blosc-blosclz', 'blosc-lz4']:
-            self.func = self._uncompress_blosc
     
-    def recv(self, autoswapaxes = True):
-        m0,m1 = self.socket.recv_multipart()
-        index = np.fromstring(m0, dtype='int64')[0]
-        index, data = self.func(index, m1)
-        if autoswapaxes and self.params['timeaxis']!=0:
-            data = data.swapaxes(0, self.params['timeaxis'])
-        return  index, data
+    def recv(self):
+        # receive and unpack structure
+        stat, data = self.socket.recv_multipart()
+        ndim = struct.unpack('!Q', stat[:8])[0]
+        stat = struct.unpack('!' + 'Q' * (ndim + 2) + 'q' * ndim, stat[8:])
+        index = stat[0]
+        offset = stat[1]
+        shape = stat[2:2+ndim]
+        strides = stat[-ndim:]
+        
+        # uncompress
+        comp = self.params['compression']
+        if comp.startswith('blosc-'):
+            assert HAVE_BLOSC, "Cannot use blosc decompression; blosc package is not importable."
+            data = blosc.decompress(data)
+        elif comp != '':
+            raise ValueError("Unknown compression method '%s'" % comp)
+        
+        # convert to array
+        dtype = self.params['dtype']
+        data = np.ndarray(buffer=data, shape=shape,
+                          strides=strides, offset=offset, dtype=dtype)        
+        return index, data
     
     def close(self):
         pass
 
-    def _numpy_fromstring(self, index, data):
-        data = np.frombuffer(data, dtype=self.params['dtype']).reshape(self.params['shape'])
+
+class SharedMemSender:
+    """
+    """
+    def __init__(self, socket, params):
+        self.socket = socket
+        self.params = params
+        self.size = self.params['sharedmem_size']
+        dtype = np.dtype(self.params['dtype'])
+        shm_size = self.size * dtype.itemsize
+        self._shmem = SharedMem(nbytes=shm_size)
+        self.params['shm_id'] = self._shmem.shm_id
+        self._ptr = 0
+    
+    def send(self, index, data):
+        assert data.dtype == self.params['dtype']
+        shape = data.shape
+        if self.params['shape'][0] != -1:
+            assert shape == self.params['shape']
+        else:
+            assert shape[1:] == self.params['shape'][1:]
+ 
+        size = data.size * data.itemsize
+        assert size <= self.size
+        if self._ptr + size >= self.size:
+            self._ptr = 0
+        
+        # write data into shmem buffer
+        buf, offset, strides = decompose_array(data)  # can we avoid this copy?
+        shm_buf = self._shmem.to_numpy(self._ptr + offset, data.dtype, data.shape, strides)
+        shm_buf[:] = buf
+        
+        stat = struct.pack('!' + 'Q' * (3+len(shape)) + 'q' * len(strides), len(shape), index, self._ptr+offset, *(shape + strides))
+        self._ptr += data.size
+        self.socket.send_multipart([stat])
+    
+    def close(self):
+        pass
+
+
+class SharedMemReceiver:
+    def __init__(self, socket, params):
+        self.socket = socket
+        self.params = params
+
+        self.size = self.params['sharedmem_size']
+        self._shmem = SharedMem(nbytes=self.size, shm_id=self.params['shm_id'])
+
+    def recv(self, with_data=False):
+        stat = self.socket.recv_multipart()[0]
+        ndim = struct.unpack('!Q', stat[:8])[0]
+        stat = struct.unpack('!' + 'Q' * (ndim + 2) + 'q' * ndim, stat[8:])
+        index = stat[0]
+        offset = stat[1]
+        shape = stat[2:2+ndim]
+        strides = stat[-ndim:]
+        
+        dtype = self.params['dtype']
+        data = self._shmem.to_numpy(offset, dtype, shape, strides)
         return index, data
     
-    def _uncompress_blosc(self, index, data):
-        data = blosc.unpack_array(data)
-        return index, data
+    def close(self):
+        pass
+    
 
 
 class SharedArraySender:
@@ -374,8 +422,6 @@ class SharedArraySender:
     
     This is useful for a Node that needs to access older chunks.
     
-    Be careful to correctly set the timeaxis (concatenation axis).
-    
     Note that on Unix using plaindata+inproc can be faster.
     """
     def __init__(self, socket, params):
@@ -384,20 +430,12 @@ class SharedArraySender:
         #~ self.copy = self.params['protocol'] == 'inproc'
         self.copy = False
         
-        assert 'ring_buffer_method' in params, 'ring_buffer_method not in params for sharedarray'
         assert 'sharedarray_shape' in params, 'sharedarray_shape not in params for sharedarray'
         
-        if self.params['ring_buffer_method'] == 'single':
-            #~ self.funcs.append(self._copy_to_sharray_single)
-            self.func = self._copy_to_sharray_single
-        elif self.params['ring_buffer_method'] == 'double':
-            #~ self.funcs.append(self._copy_to_sharray_double)
-            self.func = self._copy_to_sharray_double
         self._index = 0
         
         # prepare SharedArray
-        self._timeaxis = self.params['timeaxis']
-        self._ring_size = self.params['sharedarray_shape'][self._timeaxis]
+        self._ring_size = self.params['sharedarray_shape'][0]
         sharedarray_shape = list(self.params['sharedarray_shape'])
         self._ndim = len(sharedarray_shape)
         assert self._ndim==len(self.params['shape']), 'sharedarray_shape and shape must coherent!'
@@ -407,10 +445,15 @@ class SharedArraySender:
         self.params['shm_id'] = self._sharedarray.shm_id
         self._numpyarr = self._sharedarray.to_numpy()
 
-    def send(self, index, data, autoswapaxes = True):
-        if autoswapaxes and self.params['timeaxis']!=0:
-            data = data.swapaxes(0, self.params['timeaxis'])
-        self.func(index, data)
+    def send(self, index, data):
+        method = self.params.get('ring_buffer_method', 'single')
+        
+        if method == 'single':
+            self._copy_to_sharray_single(index, data)
+        elif method == 'double':
+            self._copy_to_sharray_double(index, data)
+        else:
+            raise ValueError('Unsupported ring_buffer_method "%s"' % method)
 
     def close(self):
         self._sharedarray.close()
@@ -507,17 +550,17 @@ class SharedArrayReceiver:
         self.last_chunk_size = None
         self.last_index = 0
 
-    def recv(self, autoswapaxes = True,  with_data = False):
+    def recv(self, with_data=False):
         m0 = self.socket.recv()
         index = np.fromstring(m0, dtype='int64')[0]
         self.last_chunk_size = index - self.last_index
         self.last_index = index
         if with_data:
-            return index, self.get_array_slice(index, self.last_chunk_size, autoswapaxes = autoswapaxes)
+            return index, self.get_array_slice(index, self.last_chunk_size)
         else:
             return index, None
 
-    def get_array_slice(self, index, length, autoswapaxes = True):
+    def get_array_slice(self, index, length):
         assert length<self._ring_size, 'The ring size is too small {} {}'.format(self._ring_size, length)
         if self.params['ring_buffer_method'] == 'double':
             i2 = index%self._ring_size + self._ring_size
@@ -525,11 +568,96 @@ class SharedArrayReceiver:
             sl = [slice(None)] * self._ndim 
             sl[self._timeaxis] = slice(i1,i2)
             data = self._numpyarr[sl]
-            if autoswapaxes and self.params['timeaxis']!=0:
-                data = data.swapaxes(0, self.params['timeaxis'])
             return data
         elif self.params['ring_buffer_method'] == 'single':
             raise(NotImplementedError)
     
     def close(self):
         pass
+
+
+def axis_order_copy(data, out=None):
+    """Copy *data* such that the result is contiguous, but preserves the axis order
+    in memory.
+    
+    If *out* is provided, then write the copy into that array instead creating
+    a new one. *out* must be an array of the same dtype and size, with ndim=1.
+    """
+    # transpose to natural order
+    order = np.argsort(np.abs(data.strides))[::-1]    
+    data = data.transpose(order)
+    # reverse axes if needed
+    ind = tuple((slice(None, None, -1) if data.strides[i] < 0 else slice(None) for i in range(data.ndim)))
+    data = data[ind]
+    
+    if out is None:
+        # now copy
+        data = data.copy()
+    else:
+        assert out.dtype == data.dtype
+        assert out.size == data.size
+        assert out.ndim == 1
+        out[:] = data.reshape(data.size)
+        data = out
+    # unreverse axes
+    data = data[ind]
+    # and untranspose
+    data = data.transpose(np.argsort(order))
+    return data
+
+
+def is_contiguous(data):
+    """Return True if *data* occupies a contiguous block of memory.
+    
+    Note this is _not_ the same as asking whether an array is C-contiguous
+    or F-contiguous because it does not care about the axis order or 
+    direction.
+    """
+    order = np.argsort(np.abs(data.strides))[::-1]
+    strides = np.array(data.strides)[order]
+    shape = np.array(data.shape)[order]
+    
+    if abs(strides[-1]) != data.itemsize:
+        return False
+    for i in range(data.ndim-1):
+        if abs(strides[i]) != abs(strides[i+1] * shape[i+1]):
+            return False
+        
+    return True
+
+
+def decompose_array(data):
+    """Return the components needed to efficiently serialize and unserialize
+    an array:
+    
+    1. A contiguous data buffer that can be sent via socket
+    2. An offset into the buffer
+    3. Strides into the buffer
+    
+    Shape and dtype can be pulled directly from the array. 
+    
+    If the input array is discontiguous, it will be copied using axis_order_copy().
+    """
+    if not is_contiguous(data):
+        # socket.send requires a contiguous buffer
+        data = axis_order_copy(data)
+        
+    buf = normalized_array(data)
+    offset = data.__array_interface__['data'][0] - buf.__array_interface__['data'][0]
+    
+    return buf, offset, data.strides
+
+
+def normalized_array(data):
+    """Return *data* with axis order and direction normalized.
+    
+    This will only transpose and reverse axes; the array data is not copied.
+    If *data* is contiguous in memory, then this returns a C-contiguous array.
+    """
+    order = np.argsort(np.abs(data.strides))[::-1]    
+    data = data.transpose(order)
+    # reverse axes if needed
+    ind = tuple((slice(None, None, -1) if data.strides[i] < 0 else slice(None) for i in range(data.ndim)))
+    return data[ind]
+
+
