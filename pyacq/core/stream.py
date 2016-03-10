@@ -709,13 +709,17 @@ class RingBuffer:
             assert start <= stop, "Start index must be less than stop index."
 
             if self.double:
-                print("  double:", (start, stop), (start%bsize, stop%bsize))
-                data = self.buffer[start%bsize:stop%bsize:step]
+                start_ind = start % bsize
+                stop_ind = start_ind + (stop - start)
+                print("  double:", (start, stop), (start_ind, stop_ind), bsize)
+                data = self.buffer[start_ind:stop_ind:step]
             else:
                 break_index = (self._write_index + 1) - ((self._write_index + 1) % bsize)
                 if (start < break_index) == (stop <= break_index):
-                    print("  single; contig:", (start, stop), (start%bsize, stop%bsize), bsize, break_index)
-                    data = self.buffer[start%bsize:stop%bsize:step]
+                    start_ind = start % bsize
+                    stop_ind = start_ind + (stop - start)
+                    print("  single; contig:", (start, stop), (start_ind, stop_ind), bsize, break_index)
+                    data = self.buffer[start_ind:stop_ind:step]
                 else:
                     print("  single; discontig:", (start, stop), (start%bsize, stop%bsize), bsize, break_index)
                     # need to reconstruct from two pieces
