@@ -167,7 +167,7 @@ class InputStream(object):
     threads, processes, or machines. They offer a variety of transfer methods
     including TCP for remote connections and IPC for local connections.
     """
-    def __init__(self, spec=None, node=None, name=None):
+    def __init__(self, spec=None, node=None, name=None, bufferSize=None):
         spec = {} if spec is None else spec
         self.configured = False
         self.spec = spec
@@ -176,6 +176,10 @@ class InputStream(object):
         else:
             self.node = None
         self.name = name
+        if bufferSize is None:
+            self.buffer = None
+        else:
+            self.buffer = RingBuffer(bufferSize, double=True)
     
     def connect(self, output):
         """Connect an output to this input.
@@ -238,7 +242,10 @@ class InputStream(object):
             chunk.
 
         """
-        return self.receiver.recv(**kargs)
+        data = self.receiver.recv(**kargs)
+        if self.buffer is not None:
+            self.buffer.new_data(*data)
+        return data
 
     def close(self):
         """Close the Input.
@@ -251,8 +258,9 @@ class InputStream(object):
         del self.socket
     
     def get_array_slice(self, index, length, **kargs):
-        """Return a slice from the shared memory array, if this stream uses
-        `transfermode='sharedarray'`.
+        """Return a slice from the ring buffer that accumulates data.
+        
+        Requires `bufferSize` to be specified at initialization.
         
         Parameters
         ----------
@@ -574,6 +582,207 @@ class SharedArrayReceiver:
     
     def close(self):
         pass
+
+
+class RingBuffer:
+    """Class that collects data as it arrives from an InputStream and writes it
+    into a single- or double-ring buffer.
+    
+    This allows the user to request the concatenated history of data
+    received by the stream, up to a predefined length. Double ring buffers
+    allow faster, copyless reads at the expense of doubled write time and memory
+    footprint.
+    """
+    def __init__(self, shape, dtype, double=True):
+        self.double = double
+        self.shape = shape
+        
+        # Index of last writable sample. This value is used to determine which
+        # buffer indices map to which data indices (where buffer indices wrap
+        # around to 0, but data indices always increase as data arrives).
+        self._write_index = -1
+        # Index of last written sample. This is used to determine how much of
+        # the buffer is *valid* for reading.
+        self._read_index = -1
+        # Note: read_index and write_index are defined independently to avoid
+        # race condifions with processes reading and writing from the same
+        # shared memory simultaneously. When new data arrives:
+        #   * write_index is increased to indicate that the buffer has advanced
+        #     and some old data is no longer valid
+        #   * new data is written over the old buffer data
+        #   * read_index is increased to indicate that the new data is now
+        #     readable
+
+        #
+        #              write_index+1-bsize   break_index     read_index       write_index
+        #              |                     |               |                |
+        #    ..........<.....................|...............>................v
+        #                                    |
+        #              [           readable area             ][ writable area ]
+        #                                    |
+        #                                    |  [........]           read without copy
+        #                        [........]  |                       read without copy
+        #                               [....|......]                ewad with copy
+        # 
+        
+        shape = (shape[0] * (2 if double else 1),) + shape[1:]
+        # initialize int buffers with 0 and float buffers with nan
+        self._filler = 0 if np.dtype(dtype).kind in 'ui' else np.nan
+        self.buffer = np.empty(shape, dtype=dtype)
+        self.buffer[:] = self._filler
+        self.dtype = self.buffer.dtype
+        
+    def new_chunk(self, data, index=None):
+        dsize = data.shape[0]
+        bsize = self.shape[0]
+        assert dsize <= bsize, ("Data chunk size %d is too large for ring "
+                                "buffer of size %d." % (dsize, bsize))
+        
+        # by default, index advances by the size of the chunk
+        if index is None:
+            index = self._write_index + dsize
+        
+        assert dsize <= index - self._write_index, ("Data size is %d, but index "
+                                                    "only advanced by %d." % 
+                                                    (dsize, index-self._write_index)) 
+
+        # advance write index. This immediately prevents other processes from
+        # accessing memory that is about to be overwritten.
+        self._set_write_index(index)
+        
+        # decide if any skipped data needs to be filled in
+        fill_start = max(self._read_index + 1, self._write_index + 1 - bsize)
+        fill_stop = self._write_index + 1 - dsize
+        
+        if fill_stop > fill_start:
+            # data was skipped; fill in missing regions with 0 or nan.
+            self._write(fill_start, fill_stop, self._filler)
+            
+        self._write(self._write_index + 1 - dsize, self._write_index + 1, data)
+            
+        self._set_read_index(index)
+
+    def _set_write_index(self, i):
+        # what kind of protection do we need here?
+        self._write_index = i
+
+    def _set_read_index(self, i):
+        # what kind of protection do we need here?
+        self._read_index = i
+        
+    def _write(self, start, stop, value):
+        # get starting index
+        bsize = self.shape[0]
+        dsize = stop - start
+        i = start % bsize
+        
+        if self.double:
+            self.buffer[i:i+dsize] = value
+            i += bsize
+        
+        if i + dsize <= self.buffer.shape[0]:
+            self.buffer[i:i+dsize] = value
+        else:
+            n = self.buffer.shape[0]-i
+            self.buffer[i:] = value[:n]
+            self.buffer[:dsize-n] = value[n:]
+        
+    def __getitem__(self, item):
+        print("GET:", item, "write_ind:", self._write_index, "read_ind:", self._read_index, "shape:", self.shape, "buf_shape:", self.buffer.shape)
+        bsize = self.shape[0]
+        
+        if isinstance(item, tuple):
+            first = item[0]
+            rest = (slice(None),) + item[1:]
+        else:
+            first = item
+            rest = None
+        
+        if isinstance(first, int):
+            index = self._interpret_index(first)
+            print("  index:", first, index, index%bsize)
+            data = self.buffer[index % bsize]
+        elif isinstance(first, slice):
+            start = self._interpret_index(first.start, start=True)
+            stop = self._interpret_index(first.stop, stop=True)
+            step = first.step
+            assert start <= stop, "Start index must be less than stop index."
+
+            if self.double:
+                print("  double:", (start, stop), (start%bsize, stop%bsize))
+                data = self.buffer[start%bsize:stop%bsize:step]
+            else:
+                break_index = (self._write_index + 1) - ((self._write_index + 1) % bsize)
+                if (start < break_index) == (stop <= break_index):
+                    print("  single; contig:", (start, stop), (start%bsize, stop%bsize), bsize, break_index)
+                    data = self.buffer[start%bsize:stop%bsize:step]
+                else:
+                    print("  single; discontig:", (start, stop), (start%bsize, stop%bsize), bsize, break_index)
+                    # need to reconstruct from two pieces
+                    data = np.empty((stop-start,) + self.shape[1:], self.buffer.dtype)
+                    data[:break_index-start] = self.buffer[start%bsize:]
+                    data[break_index-start:] = self.buffer[:stop%bsize]
+                    if step is not None:
+                        data = data[::step]
+        else:
+            raise TypeError("Invalid index type %s" % type(first))
+                    
+        if rest is not None:
+            data = data[rest]
+        return data
+
+    def _interpret_index(self, index, start=False, stop=False):
+        """Return normalized index, accounting for negative and None values.
+        
+        Also check that the index is readable.
+        """
+        start_index = self._write_index + 1 - self.shape[0]
+        if index is None:
+            if start is True:
+                index = start_index
+            elif stop is True:
+                index = self._read_index + 1
+            else:
+                raise IndexError("Invalid index None")
+        elif index < 0:
+            index += self._write_index + 1
+            
+        if stop is True:
+            if index > self._read_index+1 or index < start_index:
+                raise IndexError("Stop index %d is out of bounds for ring buffer [%d, %d]" %
+                                 (index, start_index, self._read_index))
+        else:
+            if index > self._read_index or index < start_index:
+                raise IndexError("Index %d is out of bounds for ring buffer [%d, %d]" %
+                                 (index, start_index, self._read_index))
+        return index
+        
+    def get_data(self, size, copy=False):
+        """Return *size* most recent data frames.
+        
+        If *copy* is True, then the returned array is copied from the ring buffer
+        and is safe to be modified. Otherwise, the returned buffer may be a
+        direct view on the internal ring buffer.
+        """
+        assert size <= self.size, ("Requested data size (%d) is larger than ring buffer (%d)." %
+                                   size, self.size)
+        if self.double:
+            ind = (self._ptr - size) % self.size
+            data = self.buffer[ind:ind+size]
+            if copy:
+                data = data.copy()
+        else:
+            ind = self._ptr - size
+            if ind < 0:
+                data = np.empty((size,) + self.buffer.shape[1:], dtype=self.buffer.dtype)
+                data[:abs(ind)] = self.buffer[ind:]
+                data[abs(ind):] = self.buffer[:self._ptr]
+            else:
+                data = self.buffer[ind:ind+size]
+                if copy:
+                    data = data.copy()
+                
+        return data
 
 
 def axis_order_copy(data, out=None):

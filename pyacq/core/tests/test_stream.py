@@ -3,8 +3,52 @@ import timeit
 import pytest
 import sys
 
-from pyacq.core.stream import OutputStream, InputStream, is_contiguous
+from pyacq.core.stream import OutputStream, InputStream, is_contiguous, RingBuffer
 import numpy as np
+
+
+def test_ringbuffer():
+    buf1 = RingBuffer(shape=(10, 5, 7), dtype=np.ubyte, double=False)
+    buf2 = RingBuffer(shape=(10, 5, 7), dtype=np.ubyte, double=True)
+    
+    for buf in (buf1, buf2):
+        assert np.all(buf[-10:] == 0)
+        with pytest.raises(IndexError):
+            buf[-11]
+        with pytest.raises(IndexError):
+            buf[1]
+            
+            
+        d = np.ones((5, 5, 7), dtype=buf.dtype)
+        buf.new_chunk(d)
+        assert buf[1].shape == (5, 7)
+        assert buf[:].shape == (10, 5, 7)
+        assert buf[:, 2, 1:3].shape == (10, 2)
+        assert np.all(buf[-5:] == 1)
+        assert np.all(buf[0:] == buf[-5:])
+        assert buf[-5:].shape == d.shape
+        assert buf[-5:].dtype == d.dtype
+        assert np.all(buf[-10:-5] == 0)
+    
+        buf.new_chunk(d[:3]*2)
+        assert np.all(buf[-3:] == 2)
+        assert np.all(buf[5:] == buf[-3:])
+        assert np.all(buf[-8:-3] == 1)
+        assert np.all(buf[-8:-3] == buf[0:5])
+        assert np.all(buf[-10:-8] == 0)
+        
+        buf.new_chunk(d*3)
+        with pytest.raises(IndexError):
+            buf[-11]
+        with pytest.raises(IndexError):
+            buf[0]
+        assert np.all(buf[-10:-8] == 1)
+        assert np.all(buf[-8:-5] == 2)
+        assert np.all(buf[-5:] == 3)
+        assert np.all(buf[3:5] == 1)
+        assert np.all(buf[5:8] == 2)
+        assert np.all(buf[8:] == 3)
+
 
 
 protocols = ['tcp', 'inproc', 'ipc']  # 'udp' is not working
