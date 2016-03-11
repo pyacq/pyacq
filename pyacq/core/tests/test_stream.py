@@ -8,6 +8,10 @@ import numpy as np
 
 
 def test_ringbuffer():
+    # Add tests:
+    #  ensure copy / no-copy
+    #  extra indices, steps, negative steps...
+    
     buf1 = RingBuffer(shape=(10, 5, 7), dtype=np.ubyte, double=False)
     buf2 = RingBuffer(shape=(10, 5, 7), dtype=np.ubyte, double=True)
     
@@ -17,7 +21,6 @@ def test_ringbuffer():
             buf[-11]
         with pytest.raises(IndexError):
             buf[1]
-            
             
         d = np.ones((5, 5, 7), dtype=buf.dtype)
         buf.new_chunk(d)
@@ -31,6 +34,7 @@ def test_ringbuffer():
         assert np.all(buf[-10:-5] == 0)
     
         buf.new_chunk(d[:3]*2)
+        assert buf[:].shape == (10, 5, 7)
         assert np.all(buf[-3:] == 2)
         assert np.all(buf[5:] == buf[-3:])
         assert np.all(buf[-8:-3] == 1)
@@ -38,6 +42,7 @@ def test_ringbuffer():
         assert np.all(buf[-10:-8] == 0)
         
         buf.new_chunk(d*3)
+        assert buf[:].shape == (10, 5, 7)
         with pytest.raises(IndexError):
             buf[-11]
         with pytest.raises(IndexError):
@@ -49,6 +54,23 @@ def test_ringbuffer():
         assert np.all(buf[5:8] == 2)
         assert np.all(buf[8:] == 3)
 
+        # new chunk with skipped data
+        buf.new_chunk(d*4, index=buf.last_index() + 7)
+        assert buf[:].shape == (10, 5, 7)
+        assert np.all(buf[-5:] == 4)
+        assert np.all(buf[-7:-5] == 0)
+        assert np.all(buf[-10:-7] == 3)
+        
+        # check extra indices
+        assert np.all(buf[::-1] == buf[:][::-1])
+        
+        buf.new_chunk(d*5, index=buf.last_index() + 15)
+        assert buf[:].shape == (10, 5, 7)
+        assert np.all(buf[-5:] == 5)
+        assert np.all(buf[-10:-5] == 0)
+        
+        # check extra indices
+        assert np.all(buf[::-1] == buf[:][::-1])
 
 
 protocols = ['tcp', 'inproc', 'ipc']  # 'udp' is not working

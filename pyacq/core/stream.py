@@ -688,7 +688,7 @@ class RingBuffer:
             self.buffer[:dsize-n] = value[n:]
         
     def __getitem__(self, item):
-        print("GET:", item, "write_ind:", self._write_index, "read_ind:", self._read_index, "shape:", self.shape, "buf_shape:", self.buffer.shape)
+        #print("GET:", item, "write_ind:", self._write_index, "read_ind:", self._read_index, "shape:", self.shape, "buf_shape:", self.buffer.shape)
         bsize = self.shape[0]
         
         if isinstance(item, tuple):
@@ -700,34 +700,31 @@ class RingBuffer:
         
         if isinstance(first, int):
             index = self._interpret_index(first)
-            print("  index:", first, index, index%bsize)
+            #print("  index:", first, index, index%bsize)
             data = self.buffer[index % bsize]
         elif isinstance(first, slice):
-            start = self._interpret_index(first.start, start=True)
-            stop = self._interpret_index(first.stop, stop=True)
-            step = first.step
-            assert start <= stop, "Start index must be less than stop index."
-
+            start, stop, step = self._interpret_index(first)
             if self.double:
                 start_ind = start % bsize
                 stop_ind = start_ind + (stop - start)
-                print("  double:", (start, stop), (start_ind, stop_ind), bsize)
-                data = self.buffer[start_ind:stop_ind:step]
+                #print("  double:", (start, stop), (start_ind, stop_ind), bsize)
+                data = self.buffer[start_ind:stop_ind]
             else:
                 break_index = (self._write_index + 1) - ((self._write_index + 1) % bsize)
                 if (start < break_index) == (stop <= break_index):
                     start_ind = start % bsize
                     stop_ind = start_ind + (stop - start)
-                    print("  single; contig:", (start, stop), (start_ind, stop_ind), bsize, break_index)
-                    data = self.buffer[start_ind:stop_ind:step]
+                    #print("  single; contig:", (start, stop), (start_ind, stop_ind), bsize, break_index)
+                    data = self.buffer[start_ind:stop_ind]
                 else:
-                    print("  single; discontig:", (start, stop), (start%bsize, stop%bsize), bsize, break_index)
+                    #print("  single; discontig:", (start, stop), (start%bsize, stop%bsize), bsize, break_index)
                     # need to reconstruct from two pieces
                     data = np.empty((stop-start,) + self.shape[1:], self.buffer.dtype)
                     data[:break_index-start] = self.buffer[start%bsize:]
                     data[break_index-start:] = self.buffer[:stop%bsize]
-                    if step is not None:
-                        data = data[::step]
+            if step is not None:
+                data = data[::step]
+                        
         else:
             raise TypeError("Invalid index type %s" % type(first))
                     
@@ -735,31 +732,60 @@ class RingBuffer:
             data = data[rest]
         return data
 
-    def _interpret_index(self, index, start=False, stop=False):
+    def _interpret_index(self, index):
         """Return normalized index, accounting for negative and None values.
-        
         Also check that the index is readable.
+        
+        Slices are returned such that start,stop are swapped and shifted -1 if
+        the step is negative. This makes it possible to collect the result in
+        the forward direction and handle the step later.
         """
         start_index = self._write_index + 1 - self.shape[0]
-        if index is None:
-            if start is True:
-                index = start_index
-            elif stop is True:
-                index = self._read_index + 1
-            else:
-                raise IndexError("Invalid index None")
-        elif index < 0:
-            index += self._write_index + 1
-            
-        if stop is True:
-            if index > self._read_index+1 or index < start_index:
-                raise IndexError("Stop index %d is out of bounds for ring buffer [%d, %d]" %
-                                 (index, start_index, self._read_index))
-        else:
+        if isinstance(index, int):
+            if index < 0:
+                index += self._read_index + 1
             if index > self._read_index or index < start_index:
                 raise IndexError("Index %d is out of bounds for ring buffer [%d, %d]" %
                                  (index, start_index, self._read_index))
-        return index
+            return index
+        elif isinstance(index, slice):
+            start, stop, step = index.start, index.stop, index.step
+            
+            # Handle None and negative steps
+            if step is None:
+                step = 1
+            if step < 0:
+                start, stop = stop, start
+                
+            # Interpret None and negative indices
+            if start is None:
+                start = start_index
+            else:
+                if start < 0:
+                    start += self._read_index + 1
+                if step < 0:
+                    start += 1 
+                
+            if stop is None:
+                stop = self._read_index + 1
+            else:
+                if stop < 0:
+                    stop += self._read_index + 1
+                if step < 0:
+                    stop += 1
+                
+            # Bounds check.
+            # Perhaps we could clip the returned data like lists/arrays do,
+            # but in this case the feedback is likely to be useful to the user.
+            if stop > self._read_index+1 or stop < start_index:
+                raise IndexError("Stop index %d is out of bounds for ring buffer [%d, %d]" %
+                                 (stop, start_index, self._read_index))
+            if start > self._read_index or start < start_index:
+                raise IndexError("Start index %d is out of bounds for ring buffer [%d, %d]" %
+                                 (start, start_index, self._read_index))
+            return start, stop, step
+        else:
+            raise TypeError("Invalid index %s" % index)
         
     def get_data(self, size, copy=False):
         """Return *size* most recent data frames.
@@ -787,6 +813,9 @@ class RingBuffer:
                     data = data.copy()
                 
         return data
+    
+    def last_index(self):
+        return self._read_index
 
 
 def axis_order_copy(data, out=None):
