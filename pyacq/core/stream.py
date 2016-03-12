@@ -632,11 +632,21 @@ class RingBuffer:
         self.buffer[:] = self._filler
         self.dtype = self.buffer.dtype
         
+    def last_index(self):
+        return self._read_index
+
+    def first_index(self):
+        return self._read_index + 1 - self.shape[0]
+
     def new_chunk(self, data, index=None):
         dsize = data.shape[0]
         bsize = self.shape[0]
-        assert dsize <= bsize, ("Data chunk size %d is too large for ring "
-                                "buffer of size %d." % (dsize, bsize))
+        if dsize > bsize:
+            raise ValueError("Data chunk size %d is too large for ring "
+                            "buffer of size %d." % (dsize, bsize))
+        if data.dtype != self.dtype:
+            raise TypeError("Data has incorrect dtype %s (buffer requires %s)" %
+                            (data.dtype, self.dtype))
         
         # by default, index advances by the size of the chunk
         if index is None:
@@ -646,21 +656,29 @@ class RingBuffer:
                                                     "only advanced by %d." % 
                                                     (dsize, index-self._write_index)) 
 
-        # advance write index. This immediately prevents other processes from
-        # accessing memory that is about to be overwritten.
-        self._set_write_index(index)
-        
-        # decide if any skipped data needs to be filled in
-        fill_start = max(self._read_index + 1, self._write_index + 1 - bsize)
-        fill_stop = self._write_index + 1 - dsize
-        
-        if fill_stop > fill_start:
-            # data was skipped; fill in missing regions with 0 or nan.
-            self._write(fill_start, fill_stop, self._filler)
+        revert_inds = [self._read_index, self._write_index]
+        try:
+            # advance write index. This immediately prevents other processes from
+            # accessing memory that is about to be overwritten.
+            self._set_write_index(index)
             
-        self._write(self._write_index + 1 - dsize, self._write_index + 1, data)
+            # decide if any skipped data needs to be filled in
+            fill_start = max(self._read_index + 1, self._write_index + 1 - bsize)
+            fill_stop = self._write_index + 1 - dsize
             
-        self._set_read_index(index)
+            if fill_stop > fill_start:
+                # data was skipped; fill in missing regions with 0 or nan.
+                self._write(fill_start, fill_stop, self._filler)
+                revert_inds[1] = fill_stop-1
+                
+            self._write(self._write_index + 1 - dsize, self._write_index + 1, data)
+                
+            self._set_read_index(index)
+        except:
+            # If there is a failure writing data, revert read/write pointers
+            self._read_index = revert_inds[0]
+            self._write_index = revert_inds[1]
+            raise
 
     def _set_write_index(self, i):
         # what kind of protection do we need here?
@@ -814,9 +832,6 @@ class RingBuffer:
                 
         return data
     
-    def last_index(self):
-        return self._read_index
-
 
 def axis_order_copy(data, out=None):
     """Copy *data* such that the result is contiguous, but preserves the axis order

@@ -12,15 +12,34 @@ def test_ringbuffer():
     #  ensure copy / no-copy
     #  extra indices, steps, negative steps...
     
+    def is_fill(data):
+        if np.isnan(fill):
+            return np.all(np.isnan(data))
+        else:
+            return np.all(data == fill)
+    
+    def array_eq(a, b):
+        ma = np.isnan(a)
+        mb = np.isnan(b)
+        return (a.shape == b.shape) and np.all(ma == mb) and np.all(a[~ma] == b[~mb]) 
+    
     buf1 = RingBuffer(shape=(10, 5, 7), dtype=np.ubyte, double=False)
     buf2 = RingBuffer(shape=(10, 5, 7), dtype=np.ubyte, double=True)
+    buf3 = RingBuffer(shape=(10, 5, 7), dtype=np.float, double=False)
     
-    for buf in (buf1, buf2):
-        assert np.all(buf[-10:] == 0)
+    for buf, fill in [(buf1, 0), (buf2, 0), (buf3, np.nan)]:
+        assert is_fill(buf[-10:])
         with pytest.raises(IndexError):
             buf[-11]
         with pytest.raises(IndexError):
             buf[1]
+            
+        with pytest.raises(ValueError):
+            buf.new_chunk(np.zeros((20, 5, 7), dtype=buf.dtype))
+        with pytest.raises(ValueError):
+            buf.new_chunk(np.zeros((10, 5, 8), dtype=buf.dtype))
+        with pytest.raises(TypeError):
+            buf.new_chunk(np.zeros((10, 5, 7), dtype='uint'))
             
         d = np.ones((5, 5, 7), dtype=buf.dtype)
         buf.new_chunk(d)
@@ -31,7 +50,7 @@ def test_ringbuffer():
         assert np.all(buf[0:] == buf[-5:])
         assert buf[-5:].shape == d.shape
         assert buf[-5:].dtype == d.dtype
-        assert np.all(buf[-10:-5] == 0)
+        assert is_fill(buf[-10:-5])
     
         buf.new_chunk(d[:3]*2)
         assert buf[:].shape == (10, 5, 7)
@@ -39,7 +58,7 @@ def test_ringbuffer():
         assert np.all(buf[5:] == buf[-3:])
         assert np.all(buf[-8:-3] == 1)
         assert np.all(buf[-8:-3] == buf[0:5])
-        assert np.all(buf[-10:-8] == 0)
+        assert is_fill(buf[-10:-8])
         
         buf.new_chunk(d*3)
         assert buf[:].shape == (10, 5, 7)
@@ -58,19 +77,24 @@ def test_ringbuffer():
         buf.new_chunk(d*4, index=buf.last_index() + 7)
         assert buf[:].shape == (10, 5, 7)
         assert np.all(buf[-5:] == 4)
-        assert np.all(buf[-7:-5] == 0)
+        assert is_fill(buf[-7:-5])
         assert np.all(buf[-10:-7] == 3)
         
         # check extra indices
-        assert np.all(buf[::-1] == buf[:][::-1])
+        assert array_eq(buf[::-1], buf[:][::-1])
         
         buf.new_chunk(d*5, index=buf.last_index() + 15)
         assert buf[:].shape == (10, 5, 7)
         assert np.all(buf[-5:] == 5)
-        assert np.all(buf[-10:-5] == 0)
+        assert is_fill(buf[-10:-5])
         
         # check extra indices
-        assert np.all(buf[::-1] == buf[:][::-1])
+        i = buf.first_index()
+        assert array_eq(buf[::-1], buf[:][::-1])
+        assert array_eq(buf[::-2], buf[:][::-2])
+        assert array_eq(buf[i+5::-3], buf[:][5::-3])
+        assert array_eq(buf[:i+7:-1], buf[:][:7:-1])
+        assert array_eq(buf[:i+7:-1, 3, ::-2], buf[:][:7:-1, 3, ::-2])
 
 
 protocols = ['tcp', 'inproc', 'ipc']  # 'udp' is not working
