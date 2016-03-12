@@ -111,8 +111,14 @@ def test_ringbuffer():
             assert array_eq(c, d)
         else:
             assert not array_eq(c, d)
-            
-        
+
+
+def test_ringbuffer_shm():
+    buf1 = RingBuffer(shape=(10, 5, 7), dtype=np.ubyte, double=True, shmem=True)
+    buf2 = RingBuffer(shape=(10, 5, 7), dtype=np.ubyte, double=True, shmem=buf1.shm_id())
+    buf1.new_chunk(np.arange(350).astype(buf1.dtype).reshape(10, 5, 7), index=1005)
+    assert buf2.last_index() == buf1.last_index()
+    assert np.all(buf1[:] == buf2[:])
 
 
 protocols = ['tcp', 'inproc', 'ipc']  # 'udp' is not working

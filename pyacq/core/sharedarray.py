@@ -55,7 +55,7 @@ class SharedMem:
         """
         return {'nbytes': self.nbytes, 'shm_id': self.shm_id}
     
-    def to_numpy(self, offset, dtype, shape, strides):
+    def to_numpy(self, offset, dtype, shape, strides=None):
         """Return a numpy array pointing to part (or all) of this buffer.
         """
         return np.ndarray(buffer=self.mmap, shape=shape,

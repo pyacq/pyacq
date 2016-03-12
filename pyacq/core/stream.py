@@ -320,17 +320,46 @@ class PlainDataSender:
         pass
 
 
-class PlainDataReceiver:
+class DataReceiver:
+    def __init__(self, socket, params, ring_size=0, ring_double=True):
+        self.socket = socket
+        self.params = params
+        if ring_size > 0:
+            ring_shape = (ring_size,) + params['shape'][1:]
+            self._ring_buffer = RingBuffer(ring_shape, dtype=params['dtype'], double=ring_double)
+        else:
+            self._ring_buffer = None
+            
+    def _recv(self):
+        # must be re-implemented in subclass
+        raise NotImplementedError()
+
+    def recv(self):
+        index, chunk = self._recv()
+        if self._ring_buffer is not None:
+            self._ring_buffer.new_chunk(chunk, index)
+        return index, chunk
+
+    def __getitem__(self, *args):
+        if self._ring_buffer is None:
+            raise TypeError("DataReceiver indexing requires a ring buffer.")
+        return self._ring_buffer[args]
+    
+    def close(self):
+        pass
+    
+    
+
+class PlainDataReceiver(DataReceiver):
     """
     Helper class to receive data in 2 parts.
     
     See PlainDataSender.
     """
-    def __init__(self, socket, params):
-        self.socket = socket
-        self.params = params
+    def __init__(self, socket, params, **kwargs):
+        DataReceiver.__init__(self, socket, params, **kwargs)
     
-    def recv(self):
+    def _recv(self):
         # receive and unpack structure
         stat, data = self.socket.recv_multipart()
         ndim = struct.unpack('!Q', stat[:8])[0]
@@ -353,9 +382,6 @@ class PlainDataReceiver:
         data = np.ndarray(buffer=data, shape=shape,
                           strides=strides, offset=offset, dtype=dtype)        
         return index, data
-    
-    def close(self):
-        pass
 
 
 class SharedMemSender:
@@ -593,17 +619,42 @@ class RingBuffer:
     allow faster, copyless reads at the expense of doubled write time and memory
     footprint.
     """
-    def __init__(self, shape, dtype, double=True, fill=None):
+    def __init__(self, shape, dtype, double=True, shmem=None, fill=None):
         self.double = double
         self.shape = shape
         
-        # Index of last writable sample. This value is used to determine which
-        # buffer indices map to which data indices (where buffer indices wrap
-        # around to 0, but data indices always increase as data arrives).
-        self._write_index = -1
-        # Index of last written sample. This is used to determine how much of
-        # the buffer is *valid* for reading.
-        self._read_index = -1
+        shape = (shape[0] * (2 if double else 1),) + shape[1:]
+        # initialize int buffers with 0 and float buffers with nan
+        if fill is None:
+            fill = 0 if np.dtype(dtype).kind in 'ui' else np.nan
+        self._filler = fill
+        
+        if shmem is None:
+            self.buffer = np.empty(shape, dtype=dtype)
+            self.buffer[:] = self._filler
+            self._indexes = np.zeros((2,), dtype='int64')
+            self._shmem = None
+        else:
+            size = np.product(shape) + 16
+            if shmem is True:
+                # create new shared memory buffer
+                self._shmem = SharedMem(nbytes=size)
+            else:
+                self._shmem = SharedMem(nbytes=size, shm_id=shmem)
+            self.buffer = self._shmem.to_numpy(offset=16, dtype=dtype, shape=shape)
+            self._indexes = self._shmem.to_numpy(offset=0, dtype='int64', shape=(2,))
+        
+        self.dtype = self.buffer.dtype
+        
+        if shmem in (None, True):
+            # Index of last writable sample. This value is used to determine which
+            # buffer indices map to which data indices (where buffer indices wrap
+            # around to 0, but data indices always increase as data arrives).
+            self._set_write_index(-1)
+            # Index of last written sample. This is used to determine how much of
+            # the buffer is *valid* for reading.
+            self._set_read_index(-1)
+        
         # Note: read_index and write_index are defined independently to avoid
         # race condifions with processes reading and writing from the same
         # shared memory simultaneously. When new data arrives:
@@ -625,21 +676,33 @@ class RingBuffer:
         #                               [....|......]                read with copy
         # 
         
-        shape = (shape[0] * (2 if double else 1),) + shape[1:]
-        # initialize int buffers with 0 and float buffers with nan
-        if fill is None:
-            fill = 0 if np.dtype(dtype).kind in 'ui' else np.nan
-        self._filler = fill
-        
-        self.buffer = np.empty(shape, dtype=dtype)
-        self.buffer[:] = self._filler
-        self.dtype = self.buffer.dtype
-        
     def last_index(self):
         return self._read_index
 
     def first_index(self):
         return self._read_index + 1 - self.shape[0]
+
+    @property
+    def _write_index(self):
+        return self._indexes[1]
+
+    @property
+    def _read_index(self):
+        return self._indexes[0]
+
+    def _set_write_index(self, i):
+        # what kind of protection do we need here?
+        self._indexes[1] = i
+
+    def _set_read_index(self, i):
+        # what kind of protection do we need here?
+        self._indexes[0] = i
+
+    def shm_id(self):
+        if self._shmem is None:
+            return None
+        else:
+            return self._shmem.shm_id
 
     def new_chunk(self, data, index=None):
         dsize = data.shape[0]
@@ -679,18 +742,10 @@ class RingBuffer:
             self._set_read_index(index)
         except:
             # If there is a failure writing data, revert read/write pointers
-            self._read_index = revert_inds[0]
-            self._write_index = revert_inds[1]
+            self._set_read_index(revert_inds[0])
+            self._set_write_index(revert_inds[1])
             raise
 
-    def _set_write_index(self, i):
-        # what kind of protection do we need here?
-        self._write_index = i
-
-    def _set_read_index(self, i):
-        # what kind of protection do we need here?
-        self._read_index = i
-        
     def _write(self, start, stop, value):
         # get starting index
         bsize = self.shape[0]
