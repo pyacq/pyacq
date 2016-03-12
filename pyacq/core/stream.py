@@ -593,7 +593,7 @@ class RingBuffer:
     allow faster, copyless reads at the expense of doubled write time and memory
     footprint.
     """
-    def __init__(self, shape, dtype, double=True):
+    def __init__(self, shape, dtype, double=True, fill=None):
         self.double = double
         self.shape = shape
         
@@ -607,11 +607,11 @@ class RingBuffer:
         # Note: read_index and write_index are defined independently to avoid
         # race condifions with processes reading and writing from the same
         # shared memory simultaneously. When new data arrives:
-        #   * write_index is increased to indicate that the buffer has advanced
-        #     and some old data is no longer valid
-        #   * new data is written over the old buffer data
-        #   * read_index is increased to indicate that the new data is now
-        #     readable
+        #   1. write_index is increased to indicate that the buffer has advanced
+        #      and some old data is no longer valid
+        #   2. new data is written over the old buffer data
+        #   3. read_index is increased to indicate that the new data is now
+        #      readable
 
         #
         #              write_index+1-bsize   break_index     read_index       write_index
@@ -622,12 +622,15 @@ class RingBuffer:
         #                                    |
         #                                    |  [........]           read without copy
         #                        [........]  |                       read without copy
-        #                               [....|......]                ewad with copy
+        #                               [....|......]                read with copy
         # 
         
         shape = (shape[0] * (2 if double else 1),) + shape[1:]
         # initialize int buffers with 0 and float buffers with nan
-        self._filler = 0 if np.dtype(dtype).kind in 'ui' else np.nan
+        if fill is None:
+            fill = 0 if np.dtype(dtype).kind in 'ui' else np.nan
+        self._filler = fill
+        
         self.buffer = np.empty(shape, dtype=dtype)
         self.buffer[:] = self._filler
         self.dtype = self.buffer.dtype

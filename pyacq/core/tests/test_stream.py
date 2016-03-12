@@ -95,6 +95,24 @@ def test_ringbuffer():
         assert array_eq(buf[i+5::-3], buf[:][5::-3])
         assert array_eq(buf[:i+7:-1], buf[:][:7:-1])
         assert array_eq(buf[:i+7:-1, 3, ::-2], buf[:][:7:-1, 3, ::-2])
+        
+        # check copy/no-copy
+        buf.new_chunk(np.arange(350).astype(buf.dtype).reshape(10, 5, 7), index=1005)
+        a = buf[-4:]
+        b = buf[-4:]
+        c = buf[-8:]
+        d = buf[-8:]
+        assert array_eq(a, b)
+        assert array_eq(c, d)
+        a[:] = (np.random.random(size=(4,5,7)) * 100).astype(buf.dtype)
+        assert array_eq(a, b)
+        c[:] = (np.random.random(size=(8,5,7)) * 100).astype(buf.dtype)
+        if buf.double:
+            assert array_eq(c, d)
+        else:
+            assert not array_eq(c, d)
+            
+        
 
 
 protocols = ['tcp', 'inproc', 'ipc']  # 'udp' is not working
