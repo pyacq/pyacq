@@ -412,7 +412,7 @@ class SharedMemSender:
         
         # write data into shmem buffer
         buf, offset, strides = decompose_array(data)  # can we avoid this copy?
-        shm_buf = self._shmem.to_numpy(self._ptr + offset, data.dtype, data.shape, strides)
+        shm_buf = self._shmem.to_numpy(self._ptr + offset, data.dtype, buf.shape, buf.strides)
         shm_buf[:] = buf
         
         stat = struct.pack('!' + 'Q' * (3+len(shape)) + 'q' * len(strides), len(shape), index, self._ptr+offset, *(shape + strides))

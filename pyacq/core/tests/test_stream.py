@@ -164,7 +164,12 @@ def check_stream(chunksize=1024, chan_shape=(16,), **kwds):
         #~ print(i)
         # send
         index += chunksize
-        arr = np.random.rand(*chunk_shape).astype(stream_spec['dtype'])
+        if i == 1:
+            # send non-aligned data
+            cs = (chunk_shape[1], chunk_shape[0]) + chunk_shape[2:]
+            arr = np.random.rand(*cs).transpose(1,0).astype(stream_spec['dtype'])
+        else:
+            arr = np.random.rand(*chunk_shape).astype(stream_spec['dtype'])
         outstream.send(index, arr)
         
         # recv
