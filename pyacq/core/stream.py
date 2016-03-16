@@ -423,15 +423,14 @@ class SharedMemSender:
         pass
 
 
-class SharedMemReceiver:
+class SharedMemReceiver(DataReceiver):
     def __init__(self, socket, params):
-        self.socket = socket
-        self.params = params
+        DataReceiver.__init__(self, socket, params)
 
         self.size = self.params['sharedmem_size']
         self._shmem = SharedMem(nbytes=self.size, shm_id=self.params['shm_id'])
 
-    def recv(self, with_data=False):
+    def _recv(self):
         stat = self.socket.recv_multipart()[0]
         ndim = struct.unpack('!Q', stat[:8])[0]
         stat = struct.unpack('!' + 'Q' * (ndim + 2) + 'q' * ndim, stat[8:])
@@ -443,9 +442,6 @@ class SharedMemReceiver:
         dtype = self.params['dtype']
         data = self._shmem.to_numpy(offset, dtype, shape, strides)
         return index, data
-    
-    def close(self):
-        pass
     
 
 
