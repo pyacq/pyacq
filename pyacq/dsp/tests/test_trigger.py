@@ -56,7 +56,7 @@ def test_AnalogTrigger_nodebounce():
     
     all_triggers = []
     def on_new_trigger(pos, indexes):
-        #~ print(pos, indexes)
+        print(pos, indexes)
         all_triggers.extend(indexes)
     poller = ThreadPollOutput(trigger.output)
     poller.new_data.connect(on_new_trigger)
@@ -80,7 +80,7 @@ def test_AnalogTrigger_nodebounce():
     
     app.exec_()
     
-    assert np.array_equal(all_triggers, [1001, 2001, 3001, 3015, 3025, 4001])
+    assert np.array_equal(all_triggers, [1001, 2001, 3001, 3015, 3025, 4001]), ' Nodebouce problem {}'.format(all_triggers)
 
 
 

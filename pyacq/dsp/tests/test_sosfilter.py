@@ -125,14 +125,14 @@ def test_compare_online_offline():
     
     assert np.max(np.abs(output_arr-offline_arr))<1e-6, 'online differt from offline'
     
-    #~ from matplotlib import pyplot
-    #~ fig, ax = pyplot.subplots()
-    #~ ax.plot(output_arr[0,:], color = 'r')
-    #~ ax.plot(offline_arr[0,:], color = 'g')
-    #~ fig, ax = pyplot.subplots()
-    #~ for c in range(nb_channel):
-        #~ ax.plot(output_arr[c,:]-offline_arr[c,:], color = 'k')
-    #~ pyplot.show()
+    from matplotlib import pyplot
+    fig, ax = pyplot.subplots()
+    ax.plot(output_arr[0,:], color = 'r')
+    ax.plot(offline_arr[0,:], color = 'g')
+    fig, ax = pyplot.subplots()
+    for c in range(nb_channel):
+        ax.plot(output_arr[c,:]-offline_arr[c,:], color = 'k')
+    pyplot.show()
     
     
     man.close()
@@ -141,7 +141,7 @@ def test_compare_online_offline():
     
 
 if __name__ == '__main__':
-    test_sosfilter()
+    #~ test_sosfilter()
     test_compare_online_offline()
 
  
