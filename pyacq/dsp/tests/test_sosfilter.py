@@ -1,9 +1,10 @@
+import pytest
 import time
 import numpy as np
 import pyqtgraph as pg
 
-from pyacq import create_manager, InputStream, NumpyDeviceBuffer, ThreadPollOutput
-from pyacq.dsp.sosfilter import SosFilter
+from pyacq import create_manager, NumpyDeviceBuffer
+from pyacq.dsp.sosfilter import SosFilter, HAVE_PYOPENCL
 from pyacq.viewers.qoscilloscope import QOscilloscope
 
 from pyqtgraph.Qt import QtCore, QtGui
@@ -13,7 +14,6 @@ import scipy.signal
 nb_channel = 4
 sample_rate =1000.
 chunksize = 500
-
 
 length = int(sample_rate*20)
 times = np.arange(length)/sample_rate
@@ -89,6 +89,7 @@ def do_filtertest(FilterClass, engine):
 def test_sosfilter():
     do_filtertest(SosFilter, 'numpy')
 
+@pytest.mark.skipif(not HAVE_PYOPENCL, reason='no pyopencl')
 def test_openclsosfilter():
     do_filtertest(SosFilter, 'opencl')
 
@@ -150,6 +151,7 @@ def compare_online_offline(FilterClass, engine):
 def test_compare_sosfilter():
     compare_online_offline(SosFilter, 'numpy')
 
+@pytest.mark.skipif(not HAVE_PYOPENCL, reason='no pyopencl')
 def test_compare_openclsosfilter():
     compare_online_offline(SosFilter, 'opencl')
 
