@@ -44,8 +44,8 @@ class SosFilterThread(ThreadPollInput):
         self.zi = np.zeros((self.n_section, 2, nb_channel), dtype= dtype)
 
 
-
-class OpenCLSosFilterThread(ThreadPollInput):
+#TODO test if the GPU have float64 capabities and use template for float and double
+class OpenCL_SosFilterThread(ThreadPollInput):
     """
     Implementation of SosFilterThread using PyOpenCL.
     
@@ -64,7 +64,8 @@ class OpenCLSosFilterThread(ThreadPollInput):
         #self.ctx = pyopencl.Context(self.devices)
         #~ print(self.ctx)
         self.queue = pyopencl.CommandQueue(self.ctx)
-        self.opencl_prg = pyopencl.Program(self.ctx, sos_filter_kernel%dict(chunksize = self.chunksize)).build(options='-cl-mad-enable')
+        prg = pyopencl.Program(self.ctx, sos_filter_kernel)
+        self.opencl_prg = prg.build(options='-cl-mad-enable')
 
     def process_data(self, pos, data):
         if data is None:
@@ -77,30 +78,23 @@ class OpenCLSosFilterThread(ThreadPollInput):
             data = data.copy()
         pyopencl.enqueue_copy(self.queue,  self.input_cl, data)
 
-        pyopencl.enqueue_copy(self.queue,  self.zi, self.zi_cl)
-        
         kern_call = self.opencl_prg.sos_filter
-        kern_call.set_args(np.int32(self.n_section), np.int32(1),
+        kern_call.set_args(np.uint32(self.chunksize), np.int32(self.n_section), np.int32(1),
                                 self.input_cl, self.output_cl, self.coefficients_cl, self.zi_cl)
         event = pyopencl.enqueue_nd_range_kernel(self.queue,kern_call, self.global_size, self.local_size,)
         event.wait()
         
         pyopencl.enqueue_copy(self.queue,  self.output, self.output_cl)
-        
         data_filtered = self.output.transpose()
-        
         self.output_stream().send(pos, data_filtered)
         
     def set_params(self, coefficients, nb_channel, dtype):
         self.dtype = np.dtype(dtype)
-        assert self.dtype == np.dtype('float32') #TODO test if the GPU have float64 capabities and use template
-        
+        assert self.dtype == np.dtype('float32') 
         self.nb_channel = nb_channel
         
-        #self.coefficients.shape is (nb_channel, nb_section, 6)
-        #The CL kernel implement one coeficient by channel so need to to tile
         self.coefficients = coefficients.astype(self.dtype)
-        if self.coefficients.ndim==2:
+        if self.coefficients.ndim==2: #(nb_section, 6) to (nb_channel, nb_section, 6)
             self.coefficients = np.tile(self.coefficients[None,:,:], (nb_channel, 1,1))
         if not self.coefficients.flags['C_CONTIGUOUS']:
             self.coefficients = self.coefficients.copy()
@@ -121,6 +115,7 @@ class OpenCLSosFilterThread(ThreadPollInput):
         #nb works
         self.global_size = (self.nb_channel, self.n_section)
         self.local_size = (1, self.n_section, )
+
 
 class SosFilter(Node,  QtCore.QObject):
     """
@@ -149,6 +144,10 @@ class SosFilter(Node,  QtCore.QObject):
     If pyopencl is avaible you can do SosFilter.configure(engine='opencl')
     In that cases the coefficients.shape can also be (n_channel, n_section, 6)
     this help for having different filter on each channels.
+    
+    The opencl engine prefer inernally (channel, sample) ordered.
+    In case not a copy is done. So the input ordering do impact performences.
+    
     
     """
     
@@ -180,7 +179,7 @@ class SosFilter(Node,  QtCore.QObject):
         elif  self.engine == 'opencl':
             assert HAVE_PYOPENCL, 'need pyopencl change engine to numpy'
             assert self.chunksize is not None, 'for OpenCL engine need fixed chunksize'
-            self.thread = OpenCLSosFilterThread(self.input, self.output, self.chunksize)
+            self.thread = OpenCL_SosFilterThread(self.input, self.output, self.chunksize)
         self.thread.set_params(self.coefficients, self.nb_channel, self.output.params['dtype'])
     
     def _start(self):
@@ -202,9 +201,8 @@ register_node_type(SosFilter)
 
 #This kernel
 sos_filter_kernel = """
-#define chunksize %(chunksize)d
 
-__kernel void sos_filter(int n_section, int direction, __global  float *input,
+__kernel void sos_filter(uint chunksize, int n_section, int direction, __global  float *input,
                 __global  float *output, __constant  float *coefficients, __global float *zi) {
 
     int chan = get_global_id(0); //channel indice
