@@ -10,9 +10,9 @@ from pyqtgraph.Qt import QtCore, QtGui
 import scipy.signal
 
 
-nb_channel = 8
+nb_channel = 4
 sample_rate =1000.
-chunksize = 100
+chunksize = 500
 
 
 length = int(sample_rate*20)
@@ -30,9 +30,9 @@ buffer = buffer.astype('float32')
 stream_spec = dict(protocol='tcp', interface='127.0.0.1', transfermode='sharedarray',
                         sharedarray_shape=(nb_channel, 2048*50), ring_buffer_method = 'double',
                         dtype = 'float32',)
-                        # timeaxis = 1, shape = (nb_channel, -1), 
+                        # timeaxis = 1, shape = (nb_channel, -1),
 
-def test_sosfilter():
+def do_filtertest(FilterClass, engine):
     app = pg.mkQApp()
     
                             
@@ -48,8 +48,8 @@ def test_sosfilter():
     coefficients = scipy.signal.iirfilter(7, [f1/sample_rate*2, f2/sample_rate*2],
                 btype = 'bandpass', ftype = 'butter', output = 'sos')
     
-    filter = SosFilter()
-    filter.configure(coefficients = coefficients)
+    filter = FilterClass()
+    filter.configure(coefficients = coefficients, engine=engine, chunksize=chunksize)
     filter.input.connect(dev.output)
     filter.output.configure(**stream_spec)
     filter.initialize()
@@ -86,8 +86,16 @@ def test_sosfilter():
     
     app.exec_()
 
+def test_sosfilter():
+    do_filtertest(SosFilter, 'numpy')
 
-def test_compare_online_offline():
+def test_openclsosfilter():
+    do_filtertest(SosFilter, 'opencl')
+
+
+
+def compare_online_offline(FilterClass, engine):
+
     #~ man = create_manager(auto_close_at_exit=True)
     man = create_manager(auto_close_at_exit=False)
     ng = man.create_nodegroup()
@@ -101,8 +109,9 @@ def test_compare_online_offline():
     coefficients = scipy.signal.iirfilter(7, [f1/sample_rate*2, f2/sample_rate*2],
                 btype = 'bandpass', ftype = 'butter', output = 'sos')
     
-    filter = ng.create_node('SosFilter')
-    filter.configure(coefficients = coefficients)
+    filter = ng.create_node(FilterClass.__name__)
+    filter.configure(coefficients = coefficients, engine=engine, chunksize=chunksize)
+    #~ filter.configure(coefficients = coefficients)
     filter.input.connect(dev.output)
     filter.output.configure(**stream_spec)
     filter.initialize()
@@ -118,30 +127,40 @@ def test_compare_online_offline():
     
     head = dev.head._get_value()
     output_arr = filter.output.sender._numpyarr._get_value()
+    #~ output_arr = filter.output.sender._numpyarr
     output_arr = output_arr[:, :head]
     
     
-    offline_arr =  scipy.signal.sosfilt(coefficients, buffer[:, :head], axis=1, zi=None)
+    offline_arr =  scipy.signal.sosfilt(coefficients.astype('float32'), buffer[:, :head].astype('float32'), axis=1, zi=None)
     
-    assert np.max(np.abs(output_arr-offline_arr))<1e-6, 'online differt from offline'
+    residual = np.abs((output_arr.astype('float64')-offline_arr.astype('float64'))/np.mean(np.abs(offline_arr.astype('float64'))))
+    assert np.max(residual)<5e-5, 'online differt from offline'
     
-    from matplotlib import pyplot
-    fig, ax = pyplot.subplots()
-    ax.plot(output_arr[0,:], color = 'r')
-    ax.plot(offline_arr[0,:], color = 'g')
-    fig, ax = pyplot.subplots()
-    for c in range(nb_channel):
-        ax.plot(output_arr[c,:]-offline_arr[c,:], color = 'k')
-    pyplot.show()
-    
+    #~ from matplotlib import pyplot
+    #~ fig, ax = pyplot.subplots()
+    #~ ax.plot(output_arr[0,:], color = 'r')
+    #~ ax.plot(offline_arr[0,:], color = 'g')
+    #~ fig, ax = pyplot.subplots()
+    #~ for c in range(nb_channel):
+        #~ ax.plot(residual[c,:], color = 'k')
+    #~ pyplot.show()
     
     man.close()
+
+def test_compare_sosfilter():
+    compare_online_offline(SosFilter, 'numpy')
+
+def test_compare_openclsosfilter():
+    compare_online_offline(SosFilter, 'opencl')
+
     
     
     
 
 if __name__ == '__main__':
-    #~ test_sosfilter()
-    test_compare_online_offline()
+    test_sosfilter()
+    test_openclsosfilter()
+    test_compare_sosfilter()
+    test_compare_openclsosfilter()
 
  
