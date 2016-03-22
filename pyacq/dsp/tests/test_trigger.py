@@ -56,7 +56,7 @@ def test_AnalogTrigger_nodebounce():
     
     all_triggers = []
     def on_new_trigger(pos, indexes):
-        #~ print(pos, indexes)
+        print(pos, indexes)
         all_triggers.extend(indexes)
     poller = ThreadPollOutput(trigger.output)
     poller.new_data.connect(on_new_trigger)
@@ -79,8 +79,8 @@ def test_AnalogTrigger_nodebounce():
     timer.start()
     
     app.exec_()
-    
-    assert np.array_equal(all_triggers, [1001, 2001, 3001, 3015, 3025, 4001])
+    print(all_triggers)
+    assert np.array_equal(all_triggers, [1001, 2001, 3001, 3015, 3025, 4001]), '{} {}'.format(all_triggers, [1001, 2001, 3001, 3015, 3025, 4001])
 
 
 
@@ -156,7 +156,7 @@ def test_AnalogTrigger_before_stable():
 
 if __name__ == '__main__':
     test_AnalogTrigger_nodebounce()
-    test_AnalogTrigger_after_stable()
-    test_AnalogTrigger_before_stable()
+    #~ test_AnalogTrigger_after_stable()
+    #~ test_AnalogTrigger_before_stable()
 
  
