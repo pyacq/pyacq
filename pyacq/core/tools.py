@@ -98,10 +98,8 @@ class ThreadStreamConverter(ThreadPollInput):
         self.conversions = conversions
     
     def process_data(self, pos, data):
-        if 'transfermode' in self.conversions and self.conversions['transfermode'][0]=='sharedarray':
-            data = self.input_stream().get_array_slice(self, pos, None)
-        #~ if 'timeaxis' in self.conversions:
-            #~ data = data.swapaxes(*self.conversions['timeaxis'])
+        if data is None:
+            data = self.input_stream().get_array_slice(pos, None)
         self.output_stream().send(pos, data)
 
 
@@ -139,13 +137,13 @@ class StreamConverter(Node):
     def _initialize(self):
         self.conversions = {}
         # check convertion
-        for k in self.input.params:
-            if k in ('port', 'protocol', 'interface', 'dtype'):
-                continue  # the OutputStream/InputStream already do it
+        #~ for k in self.input.params:
+            #~ if k in ('port', 'protocol', 'interface', 'dtype'):
+                #~ continue  # the OutputStream/InputStream already do it
             
-            old, new = self.input.params.get(k, None), self.output.params.get(k, None)
-            if old != new and old is not None:
-                self.conversions[k] = (old, new)
+            #~ old, new = self.input.params.get(k, None), self.output.params.get(k, None)
+            #~ if old != new and old is not None:
+                #~ self.conversions[k] = (old, new)
                 
         # DO some check ???
         # if 'shape' in self.conversions:

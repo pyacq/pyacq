@@ -1,45 +1,46 @@
+import pytest
 import time
 import numpy as np
 import pyqtgraph as pg
 
-from pyacq import create_manager, InputStream, NumpyDeviceBuffer, ThreadPollOutput
-from pyacq.dsp.sosfilter import SosFilter
+from pyacq import create_manager, NumpyDeviceBuffer
+from pyacq.dsp.sosfilter import SosFilter, HAVE_PYOPENCL, sosfilter_engines
 from pyacq.viewers.qoscilloscope import QOscilloscope
 
 from pyqtgraph.Qt import QtCore, QtGui
 import scipy.signal
 
 
-nb_channel = 8
+nb_channel = 4
 sample_rate =1000.
+#~ chunksize = 500
 chunksize = 100
+nloop = 20
 
-
-length = int(sample_rate*20)
+length = int(chunksize*nloop)
 times = np.arange(length)/sample_rate
-buffer = np.random.rand(nb_channel, length) *.3
+buffer = np.random.rand(length, nb_channel) *.3
 f1, f2, speed = 20., 60., .05
 freqs = (np.sin(np.pi*2*speed*times)+1)/2 * (f2-f1) + f1
 phases = np.cumsum(freqs/sample_rate)*2*np.pi
 ampl = np.abs(np.sin(np.pi*2*speed*8*times))*.8
-buffer += (np.sin(phases)*ampl)[None, :]
+buffer += (np.sin(phases)*ampl)[:, None]
+
 buffer = buffer.astype('float32')
 
 
-
-stream_spec = dict(protocol='tcp', interface='127.0.0.1', transfermode='sharedarray',
-                        sharedarray_shape=(nb_channel, 2048*50), ring_buffer_method = 'double',
-                        dtype = 'float32',)
-                        # timeaxis = 1, shape = (nb_channel, -1), 
-
-def test_sosfilter():
+def do_filtertest(engine):
+    stream_spec = dict(protocol='tcp', interface='127.0.0.1', transfermode='sharedarray',
+                            sharedarray_shape=(2048*50, nb_channel), ring_buffer_method = 'double',
+                            dtype = 'float32',)
+    
     app = pg.mkQApp()
     
                             
     dev = NumpyDeviceBuffer()
     dev.configure(nb_channel=nb_channel, sample_interval=1./sample_rate, chunksize=chunksize,
-                    buffer=buffer, timeaxis=1,)
-    dev.output.configure(**stream_spec)
+                    buffer=buffer, timeaxis=0,)
+    dev.output.configure( **stream_spec)
     dev.initialize()
     
     
@@ -49,7 +50,7 @@ def test_sosfilter():
                 btype = 'bandpass', ftype = 'butter', output = 'sos')
     
     filter = SosFilter()
-    filter.configure(coefficients = coefficients)
+    filter.configure(coefficients = coefficients, engine=engine, chunksize=chunksize)
     filter.input.connect(dev.output)
     filter.output.configure(**stream_spec)
     filter.initialize()
@@ -86,62 +87,69 @@ def test_sosfilter():
     
     app.exec_()
 
+def test_sosfilter():
+    do_filtertest('numpy')
 
-def test_compare_online_offline():
-    #~ man = create_manager(auto_close_at_exit=True)
-    man = create_manager(auto_close_at_exit=False)
-    ng = man.create_nodegroup()
+@pytest.mark.skipif(not HAVE_PYOPENCL, reason='no pyopencl')
+def test_openclsosfilter():
+    do_filtertest('opencl')
+    do_filtertest('opencl2')
 
-    dev = ng.create_node('NumpyDeviceBuffer')
-    dev.configure(nb_channel=nb_channel, sample_interval=1./sample_rate, chunksize=chunksize,
-                    buffer=buffer, timeaxis=1,)
-    dev.output.configure(**stream_spec)
-    dev.initialize()
 
+
+def compare_online_offline_engines():
+    
+    if HAVE_PYOPENCL:
+        engines = ['numpy', 'opencl', 'opencl2', 'opencl3']
+        #~ engines = ['opencl3']
+    else:
+        engines = ['numpy']
+    
+    
+    dtype = 'float32'
+    
     coefficients = scipy.signal.iirfilter(7, [f1/sample_rate*2, f2/sample_rate*2],
                 btype = 'bandpass', ftype = 'butter', output = 'sos')
     
-    filter = ng.create_node('SosFilter')
-    filter.configure(coefficients = coefficients)
-    filter.input.connect(dev.output)
-    filter.output.configure(**stream_spec)
-    filter.initialize()
+    offline_arr =  scipy.signal.sosfilt(coefficients.astype('float32'), buffer.astype('float32'), axis=0, zi=None)
     
-    filter.start()
-    dev.start()
+    for engine in engines:
+        print(engine)
+        EngineClass = sosfilter_engines[engine]
+        filter_engine = EngineClass(coefficients, nb_channel, dtype, chunksize)
+        print(filter_engine)
+        online_arr = np.zeros_like(offline_arr)
+        
+        for i in range(nloop):
+            #~ print(i)
+            chunk = buffer[i*chunksize:(i+1)*chunksize,:]
+            chunk_filtered = filter_engine.compute_one_chunk(chunk)
+            #~ print(chunk_filtered.shape)
+            #~ print(online_arr[i*chunksize:(i+1)*chunksize,:])
+            online_arr[i*chunksize:(i+1)*chunksize,:] = chunk_filtered
+            #~ print(online_arr[i*chunksize:(i+1)*chunksize,:])
+
+        residual = np.abs((online_arr.astype('float64')-offline_arr.astype('float64'))/np.mean(np.abs(offline_arr.astype('float64'))))
+        print(np.max(residual))
+        #~ assert np.max(residual)<5e-5, 'online differt from offline'
     
-    time.sleep(2.)
-    dev.stop()
-    time.sleep(.1)
-    filter.stop()
-    
-    
-    head = dev.head._get_value()
-    output_arr = filter.output.sender._numpyarr._get_value()
-    output_arr = output_arr[:, :head]
-    
-    
-    offline_arr =  scipy.signal.sosfilt(coefficients, buffer[:, :head], axis=1, zi=None)
-    
-    assert np.max(np.abs(output_arr-offline_arr))<1e-6, 'online differt from offline'
-    
-    #~ from matplotlib import pyplot
-    #~ fig, ax = pyplot.subplots()
-    #~ ax.plot(output_arr[0,:], color = 'r')
-    #~ ax.plot(offline_arr[0,:], color = 'g')
-    #~ fig, ax = pyplot.subplots()
-    #~ for c in range(nb_channel):
-        #~ ax.plot(output_arr[c,:]-offline_arr[c,:], color = 'k')
+        #~ from matplotlib import pyplot
+        #~ fig, ax = pyplot.subplots()
+        #~ ax.plot(online_arr[:, 2], color = 'r')
+        #~ ax.plot(offline_arr[:, 2], color = 'g')
+        #~ fig, ax = pyplot.subplots()
+        #~ for c in range(nb_channel):
+            #~ ax.plot(residual[:, c], color = 'k')
     #~ pyplot.show()
-    
-    
-    man.close()
+        
     
     
     
 
 if __name__ == '__main__':
-    test_sosfilter()
-    test_compare_online_offline()
+    #~ test_sosfilter()
+    #~ test_openclsosfilter()
+    
+    compare_online_offline_engines()
 
  

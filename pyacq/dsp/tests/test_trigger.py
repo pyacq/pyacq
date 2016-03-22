@@ -79,7 +79,6 @@ def test_AnalogTrigger_nodebounce():
     timer.start()
     
     app.exec_()
-    print(all_triggers)
     assert np.array_equal(all_triggers, [1001, 2001, 3001, 3015, 3025, 4001]), '{} {}'.format(all_triggers, [1001, 2001, 3001, 3015, 3025, 4001])
 
 
