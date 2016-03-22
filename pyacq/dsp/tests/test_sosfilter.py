@@ -88,7 +88,7 @@ def do_filtertest(engine):
     app.exec_()
 
 def test_sosfilter():
-    do_filtertest('numpy')
+    do_filtertest('scipy')
 
 @pytest.mark.skipif(not HAVE_PYOPENCL, reason='no pyopencl')
 def test_openclsosfilter():
@@ -100,10 +100,10 @@ def test_openclsosfilter():
 def compare_online_offline_engines():
     
     if HAVE_PYOPENCL:
-        engines = ['numpy', 'opencl', 'opencl2', 'opencl3']
+        engines = ['scipy', 'opencl', 'opencl2', 'opencl3']
         #~ engines = ['opencl3']
     else:
-        engines = ['numpy']
+        engines = ['scipy']
     
     
     dtype = 'float32'

@@ -27,9 +27,9 @@ except ImportError:
 #TODO: make a kernel that mix SosFilter_OpenCL_V1 and SosFilter_OpenCL_V2 approach
 
 
-class SosFilter_Numpy:
+class SosFilter_Scipy:
     """
-    Implementation with numpy.
+    Implementation with scipy.
     """
     def __init__(self, coefficients, nb_channel, dtype, chunksize):
         self.coefficients = coefficients
@@ -329,7 +329,7 @@ class SosFilter_OpenCL_V3(SosFilter_OpenCl_Base):
 
 
 
-sosfilter_engines = { 'numpy' : SosFilter_Numpy, 'opencl' : SosFilter_OpenCL_V1,
+sosfilter_engines = { 'scipy' : SosFilter_Scipy, 'opencl' : SosFilter_OpenCL_V1,
                 'opencl2' : SosFilter_OpenCL_V2, 'opencl3' : SosFilter_OpenCL_V3, }
     
 

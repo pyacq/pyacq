@@ -4,7 +4,7 @@ import numpy as np
 import pyqtgraph as pg
 
 from pyacq import create_manager, NumpyDeviceBuffer
-from pyacq.dsp.overlapfiltfilt import OverlapFiltfilt, HAVE_PYOPENCL
+from pyacq.dsp.overlapfiltfilt import OverlapFiltfilt, HAVE_PYOPENCL, sosfiltfilt_engines
 from pyacq.viewers.qoscilloscope import QOscilloscope
 
 from pyqtgraph.Qt import QtCore, QtGui
@@ -13,16 +13,20 @@ import scipy.signal
 
 nb_channel = 4
 sample_rate =1000.
-chunksize = 500
+#~ chunksize = 500
+chunksize = 100
+nloop = 20
+overlapsize = 250
 
-length = int(sample_rate*20)
+length = int(chunksize*nloop)
 times = np.arange(length)/sample_rate
-buffer = np.random.rand(nb_channel, length) *.3
+buffer = np.random.rand(length, nb_channel) *.3
 f1, f2, speed = 20., 60., .05
 freqs = (np.sin(np.pi*2*speed*times)+1)/2 * (f2-f1) + f1
 phases = np.cumsum(freqs/sample_rate)*2*np.pi
 ampl = np.abs(np.sin(np.pi*2*speed*8*times))*.8
-buffer += (np.sin(phases)*ampl)[None, :]
+buffer += (np.sin(phases)*ampl)[:, None]
+
 buffer = buffer.astype('float32')
 
 
@@ -30,14 +34,13 @@ buffer = buffer.astype('float32')
 stream_spec = dict(protocol='tcp', interface='127.0.0.1', transfermode='sharedarray',
                         sharedarray_shape=(nb_channel, 2048*50), ring_buffer_method = 'double',
                         dtype = 'float32',)
-                        # timeaxis = 1, shape = (nb_channel, -1),
 
-def do_filtertest(FilterClass, engine):
+def do_filtertest(engine):
     app = pg.mkQApp()
     
     dev = NumpyDeviceBuffer()
     dev.configure(nb_channel=nb_channel, sample_interval=1./sample_rate, chunksize=chunksize,
-                    buffer=buffer, timeaxis=1,)
+                    buffer=buffer)
     dev.output.configure(**stream_spec)
     dev.initialize()
     
@@ -47,8 +50,8 @@ def do_filtertest(FilterClass, engine):
     coefficients = scipy.signal.iirfilter(7, [f1/sample_rate*2, f2/sample_rate*2],
                 btype = 'bandpass', ftype = 'butter', output = 'sos')
     
-    filter = FilterClass()
-    filter.configure(coefficients = coefficients, engine=engine, chunksize=chunksize)
+    filter = OverlapFiltfilt()
+    filter.configure(coefficients = coefficients, engine=engine, chunksize=chunksize, overlapsize=overlapsize)
     filter.input.connect(dev.output)
     filter.output.configure(**stream_spec)
     filter.initialize()
@@ -86,74 +89,63 @@ def do_filtertest(FilterClass, engine):
     app.exec_()
 
 def test_sosfilter():
-    do_filtertest(OverlapFiltfilt, 'numpy')
+    do_filtertest('scipy')
 
 @pytest.mark.skipif(not HAVE_PYOPENCL, reason='no pyopencl')
 def test_openclsosfilter():
-    do_filtertest(OverlapFiltfilt, 'opencl')
+    do_filtertest('opencl')
 
 
 
-def compare_online_offline(FilterClass, engine):
+def compare_online_offline_engines():
+    #TODO loop over overlapsize
+    chunksize = 500
+    overlapsize = 250
 
-    #~ man = create_manager(auto_close_at_exit=True)
-    man = create_manager(auto_close_at_exit=False)
-    ng = man.create_nodegroup()
-
-    dev = ng.create_node('NumpyDeviceBuffer')
-    dev.configure(nb_channel=nb_channel, sample_interval=1./sample_rate, chunksize=chunksize,
-                    buffer=buffer, timeaxis=1,)
-    dev.output.configure(**stream_spec)
-    dev.initialize()
-
+    if HAVE_PYOPENCL:
+        engines = ['scipy', 'opencl',]
+    else:
+        engines = ['scipy']
+    
+    dtype = 'float32'
+    
     coefficients = scipy.signal.iirfilter(7, [f1/sample_rate*2, f2/sample_rate*2],
                 btype = 'bandpass', ftype = 'butter', output = 'sos')
     
-    filter = ng.create_node(FilterClass.__name__)
-    filter.configure(coefficients = coefficients, engine=engine, chunksize=chunksize)
-    #~ filter.configure(coefficients = coefficients)
-    filter.input.connect(dev.output)
-    filter.output.configure(**stream_spec)
-    filter.initialize()
+    offline_arr =  scipy.signal.sosfilt(coefficients.astype('float32'), buffer.astype('float32'), axis=0, zi=None)
+    offline_arr = scipy.signal.sosfilt(coefficients.astype('float32'), offline_arr[::-1, :], axis=0, zi=None)
+    offline_arr = offline_arr[::-1, :]
     
-    filter.start()
-    dev.start()
+    for engine in engines:
+        print(engine)
+        EngineClass = sosfilter_engines[engine]
+        filter_engine = EngineClass(coefficients, nb_channel, dtype, chunksize, overlapsize)
+        online_arr = np.zeros_like(offline_arr)
+        
+        pos = 0
+        for i in range(nloop):
+            #~ print(i)
+            chunk = buffer[pos:pos+i*chunksize:(i+1)*chunksize,:]
+            chunk_filtered = filter_engine.compute_one_chunk(chunk)
+            l = chunk_filtered.shape[0]
+            online_arr[pos:pos+l,:] = chunk_filtered
+            pos += l
+        
+        offline_arr = offline_arr[:-overlapsize, :]
+        online_arr = online_arr[:-overlapsize, :]
+        
+        residual = np.abs((online_arr.astype('float64')-offline_arr.astype('float64'))/np.mean(np.abs(offline_arr.astype('float64'))))
+        print(np.max(residual))
+        assert np.max(residual)<5e-5, 'online differt from offline'
     
-    time.sleep(2.)
-    dev.stop()
-    time.sleep(.1)
-    filter.stop()
-    
-    
-    head = dev.head._get_value()
-    output_arr = filter.output.sender._numpyarr._get_value()
-    #~ output_arr = filter.output.sender._numpyarr
-    output_arr = output_arr[:, :head]
-    
-    
-    offline_arr =  scipy.signal.sosfilt(coefficients.astype('float32'), buffer[:, :head].astype('float32'), axis=1, zi=None)
-    
-    residual = np.abs((output_arr.astype('float64')-offline_arr.astype('float64'))/np.mean(np.abs(offline_arr.astype('float64'))))
-    assert np.max(residual)<5e-5, 'online differt from offline'
-    
-    #~ from matplotlib import pyplot
-    #~ fig, ax = pyplot.subplots()
-    #~ ax.plot(output_arr[0,:], color = 'r')
-    #~ ax.plot(offline_arr[0,:], color = 'g')
-    #~ fig, ax = pyplot.subplots()
-    #~ for c in range(nb_channel):
-        #~ ax.plot(residual[c,:], color = 'k')
-    #~ pyplot.show()
-    
-    man.close()
-
-def test_compare_sosfilter():
-    compare_online_offline(OverlapFiltfilt, 'numpy')
-
-@pytest.mark.skipif(not HAVE_PYOPENCL, reason='no pyopencl')
-def test_compare_openclsosfilter():
-    compare_online_offline(OverlapFiltfilt, 'opencl')
-
+        from matplotlib import pyplot
+        fig, ax = pyplot.subplots()
+        ax.plot(online_arr[:, 2], color = 'r')
+        ax.plot(offline_arr[:, 2], color = 'g')
+        fig, ax = pyplot.subplots()
+        for c in range(nb_channel):
+            ax.plot(residual[:, c], color = 'k')
+    pyplot.show()
     
     
     
@@ -161,7 +153,7 @@ def test_compare_openclsosfilter():
 if __name__ == '__main__':
     test_sosfilter()
     test_openclsosfilter()
-    test_compare_sosfilter()
-    test_compare_openclsosfilter()
+    
+    compare_online_offline_engines()
 
  

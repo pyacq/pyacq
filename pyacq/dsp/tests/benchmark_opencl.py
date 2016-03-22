@@ -24,10 +24,10 @@ def compare(chunksize,n_section, nb_channel):
     print(coefficients.shape)
 
     if HAVE_PYOPENCL:
-        engines = ['numpy', 'opencl', 'opencl2', 'opencl3']
-        #~ engines = ['numpy', 'opencl3']
+        engines = ['scipy', 'opencl', 'opencl2', 'opencl3']
+        #~ engines = ['scipy', 'opencl3']
     else:
-        engines = ['numpy']
+        engines = ['scipy']
     
     times = []
     for engine in engines:
@@ -59,8 +59,8 @@ def benchmark_sosfilter():
     chunksizes = [64]
     #~ n_sections = [2,8,16,24]
     n_sections = [4]
-    #~ nb_channels = [1,10, 50,100, 200]
-    nb_channels = [10, 50, 100]
+    nb_channels = [1,10, 50,100, 200]
+    #~ nb_channels = [10, 50, 100]
     #~ chunksizes = [1024]
     #~ n_sections = [4]
     #~ nb_channels = [100]
