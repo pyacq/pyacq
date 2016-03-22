@@ -21,15 +21,17 @@ def compare(chunksize,n_section, nb_channel):
     data = np.random.randn(nloop*chunksize, nb_channel).astype('float32')
     coefficients = scipy.signal.iirfilter(n_section, [f1/sample_rate*2, f2/sample_rate*2],
                 btype = 'bandpass', ftype = 'butter', output = 'sos')
-    
+    print(coefficients.shape)
 
     if HAVE_PYOPENCL:
-        engines = ['numpy', 'opencl', 'opencl2']
+        engines = ['numpy', 'opencl', 'opencl2', 'opencl3']
+        #~ engines = ['numpy', 'opencl3']
     else:
         engines = ['numpy']
     
     times = []
     for engine in engines:
+        print(engine)
         EngineClass = sosfilter_engines[engine]
         filter_engine = EngineClass(coefficients, nb_channel, dtype, chunksize)
         
@@ -53,11 +55,12 @@ def benchmark_sosfilter():
     print(ctx)
     
     #~ chunksizes = [256,1024,2048]
-    chunksizes = [2048]
-    #~ chunksizes = [512]
+    #~ chunksizes = [2048]
+    chunksizes = [64]
     #~ n_sections = [2,8,16,24]
-    n_sections = [8]
-    nb_channels = [1,10, 50,100, 200]
+    n_sections = [4]
+    #~ nb_channels = [1,10, 50,100, 200]
+    nb_channels = [10, 50, 100]
     #~ chunksizes = [1024]
     #~ n_sections = [4]
     #~ nb_channels = [100]

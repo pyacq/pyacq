@@ -245,9 +245,92 @@ class SosFilter_OpenCL_V2:
     """
 
 
+class SosFilter_OpenCL_V3(SosFilter_OpenCl_Base):
+    """
+    Implementation with OpenCL : this version scale nb_channel and nb_section
+    at the same time.
+    """
+    def __init__(self, coefficients, nb_channel, dtype, chunksize):
+        SosFilter_OpenCl_Base.__init__(self, coefficients, nb_channel, dtype, chunksize)
+        self.global_size = (self.nb_channel, self.nb_section)
+        self.local_size = (self.nb_channel, self.nb_section)
+        self.output = np.zeros((self.chunksize, self.nb_channel), dtype= self.dtype)
+        self.kernel_func_name = 'sos_filter'
+    
+    def compute_one_chunk(self, chunk):
+        assert chunk.dtype==self.dtype
+        assert chunk.shape==(self.chunksize, self.nb_channel), 'wrong shape'
+        
+        if not chunk.flags['C_CONTIGUOUS']:
+            chunk = chunk.copy()
+        pyopencl.enqueue_copy(self.queue,  self.input_cl, chunk)
+
+        kern_call = getattr(self.opencl_prg, self.kernel_func_name)
+        event = kern_call(self.queue, self.global_size, self.local_size,
+                                self.input_cl, self.output_cl, self.coefficients_cl, self.zi_cl)
+        event.wait()
+        
+        pyopencl.enqueue_copy(self.queue,  self.output, self.output_cl)
+        chunk_filtered = self.output
+        return chunk_filtered
+    
+    kernel = """
+    #define chunksize %(chunksize)d
+    #define nb_section %(nb_section)d
+    #define nb_channel %(nb_channel)d
+
+    __kernel void sos_filter(__global  float *input, __global  float *output, __constant  float *coefficients, 
+                                                                            __global float *zi) {
+
+        int chan = get_global_id(0); //channel indice
+        int section = get_global_id(1); //section indice
+        
+        int offset_filt2;  //offset channel within section
+        int offset_zi = chan*nb_section*2;
+        
+        int idx;
+
+        float w0, w1,w2;
+        float res;
+        int s2;
+
+        w1 = zi[offset_zi+section*2+0];
+        w2 = zi[offset_zi+section*2+1];
+        
+        for (int s=0; s<chunksize+(3*nb_section);s++){
+            barrier(CLK_GLOBAL_MEM_FENCE);
+
+            s2 = s-section*3;
+            
+            if (s2>=0 && (s2<chunksize)){
+                
+                offset_filt2 = chan*nb_section*6+section*6;
+                
+                idx = s2*nb_channel+chan;
+                if (section==0)  {w0 = input[idx];}
+                else {w0 = output[idx];}
+                
+                w0 -= coefficients[offset_filt2+4] * w1;
+                w0 -= coefficients[offset_filt2+5] * w2;
+                res = coefficients[offset_filt2+0] * w0 + coefficients[offset_filt2+1] * w1 +  coefficients[offset_filt2+2] * w2;
+                w2 = w1; w1 =w0;
+                
+                output[idx] = res;
+            }
+        }
+
+        zi[offset_zi+section*2+0] = w1;
+        zi[offset_zi+section*2+1] = w2;        
+       
+    }
+    
+    
+    """
+
+
 
 sosfilter_engines = { 'numpy' : SosFilter_Numpy, 'opencl' : SosFilter_OpenCL_V1,
-                'opencl2' : SosFilter_OpenCL_V2}
+                'opencl2' : SosFilter_OpenCL_V2, 'opencl3' : SosFilter_OpenCL_V3, }
     
 
 
@@ -348,121 +431,4 @@ class SosFilter(Node,  QtCore.QObject):
                                 self.output.params['dtype'], self.chunksize)
 
 register_node_type(SosFilter)
-
-
-
-sos_filter_kernel_v1 = """
-
-#define chunksize %(chunksize)d
-#define nb_section %(nb_section)d
-#define direction %(direction)d
-
-__kernel void sos_filter_%(chunksize)d(__global  float *input, __global  float *output, 
-                                            __constant  float *coefficients, __global float *zi) {
-
-    int chan = get_global_id(0); //channel indice
-    int section = get_global_id(1); //section indice
-
-    int offset_buf = chan*chunksize;
-    int offset_filt = chan*nb_section*6; //offset channel
-    int offset_filt2;  //offset channel within section
-    int offset_zi = chan*nb_section*2;
-
-
-    // copy channel to local group
-    __local float out_channel[chunksize];
-    if (section ==0) for (int s=0; s<chunksize;s++) out_channel[s] = input[offset_buf+s];
-    
-    float w0, w1,w2;
-    float y0;
-    
-    w1 = zi[offset_zi+section*2+0];
-    w2 = zi[offset_zi+section*2+1];
-    int s2;
-    for (int s=0; s<chunksize+(3*nb_section);s++){
-        barrier(CLK_LOCAL_MEM_FENCE);
-
-        s2 = s-section*3;
-        
-        if (s2>=0 && (s2<chunksize)){
-        
-            if (direction==-1) s2 = chunksize - s2 - 1;  //this is for bacward
-            
-            offset_filt2 = offset_filt+section*6;
-            w0 = out_channel[s2];
-            w0 -= coefficients[offset_filt2+4] * w1;
-            w0 -= coefficients[offset_filt2+5] * w2;
-            out_channel[s2] = coefficients[offset_filt2+0] * w0 + coefficients[offset_filt2+1] * w1 +  coefficients[offset_filt2+2] * w2;
-            w2 = w1; w1 =w0;
-        }
-    }
-    zi[offset_zi+section*2+0] = w1;
-    zi[offset_zi+section*2+1] = w2;
-    
-    if (section ==(nb_section-1)){
-        for (int s=0; s<chunksize;s++) output[offset_buf+s] = out_channel[s];
-    }
-   
-}
-
-
-"""
-
-
-
-sos_filter_kernel_v2 = """
-
-#define chunksize %(chunksize)d
-#define nb_section %(nb_section)d
-#define direction %(direction)d
-#define nb_channel %(nb_channel)d
-
-__kernel void sos_filter_%(chunksize)d(__global  float *input, __global  float *output, 
-                                            __constant  float *coefficients, __global float *zi) {
-
-    int chan = get_global_id(0); //channel indice
-    
-    int offset_filt2;  //offset channel within section
-    int offset_zi = chan*nb_section*2;
-    
-    int idx;
-
-    float w0, w1,w2;
-    float res;
-    
-    for (int section=0; section<nb_section; section++){
-    
-        offset_filt2 = chan*nb_section*6+section*6;
-        
-        w1 = zi[offset_zi+section*2+0];
-        w2 = zi[offset_zi+section*2+1];
-        
-        for (int s=0; s<chunksize;s++){
-            
-            idx = s*nb_channel+chan;
-            if (section==0)  {w0 = input[idx];}
-            else {w0 = output[idx];}
-            
-            w0 -= coefficients[offset_filt2+4] * w1;
-            w0 -= coefficients[offset_filt2+5] * w2;
-            res = coefficients[offset_filt2+0] * w0 + coefficients[offset_filt2+1] * w1 +  coefficients[offset_filt2+2] * w2;
-            w2 = w1; w1 =w0;
-            
-            output[idx] = res;
-            //barrier(CLK_GLOBAL_MEM_FENCE);
-            //output[idx] = w0;
-            //output[idx] = 1.0 * idx;
-            //output[idx] = 1.*s;
-        
-        }
-        
-        zi[offset_zi+section*2+0] = w1;
-        zi[offset_zi+section*2+1] = w2;
-
-    }
-   
-}
-
-
-"""
 
