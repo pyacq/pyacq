@@ -118,18 +118,17 @@ def compare_online_offline_engines():
     
     for engine in engines:
         print(engine)
-        EngineClass = sosfilter_engines[engine]
+        EngineClass = sosfiltfilt_engines[engine]
         filter_engine = EngineClass(coefficients, nb_channel, dtype, chunksize, overlapsize)
         online_arr = np.zeros_like(offline_arr)
         
-        pos = 0
+        
         for i in range(nloop):
             #~ print(i)
-            chunk = buffer[pos:pos+i*chunksize:(i+1)*chunksize,:]
-            chunk_filtered = filter_engine.compute_one_chunk(chunk)
-            l = chunk_filtered.shape[0]
-            online_arr[pos:pos+l,:] = chunk_filtered
-            pos += l
+            chunk = buffer[i*chunksize:(i+1)*chunksize:,:]
+            pos, chunk_filtered = filter_engine.compute_one_chunk((i+1)*chunksize, chunk)
+            if pos is not None:
+                online_arr[pos-chunk.shape[0]:pos,:] = chunk_filtered
         
         offline_arr = offline_arr[:-overlapsize, :]
         online_arr = online_arr[:-overlapsize, :]
@@ -151,8 +150,8 @@ def compare_online_offline_engines():
     
 
 if __name__ == '__main__':
-    test_sosfilter()
-    test_openclsosfilter()
+    #~ test_sosfilter()
+    #~ test_openclsosfilter()
     
     compare_online_offline_engines()
 

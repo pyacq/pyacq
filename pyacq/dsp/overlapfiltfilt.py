@@ -23,20 +23,58 @@ except ImportError:
     HAVE_PYOPENCL = False
 
 
-class SosFiltfilt_Scipy:
+class SosFiltfilt_Base:
+    def __init__(self, coefficients, nb_channel, dtype, chunksize, overlapsize):
+        self.coefficients = coefficients
+        if self.coefficients.ndim==2:
+            self.nb_section =self. coefficients.shape[0]
+        if self.coefficients.ndim==3:
+            self.nb_section = self.coefficients.shape[1]
+        self.nb_channel = nb_channel
+        self.dtype = np.dtype(dtype)
+        self.chunksize = chunksize
+        self.overlapsize = overlapsize
+        
+        shape = ((chunksize+overlapsize)*5, nb_channel)
+        self.forward_buffer = ArrayRingBuffer(shape, dtype, double=True)
+    
+    def compute_one_chunk(self, pos, data):
+        forward_chunk_filtered = self.compute_forward(data)
+        forward_chunk_filtered = forward_chunk_filtered.astype(self.dtype)
+        print('yep', data.shape, forward_chunk_filtered.shape, pos)
+        self.forward_buffer.new_chunk(forward_chunk_filtered, pos)
+        
+        start = pos-self.chunksize-self.overlapsize
+        if start>0:
+            backward_chunk = self.forward_buffer[start:pos, :]
+            backward_filtered = self.compute_forward(backward_chunk)
+            backward_filtered = backward_filtered[:chunksize]
+            return pos-self.overlapsize, backward_filtered
+        elif pos>self.overlapsize:
+            backward_chunk = self.forward_buffer[0:pos, :]
+            backward_filtered = self.compute_forward(backward_chunk)
+            backward_filtered = backward_filtered[:-self.overlapsize]
+            return pos-self.overlapsize, backward_filtered
+        else:
+            return None, None
+    
+    
+    def compute_forward(self, chunk):
+        raise NotImplementedError
+    
+    def compute_backward(self, chunk):
+        raise NotImplementedError
+
+class SosFiltfilt_Scipy(SosFiltfilt_Base):
     """
     Implementation with scipy.
     """
     def __init__(self, coefficients, nb_channel, dtype, chunksize, overlapsize):
-        self.coefficients = coefficients
-        self.nb_section = coefficients.shape[0]
-        self.nb_channel = nb_channel
+        SosFiltfilt_Base.__init__(self, coefficients, nb_channel, dtype, chunksize, overlapsize)
         self.zi = np.zeros((self.nb_section, 2, self.nb_channel), dtype= dtype)
-        self.chunksize = chunksize
-        self.overlapsize = overlapsize
     
     def compute_forward(self, chunk):
-        forward_chunk_filtered, self.zi = scipy.signal.sosfilt(self.coefficients, chunkk, zi=self.zi, axis=0)
+        forward_chunk_filtered, self.zi = scipy.signal.sosfilt(self.coefficients, chunk, zi=self.zi, axis=0)
         return forward_chunk_filtered
     
     def compute_backward(self, chunk):
@@ -45,24 +83,22 @@ class SosFiltfilt_Scipy:
         return backward_filtered
 
 
-class SosFiltfilt_OpenCl_Base:
+class SosFiltfilt_OpenCl_Base(SosFiltfilt_Base):
     def __init__(self, coefficients, nb_channel, dtype, chunksize, overlapsize):
-        self.dtype = np.dtype(dtype)
-        assert self.dtype == np.dtype('float32')
-        self.nb_channel = nb_channel
-        self.chunksize = chunksize
-        assert self.chunksize is not None, 'chunksize for opencl must be fixed'
-        self.overlapsize = overlapsize
+        SosFiltfilt_Base.__init__(self, coefficients, nb_channel, dtype, chunksize, overlapsize)
         
-        self.coefficients = coefficients.astype(self.dtype)
+        assert self.dtype == np.dtype('float32')
+        assert self.chunksize is not None, 'chunksize for opencl must be fixed'
+        
+        self.coefficients = self.coefficients.astype(self.dtype)
         if self.coefficients.ndim==2: #(nb_section, 6) to (nb_channel, nb_section, 6)
             self.coefficients = np.tile(self.coefficients[None,:,:], (nb_channel, 1,1))
         if not self.coefficients.flags['C_CONTIGUOUS']:
             self.coefficients = self.coefficients.copy()
-        self.nb_section = self.coefficients.shape[1]
-        
         assert self.coefficients.shape[0]==self.nb_channel, 'wrong coefficients.shape'
         assert self.coefficients.shape[2]==6, 'wrong coefficients.shape'
+            
+        self.nb_section = self.coefficients.shape[1]
 
         self.ctx = pyopencl.create_some_context()
         #TODO : add arguments gpu_platform_index/gpu_device_index
@@ -85,7 +121,8 @@ class SosFiltfilt_OpenCl_Base:
         self.output2_cl = pyopencl.Buffer(self.ctx, mf.READ_WRITE, size=self.output2.nbytes)
 
         #nb works
-        kernel = self.kernel%dict(chunksize = self.chunksize, nb_section=self.nb_section, nb_channel=self.nb_channel)
+        kernel = self.kernel%dict(forward_chunksize=self.chunksize, backward_chunksize=self.chunksize+self.overlapsize,
+                                                            nb_section=self.nb_section, nb_channel=self.nb_channel)
         prg = pyopencl.Program(self.ctx, kernel)
         self.opencl_prg = prg.build(options='-cl-mad-enable')
 
@@ -188,7 +225,11 @@ class SosFilfilt_OpenCL_V1(SosFiltfilt_OpenCl_Base):
     
 
 sosfiltfilt_engines = { 'scipy' : SosFiltfilt_Scipy, 'opencl' : SosFilfilt_OpenCL_V1 }
-    
+
+
+
+#TODO when branch stream-performence is done
+from .ringbuffer import ArrayRingBuffer
 
 
 class SosFiltfiltThread(ThreadPollInput):
@@ -196,29 +237,20 @@ class SosFiltfiltThread(ThreadPollInput):
         ThreadPollInput.__init__(self, input_stream, timeout = timeout, parent = parent)
         self.output_stream = output_stream
 
-        #TODO when branch stream-performence is done
-        self.forward_buffer = ArrayRingBuffer()        
 
     def process_data(self, pos, data):
         if data is None:
             #sharred_array case
             data =  self.input_stream().get_array_slice(pos, None)
-        
-        forward_chunk_filtered = self.filter_engine.compute_forward(data)
-        self.forward_buffer.new_chunk(forward_data_filtered, pos)
-
-        backward_chunk = self.forward_buffer[pos-self.chunksize-self.overlap:pos, :]
-        backward_filtered = self.filter_engine.compute_forward(backward_chunk)
-        backward_filtered = backward_filtered[:chunksize]
-        
-        self.output_stream.send(pos, backward_filtered)
+        pos2, chunk_filtered = self.filter_engine.compute_one_chunk(data)
+        if pos2 is not None:
+            self.output_stream.send(pos2, chunk_filtered)
         
     def set_params(self, engine, coefficients, nb_channel, dtype, chunksize, overlapsize):
         #TODO put mutex for self.filter_engine
         assert engine in sosfiltfilt_engines
         EngineClass = sosfiltfilt_engines[engine]
         self.filter_engine = EngineClass(coefficients, nb_channel, dtype, chunksize, overlapsize)
-
 
 
 class OverlapFiltfilt(Node,  QtCore.QObject):

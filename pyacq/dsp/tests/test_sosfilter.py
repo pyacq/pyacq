@@ -11,11 +11,11 @@ from pyqtgraph.Qt import QtCore, QtGui
 import scipy.signal
 
 
-nb_channel = 4
+nb_channel = 10
 sample_rate =1000.
 #~ chunksize = 500
-chunksize = 100
-nloop = 20
+chunksize = 10
+nloop = 200
 
 length = int(chunksize*nloop)
 times = np.arange(length)/sample_rate
@@ -131,16 +131,16 @@ def compare_online_offline_engines():
 
         residual = np.abs((online_arr.astype('float64')-offline_arr.astype('float64'))/np.mean(np.abs(offline_arr.astype('float64'))))
         print(np.max(residual))
-        #~ assert np.max(residual)<5e-5, 'online differt from offline'
+        #~ assert np.max(residual)<1e-4, 'online differt from offline'
     
-        #~ from matplotlib import pyplot
-        #~ fig, ax = pyplot.subplots()
-        #~ ax.plot(online_arr[:, 2], color = 'r')
-        #~ ax.plot(offline_arr[:, 2], color = 'g')
-        #~ fig, ax = pyplot.subplots()
-        #~ for c in range(nb_channel):
-            #~ ax.plot(residual[:, c], color = 'k')
-    #~ pyplot.show()
+        from matplotlib import pyplot
+        fig, ax = pyplot.subplots()
+        ax.plot(online_arr[:, 2], color = 'r')
+        ax.plot(offline_arr[:, 2], color = 'g')
+        fig, ax = pyplot.subplots()
+        for c in range(nb_channel):
+            ax.plot(residual[:, c], color = 'k')
+    pyplot.show()
         
     
     
