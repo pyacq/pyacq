@@ -155,10 +155,11 @@ class Node(object):
         """
         assert self.configured(),\
             'Cannot start Node {} : the Node is not configured'.format(self.name)
-        assert self.initialized(),\
-            'Cannot start Node {} : the Node is not initialized'.format(self.name)
         assert not self.running(),\
             'Cannot start Node {} : the Node is already running'.format(self.name)
+            
+        if not self.initialized():
+            self.initialize()
         
         self._start()
         with self.lock:
