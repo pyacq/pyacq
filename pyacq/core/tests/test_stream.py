@@ -29,8 +29,9 @@ def test_ringbuffer():
     buf2 = RingBuffer(shape=(10, 5, 7), dtype=np.ubyte, double=True)
     buf3 = RingBuffer(shape=(10, 5, 7), dtype=np.float, double=False)
     buf4 = RingBuffer(shape=(10, 5, 7), dtype=np.ubyte, double=True, axisorder=(1, 2, 0))
+    buf5 = RingBuffer(shape=(10, 5, 7), dtype='float32', double=False, axisorder=(1, 2, 0))
     
-    for buf, fill in [(buf1, 0), (buf2, 0), (buf3, np.nan)]:
+    for buf, fill in [(buf1, 0), (buf2, 0), (buf3, np.nan), (buf4, 0), (buf5, np.nan)]:
         assert_is_fill(buf[-10:])
         with pytest.raises(IndexError):
             buf[-11]
@@ -57,7 +58,7 @@ def test_ringbuffer():
         assert_is_fill(buf[-10:-5])
 
         # test native axis order
-        order = np.argsort(buf[-1:].strides)[::-1]
+        order = np.argsort(buf[:].strides)[::-1]
         assert np.all(order == buf.axisorder)
     
         # test another chunk
@@ -82,6 +83,10 @@ def test_ringbuffer():
         assert np.all(buf[3:5] == 1)
         assert np.all(buf[5:8] == 2)
         assert np.all(buf[8:] == 3)
+
+        # test native axis order
+        order = np.argsort(buf[:].strides)[::-1]
+        assert np.all(order == buf.axisorder)
 
         # new chunk with skipped data
         buf.new_chunk(d*4, index=buf.last_index() + 7)
@@ -194,15 +199,16 @@ def check_stream(chunksize=1024, chan_shape=(16,), **kwds):
 def test_plaindata_ringbuffer():
     check_stream_ringbuffer(transfermode='plaindata', buffer_size=4096)
     
-def test_plaindata_ringbuffer():
+def test_sharedmem_ringbuffer():
     check_stream_ringbuffer(transfermode='sharedmem', buffer_size=4096)
+    check_stream_ringbuffer(transfermode='sharedmem', buffer_size=4096, axisorder=(1, 0))
     
 def check_stream_ringbuffer(**kwds):
     chunk_shape = (-1, 16)
     stream_spec = dict(protocol='tcp', interface='127.0.0.1', port='*', 
                        transfermode='plaindata', streamtype='analogsignal',
                        dtype='float32', shape=chunk_shape, compression='',
-                       scale=None, offset=None, units='')
+                       scale=None, offset=None, units='', axisorder=None)
     stream_spec.update(kwds)
     print("  %s" % kwds)
     
@@ -220,16 +226,10 @@ def check_stream_ringbuffer(**kwds):
         index += chunk.shape[0]
         outstream.send(index, chunk)
         instream.recv()
-    assert np.all(instream.get_array_slice(0, 4096) == data)
-    
-    # test ring buffer changes memory layout
-    data = data.T.copy().T
-    for i in range(16):
-        chunk = data[i*256:(i+1)*256]
-        index += chunk.shape[0]
-        outstream.send(index, chunk)
-        instream.recv()
-    assert np.all(instream.get_array_slice(4096, 4096) == data)
+    data2 = instream.get_array_slice(0, 4096)
+    assert np.all(data2 == data)
+    if outstream.params['axisorder'] is not None:
+        assert np.all(np.argsort(data2.strides)[::-1] == outstream.params['axisorder'])
     
 
 

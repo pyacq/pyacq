@@ -315,14 +315,13 @@ class PlainDataSender:
 
 
 class DataReceiver:
-    def __init__(self, socket, params):
+    def __init__(self, socket, params, ring_size=0, ring_double=True):
         self.socket = socket
         self.params = params
-        ring_size = params['buffer_size']
-        ring_double = params.get('double_buffer', True)
         if ring_size > 0:
             ring_shape = (ring_size,) + params['shape'][1:]
-            self._ring_buffer = RingBuffer(ring_shape, dtype=params['dtype'], double=ring_double)
+            self._ring_buffer = RingBuffer(ring_shape, dtype=params['dtype'],
+                                           double=ring_double, axisorder=params['axisorder'])
         else:
             self._ring_buffer = None
             
@@ -356,7 +355,8 @@ class PlainDataReceiver(DataReceiver):
     See PlainDataSender.
     """
     def __init__(self, socket, params):
-        DataReceiver.__init__(self, socket, params)
+        ring_size = params['buffer_size']
+        DataReceiver.__init__(self, socket, params, ring_size=ring_size)
     
     def _recv(self):
         # receive and unpack structure
@@ -415,6 +415,7 @@ class SharedMemSender:
 
 class SharedMemReceiver(DataReceiver):
     def __init__(self, socket, params):
+        # init data receiver with no ring buffer; we will implement our own from shm.
         DataReceiver.__init__(self, socket, params)
 
         self.size = self.params['buffer_size']
@@ -431,6 +432,9 @@ class SharedMemReceiver(DataReceiver):
         data = self._buffer[index+1-shape[0]:index+1]
         return index, data
     
+    def __getitem__(self, *args):
+        # make shm buffer publicly readable
+        return self._buffer[args]
 
 
 class SharedArraySender:
@@ -783,7 +787,8 @@ class RingBuffer:
                 else:
                     #print("  single; discontig:", (start, stop), (start%bsize, stop%bsize), bsize, break_index)
                     # need to reconstruct from two pieces
-                    data = np.empty((stop-start,) + self.shape[1:], self.buffer.dtype)
+                    newshape = np.array((stop-start,) + self.shape[1:])[self.axisorder]
+                    data = np.empty(newshape, self.buffer.dtype).transpose(np.argsort(self.axisorder))
                     data[:break_index-start] = self.buffer[start%bsize:]
                     data[break_index-start:] = self.buffer[:stop%bsize]
             if step is not None:
