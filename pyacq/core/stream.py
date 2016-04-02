@@ -167,19 +167,14 @@ class InputStream(object):
     threads, processes, or machines. They offer a variety of transfer methods
     including TCP for remote connections and IPC for local connections.
     """
-    def __init__(self, spec=None, node=None, name=None, bufferSize=None):
-        spec = {} if spec is None else spec
+    def __init__(self, spec=None, node=None, name=None):
+        self.spec = {} if spec is None else spec
         self.configured = False
-        self.spec = spec
         if node is not None:
             self.node = weakref.ref(node)
         else:
             self.node = None
         self.name = name
-        if bufferSize is None:
-            self.buffer = None
-        else:
-            self.buffer = RingBuffer(bufferSize, double=True)
     
     def connect(self, output):
         """Connect an output to this input.
@@ -615,18 +610,26 @@ class RingBuffer:
     allow faster, copyless reads at the expense of doubled write time and memory
     footprint.
     """
-    def __init__(self, shape, dtype, double=True, shmem=None, fill=None):
+    def __init__(self, shape, dtype, double=True, shmem=None, fill=None, axisorder=None):
         self.double = double
         self.shape = shape
+        # order of axes as written in memory. This does not affect the shape of the 
+        # buffer as seen by the user, but can be used to make sure a specific axis
+        # is contiguous in memory.
+        if axisorder is None:
+            axisorder = np.arange(len(shape))
+        self.axisorder = np.array(axisorder)
         
         shape = (shape[0] * (2 if double else 1),) + shape[1:]
+        nativeshape = np.array(shape)[self.axisorder]
+        
         # initialize int buffers with 0 and float buffers with nan
         if fill is None:
             fill = 0 if np.dtype(dtype).kind in 'ui' else np.nan
         self._filler = fill
         
         if shmem is None:
-            self.buffer = np.empty(shape, dtype=dtype)
+            self.buffer = np.empty(nativeshape, dtype=dtype).transpose(np.argsort(axisorder))
             self.buffer[:] = self._filler
             self._indexes = np.zeros((2,), dtype='int64')
             self._shmem = None
@@ -637,7 +640,7 @@ class RingBuffer:
                 self._shmem = SharedMem(nbytes=size)
             else:
                 self._shmem = SharedMem(nbytes=size, shm_id=shmem)
-            self.buffer = self._shmem.to_numpy(offset=16, dtype=dtype, shape=shape)
+            self.buffer = self._shmem.to_numpy(offset=16, dtype=dtype, shape=nativeshape).transpose(np.argsort(axisorder))
             self._indexes = self._shmem.to_numpy(offset=0, dtype='int64', shape=(2,))
         
         self.dtype = self.buffer.dtype
