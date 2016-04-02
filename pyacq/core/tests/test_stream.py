@@ -124,8 +124,8 @@ def test_ringbuffer():
 
 
 def test_ringbuffer_shm():
-    buf1 = RingBuffer(shape=(10, 5, 7), dtype=np.ubyte, double=True, shmem=True)
-    buf2 = RingBuffer(shape=(10, 5, 7), dtype=np.ubyte, double=True, shmem=buf1.shm_id())
+    buf1 = RingBuffer(shape=(10, 5, 7), dtype=np.ubyte, double=True, shmem=True, axisorder=(0, 2, 1))
+    buf2 = RingBuffer(shape=(10, 5, 7), dtype=np.ubyte, double=True, shmem=buf1.shm_id, axisorder=(0, 2, 1))
     buf1.new_chunk(np.arange(350).astype(buf1.dtype).reshape(10, 5, 7), index=1005)
     assert buf2.last_index() == buf1.last_index()
     assert np.all(buf1[:] == buf2[:])
@@ -147,10 +147,10 @@ def test_stream_sharedmem():
     chan_shape = (16,)
     n_shared_chunks = 10
     dtype = 'float32'
-    shm_size = chunksize * np.product(chan_shape) * np.dtype(dtype).itemsize * n_shared_chunks
+    shm_size = chunksize * n_shared_chunks
     for protocol in protocols:
         for compression in compressions:
-            check_stream(chunksize=chunksize, chan_shape=chan_shape, sharedmem_size=shm_size,
+            check_stream(chunksize=chunksize, chan_shape=chan_shape, buffer_size=shm_size,
                          transfermode='sharedmem', protocol=protocol, compression=compression,
                          dtype=dtype)
             
@@ -186,25 +186,16 @@ def check_stream(chunksize=1024, chan_shape=(16,), **kwds):
         index2, arr2 = instream.recv()
         assert index2==index
         assert np.all((arr-arr2)==0.)
-        if is_contiguous(arr):
-            assert arr.strides == arr2.strides
-        else:
-            # output must at least have the same stride order and direction,
-            # even if they don't have the same value
-            s1 = np.array(arr.strides)
-            s2 = np.array(arr2.strides)
-            assert np.all(np.argsort(s1) == np.argsort(s2))
-            assert np.all(s1/s1.abs() == s2/s2.abs())
 
     outstream.close()
     instream.close()
 
 
 def test_plaindata_ringbuffer():
-    check_stream_ringbuffer(transfermode='plaindata')
+    check_stream_ringbuffer(transfermode='plaindata', buffer_size=4096)
     
 def test_plaindata_ringbuffer():
-    check_stream_ringbuffer(transfermode='sharedmem', sharedmem_size=4096*4)
+    check_stream_ringbuffer(transfermode='sharedmem', buffer_size=4096)
     
 def check_stream_ringbuffer(**kwds):
     chunk_shape = (-1, 16)
@@ -218,7 +209,7 @@ def check_stream_ringbuffer(**kwds):
     outstream = OutputStream()
     outstream.configure(**stream_spec)
     
-    instream = InputStream(buffer_size=4096)
+    instream = InputStream()
     instream.connect(outstream)
     time.sleep(.1)
     

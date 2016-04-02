@@ -22,6 +22,8 @@ default_stream = dict(
     streamtype='analogsignal',
     dtype='float32',
     shape=(-1, 1),
+    axisorder=None,
+    buffer_size=0,
     compression='',
     scale=None,
     offset=None,
@@ -237,10 +239,7 @@ class InputStream(object):
             chunk.
 
         """
-        data = self.receiver.recv(**kargs)
-        if self.buffer is not None:
-            self.buffer.new_data(*data)
-        return data
+        return self.receiver.recv(**kargs)
 
     def close(self):
         """Close the Input.
@@ -316,9 +315,11 @@ class PlainDataSender:
 
 
 class DataReceiver:
-    def __init__(self, socket, params, ring_size=0, ring_double=True):
+    def __init__(self, socket, params):
         self.socket = socket
         self.params = params
+        ring_size = params['buffer_size']
+        ring_double = params.get('double_buffer', True)
         if ring_size > 0:
             ring_shape = (ring_size,) + params['shape'][1:]
             self._ring_buffer = RingBuffer(ring_shape, dtype=params['dtype'], double=ring_double)
@@ -340,6 +341,9 @@ class DataReceiver:
             raise TypeError("DataReceiver indexing requires a ring buffer.")
         return self._ring_buffer[args]
     
+    def get_array_slice(self, index, length):
+        return self[index:index+length]
+    
     def close(self):
         pass
     
@@ -351,8 +355,8 @@ class PlainDataReceiver(DataReceiver):
     
     See PlainDataSender.
     """
-    def __init__(self, socket, params, **kwargs):
-        DataReceiver.__init__(self, socket, params, **kwargs)
+    def __init__(self, socket, params):
+        DataReceiver.__init__(self, socket, params)
     
     def _recv(self):
         # receive and unpack structure
@@ -385,12 +389,12 @@ class SharedMemSender:
     def __init__(self, socket, params):
         self.socket = socket
         self.params = params
-        self.size = self.params['sharedmem_size']
+        self.size = self.params['buffer_size']
         dtype = np.dtype(self.params['dtype'])
-        shm_size = self.size * dtype.itemsize
-        self._shmem = SharedMem(nbytes=shm_size)
-        self.params['shm_id'] = self._shmem.shm_id
-        self._ptr = 0
+        shape = (self.size,) + self.params['shape'][1:]
+        self._buffer = RingBuffer(shape=shape, dtype=self.params['dtype'],
+                                  shmem=True, axisorder=self.params['axisorder'])
+        self.params['shm_id'] = self._buffer.shm_id
     
     def send(self, index, data):
         assert data.dtype == self.params['dtype']
@@ -400,18 +404,9 @@ class SharedMemSender:
         else:
             assert shape[1:] == self.params['shape'][1:]
  
-        size = data.size * data.itemsize
-        assert size <= self.size
-        if self._ptr + size >= self.size:
-            self._ptr = 0
+        self._buffer.new_chunk(data, index)
         
-        # write data into shmem buffer
-        buf, offset, strides = decompose_array(data)  # can we avoid this copy?
-        shm_buf = self._shmem.to_numpy(self._ptr + offset, data.dtype, buf.shape, buf.strides)
-        shm_buf[:] = buf
-        
-        stat = struct.pack('!' + 'Q' * (3+len(shape)) + 'q' * len(strides), len(shape), index, self._ptr+offset, *(shape + strides))
-        self._ptr += data.size
+        stat = struct.pack('!' + 'Q' * (2+len(shape)), len(shape), index, *shape)
         self.socket.send_multipart([stat])
     
     def close(self):
@@ -422,20 +417,18 @@ class SharedMemReceiver(DataReceiver):
     def __init__(self, socket, params):
         DataReceiver.__init__(self, socket, params)
 
-        self.size = self.params['sharedmem_size']
-        self._shmem = SharedMem(nbytes=self.size, shm_id=self.params['shm_id'])
+        self.size = self.params['buffer_size']
+        shape = (self.size,) + self.params['shape'][1:]
+        self._buffer = RingBuffer(shape=shape, dtype=self.params['dtype'],
+                                  shmem=self.params['shm_id'], axisorder=self.params['axisorder'])
 
     def _recv(self):
         stat = self.socket.recv_multipart()[0]
         ndim = struct.unpack('!Q', stat[:8])[0]
-        stat = struct.unpack('!' + 'Q' * (ndim + 2) + 'q' * ndim, stat[8:])
+        stat = struct.unpack('!' + 'Q' * (ndim + 1), stat[8:])
         index = stat[0]
-        offset = stat[1]
-        shape = stat[2:2+ndim]
-        strides = stat[-ndim:]
-        
-        dtype = self.params['dtype']
-        data = self._shmem.to_numpy(offset, dtype, shape, strides)
+        shape = stat[1:1+ndim]
+        data = self._buffer[index+1-shape[0]:index+1]
         return index, data
     
 
@@ -633,8 +626,9 @@ class RingBuffer:
             self.buffer[:] = self._filler
             self._indexes = np.zeros((2,), dtype='int64')
             self._shmem = None
+            self.shm_id = None
         else:
-            size = np.product(shape) + 16
+            size = np.product(shape) * np.dtype(dtype).itemsize + 16
             if shmem is True:
                 # create new shared memory buffer
                 self._shmem = SharedMem(nbytes=size)
@@ -642,6 +636,7 @@ class RingBuffer:
                 self._shmem = SharedMem(nbytes=size, shm_id=shmem)
             self.buffer = self._shmem.to_numpy(offset=16, dtype=dtype, shape=nativeshape).transpose(np.argsort(axisorder))
             self._indexes = self._shmem.to_numpy(offset=0, dtype='int64', shape=(2,))
+            self.shm_id = self._shmem.shm_id
         
         self.dtype = self.buffer.dtype
         
@@ -696,12 +691,6 @@ class RingBuffer:
     def _set_read_index(self, i):
         # what kind of protection do we need here?
         self._indexes[0] = i
-
-    def shm_id(self):
-        if self._shmem is None:
-            return None
-        else:
-            return self._shmem.shm_id
 
     def new_chunk(self, data, index=None):
         dsize = data.shape[0]
