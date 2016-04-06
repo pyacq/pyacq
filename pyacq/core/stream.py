@@ -41,6 +41,7 @@ class OutputStream(object):
     """
     def __init__(self, spec=None, node=None, name=None):
         spec = {} if spec is None else spec
+        self._last_index = -1
         self.configured = False
         self.spec = spec  # this is a priori stream params, and must be change when Node.configure
         if node is not None:
@@ -138,7 +139,7 @@ class OutputStream(object):
         if self.node and self.node():
             self.node().after_output_configure(self.name)
 
-    def send(self, index, data, **kargs):
+    def send(self, data, index=None, **kargs):
         """Send a data chunk and its frame index.
         
         Parameters
@@ -149,6 +150,9 @@ class OutputStream(object):
         data: np.ndarray or bytes
             The chunk of data to send.
         """
+        if index is None:
+            index = self._last_index + data.shape[0]
+        self._last_index = index
         self.sender.send(index, data, **kargs)
 
     def close(self):
@@ -271,8 +275,24 @@ class InputStream(object):
         
         return self.receiver.get_array_slice(index, length, **kargs)
 
+    def __getitem__(self, *args):
+        return self.receiver.__getitem__(*args)
 
-class PlainDataSender:
+
+class DataSender:
+    def __init__(self, socket, params):
+        self.socket = socket
+        self.params = params
+        self.funcs = []
+
+    def send(self, index, data):
+        raise NotImplementedError()
+    
+    def close(self):
+        pass
+
+
+class PlainDataSender(DataSender):
     """
     Helper class to send data in 2 parts with a zmq socket:
     
@@ -281,11 +301,6 @@ class PlainDataSender:
     
     The data parts can be compressed.
     """
-    def __init__(self, socket, params):
-        self.socket = socket
-        self.params = params
-        self.funcs = []
-    
     def send(self, index, data):
         # optional pre-processing before send
         if isinstance(data, np.ndarray):
@@ -309,9 +324,6 @@ class PlainDataSender:
         stat = struct.pack('!' + 'Q' * (3+len(shape)) + 'q' * len(strides), len(shape), index, offset, *(shape + strides))
         copy = self.params.get('copy', False)
         self.socket.send_multipart([stat, buf], copy=copy)
-    
-    def close(self):
-        pass
 
 
 class DataReceiver:
@@ -383,12 +395,11 @@ class PlainDataReceiver(DataReceiver):
         return index, data
 
 
-class SharedMemSender:
+class SharedMemSender(DataSender):
     """
     """
     def __init__(self, socket, params):
-        self.socket = socket
-        self.params = params
+        DataSender.__init__(self, socket, params)
         self.size = self.params['buffer_size']
         dtype = np.dtype(self.params['dtype'])
         shape = (self.size,) + self.params['shape'][1:]
@@ -408,9 +419,6 @@ class SharedMemSender:
         
         stat = struct.pack('!' + 'Q' * (2+len(shape)), len(shape), index, *shape)
         self.socket.send_multipart([stat])
-    
-    def close(self):
-        pass
 
 
 class SharedMemReceiver(DataReceiver):
@@ -435,167 +443,6 @@ class SharedMemReceiver(DataReceiver):
     def __getitem__(self, *args):
         # make shm buffer publicly readable
         return self._buffer[args]
-
-
-class SharedArraySender:
-    """
-    Helper class to share data in a SharedArray and send in the socket only the index.
-    The SharedArray can have any size larger than one chunk.
-    
-    This is useful for a Node that needs to access older chunks.
-    
-    Note that on Unix using plaindata+inproc can be faster.
-    """
-    def __init__(self, socket, params):
-        self.socket = socket
-        self.params = params
-        #~ self.copy = self.params['protocol'] == 'inproc'
-        self.copy = False
-        
-        assert 'sharedarray_shape' in params, 'sharedarray_shape not in params for sharedarray'
-        
-        self._index = 0
-        
-        # prepare SharedArray
-        self._ring_size = self.params['sharedarray_shape'][0]
-        sharedarray_shape = list(self.params['sharedarray_shape'])
-        self._ndim = len(sharedarray_shape)
-        assert self._ndim==len(self.params['shape']), 'sharedarray_shape and shape must coherent!'
-        if self.params['ring_buffer_method'] == 'double':
-            sharedarray_shape[self._timeaxis] = self._ring_size*2
-        self._sharedarray = SharedArray(shape=sharedarray_shape, dtype=self.params['dtype'])
-        self.params['shm_id'] = self._sharedarray.shm_id
-        self._numpyarr = self._sharedarray.to_numpy()
-
-    def send(self, index, data):
-        method = self.params.get('ring_buffer_method', 'single')
-        
-        if method == 'single':
-            self._copy_to_sharray_single(index, data)
-        elif method == 'double':
-            self._copy_to_sharray_double(index, data)
-        else:
-            raise ValueError('Unsupported ring_buffer_method "%s"' % method)
-
-    def close(self):
-        self._sharedarray.close()
-
-    def _copy_to_sharray_single(self, index, data):
-        assert data.shape[self._timeaxis]<self._ring_size, 'The chunk is too big for the buffer {} {}'.format(data.shape, self._numpyarr.shape)
-        head = index % self._ring_size
-        tail = self._index%self._ring_size
-        if head>tail:
-            # 1 chunks
-            sl = [slice(None)] * self._ndim
-            sl[self._timeaxis] = slice(tail, head)
-            self._numpyarr[sl] = data
-        else:
-            # 2 chunks : because end of the ring
-            size1 = self._ring_size-tail
-            size2 = data.shape[self._timeaxis] - size1
-            
-            # part1
-            sl1 = [slice(None)] * self._ndim 
-            sl1[self._timeaxis] = slice(tail, None)
-            sl2 = [slice(None)] * self._ndim 
-            sl2[self._timeaxis] = slice(None, size1)
-            self._numpyarr[sl1] = data[sl2]
-            
-            # part2
-            sl3 = [slice(None)] * self._ndim
-            sl3[self._timeaxis] = slice(None, size2)
-            sl4 = [slice(None)] * self._ndim
-            sl4[self._timeaxis] = slice(-size2, None)
-            self._numpyarr[sl3] = data[sl4]
-                
-
-        self.socket.send(np.int64(index), copy=self.copy)
-        self._index += data.shape[self._timeaxis]
-
-
-    def _copy_to_sharray_double(self, index, data):
-        head = index % self._ring_size
-        tail = self._index%self._ring_size
-        if head>tail:
-            sl = [slice(None)] * self._ndim
-            sl[self._timeaxis] = slice(tail, head)
-            # 1 chunk
-            self._numpyarr[sl] = data
-            # 1 same chunk
-            sl[self._timeaxis] = slice(tail+self._ring_size, head+self._ring_size)
-            self._numpyarr[sl] = data
-            
-        else:
-            size1 = self._ring_size-tail
-            size2 = data.shape[self._timeaxis] - size1
-            
-            # 1 full chunks continuous
-            sl = [slice(None)] * self._ndim 
-            sl[self._timeaxis] = slice(tail, head+self._ring_size)
-            self._numpyarr[sl] = data
-            
-            # part1 : in the second ring
-            if size1>0:
-                sl1 = [slice(None)] * self._ndim 
-                sl1[self._timeaxis] = slice(tail+self._ring_size, None)
-                sl2 = [slice(None)] * self._ndim 
-                sl2[self._timeaxis] = slice(None, size1)
-                self._numpyarr[sl1] = data[sl2]
-            
-            # part2 : in the first ring
-            if size2:
-                sl3 = [slice(None)] * self._ndim
-                sl3[self._timeaxis] = slice(None, size2)
-                sl4 = [slice(None)] * self._ndim
-                sl4[self._timeaxis] = slice(-size2, None)
-                self._numpyarr[sl3] = data[sl4]
-            
-        self.socket.send(np.int64(index), copy=self.copy)
-        self._index += data.shape[self._timeaxis]
- 
-
-
-class SharedArrayReceiver:
-    def __init__(self, socket, params):
-        self.socket = socket
-        self.params = params
-
-        self._timeaxis = self.params['timeaxis']
-        self._ring_size = self.params['sharedarray_shape'][self._timeaxis]
-        sharedarray_shape = list(self.params['sharedarray_shape'])
-        self._ndim = len(sharedarray_shape)
-        assert self._ndim==len(self.params['shape']), 'sharedarray_shape and shape must coherent!'
-        if self.params['ring_buffer_method'] == 'double':
-            sharedarray_shape[self._timeaxis] = self._ring_size*2
-        self._sharedarray = SharedArray(shape=sharedarray_shape, dtype=self.params['dtype'], shm_id=self.params['shm_id'])
-        self._numpyarr = self._sharedarray.to_numpy()
-        self.last_chunk_size = None
-        self.last_index = 0
-
-    def recv(self, with_data=False):
-        m0 = self.socket.recv()
-        index = np.fromstring(m0, dtype='int64')[0]
-        self.last_chunk_size = index - self.last_index
-        self.last_index = index
-        if with_data:
-            return index, self.get_array_slice(index, self.last_chunk_size)
-        else:
-            return index, None
-
-    def get_array_slice(self, index, length):
-        assert length<self._ring_size, 'The ring size is too small {} {}'.format(self._ring_size, length)
-        if self.params['ring_buffer_method'] == 'double':
-            i2 = index%self._ring_size + self._ring_size
-            i1 = i2 - length
-            sl = [slice(None)] * self._ndim 
-            sl[self._timeaxis] = slice(i1,i2)
-            data = self._numpyarr[sl]
-            return data
-        elif self.params['ring_buffer_method'] == 'single':
-            raise(NotImplementedError)
-    
-    def close(self):
-        pass
 
 
 class RingBuffer:

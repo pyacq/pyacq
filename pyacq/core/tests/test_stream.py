@@ -154,10 +154,9 @@ def test_stream_sharedmem():
     dtype = 'float32'
     shm_size = chunksize * n_shared_chunks
     for protocol in protocols:
-        for compression in compressions:
-            check_stream(chunksize=chunksize, chan_shape=chan_shape, buffer_size=shm_size,
-                         transfermode='sharedmem', protocol=protocol, compression=compression,
-                         dtype=dtype)
+        check_stream(chunksize=chunksize, chan_shape=chan_shape, buffer_size=shm_size,
+                     transfermode='sharedmem', protocol=protocol,
+                     dtype=dtype)
             
 def check_stream(chunksize=1024, chan_shape=(16,), **kwds):
     chunk_shape = (chunksize,) + chan_shape
@@ -178,14 +177,13 @@ def check_stream(chunksize=1024, chan_shape=(16,), **kwds):
     for i in range(5):
         #~ print(i)
         # send
-        index += chunksize
         if i == 1:
             # send non-aligned data
             cs = (chunk_shape[1], chunk_shape[0]) + chunk_shape[2:]
             arr = np.random.rand(*cs).transpose(1,0).astype(stream_spec['dtype'])
         else:
             arr = np.random.rand(*chunk_shape).astype(stream_spec['dtype'])
-        outstream.send(index, arr)
+        outstream.send(arr)
         
         # recv
         index2, arr2 = instream.recv()
