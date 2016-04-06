@@ -41,7 +41,7 @@ class OutputStream(object):
     """
     def __init__(self, spec=None, node=None, name=None):
         spec = {} if spec is None else spec
-        self._last_index = -1
+        self.last_index = -1
         self.configured = False
         self.spec = spec  # this is a priori stream params, and must be change when Node.configure
         if node is not None:
@@ -151,8 +151,8 @@ class OutputStream(object):
             The chunk of data to send.
         """
         if index is None:
-            index = self._last_index + data.shape[0]
-        self._last_index = index
+            index = self.last_index + data.shape[0]
+        self.last_index = index
         self.sender.send(index, data, **kargs)
 
     def close(self):

@@ -173,7 +173,6 @@ def check_stream(chunksize=1024, chan_shape=(16,), **kwds):
     instream.connect(outstream)
     time.sleep(.1)
     
-    index = 0
     for i in range(5):
         #~ print(i)
         # send
@@ -186,8 +185,8 @@ def check_stream(chunksize=1024, chan_shape=(16,), **kwds):
         outstream.send(arr)
         
         # recv
-        index2, arr2 = instream.recv()
-        assert index2==index
+        index, arr2 = instream.recv()
+        assert index == outstream.last_index
         assert np.all((arr-arr2)==0.)
 
     outstream.close()
@@ -218,11 +217,9 @@ def check_stream_ringbuffer(**kwds):
     time.sleep(.1)
     
     data = np.random.normal(size=(4096, 16)).astype('float32')
-    index = -1
     for i in range(16):
         chunk = data[i*256:(i+1)*256]
-        index += chunk.shape[0]
-        outstream.send(index, chunk)
+        outstream.send(chunk)
         instream.recv()
     data2 = instream.get_array_slice(0, 4096)
     assert np.all(data2 == data)
