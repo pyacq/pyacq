@@ -214,6 +214,7 @@ def check_stream_ringbuffer(**kwds):
     
     instream = InputStream()
     instream.connect(outstream)
+    instream.set_buffer(stream_spec['buffer_size'], axisorder=stream_spec['axisorder'])
     time.sleep(.1)
     
     data = np.random.normal(size=(4096, 16)).astype('float32')

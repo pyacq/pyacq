@@ -181,6 +181,8 @@ class InputStream(object):
         else:
             self.node = None
         self.name = name
+        self.buffer = None
+        self._own_buffer = False  # whether InputStream should populate buffer
     
     def connect(self, output):
         """Connect an output to this input.
@@ -201,6 +203,15 @@ class InputStream(object):
             self.url = '{protocol}://{interface}'.format(**self.params)
         else:
             self.url = '{protocol}://{interface}:{port}'.format(**self.params)
+            
+        # allow some keys in self.spec to override self.params
+        readonly_params = ['protocol', 'transfermode', 'shape', 'dtype']
+        for k,v in self.spec.items():
+            if k in readonly_params and v != self.params[k]:
+                raise ValueError("InputStream parameter %s=%s does not match connected output %s=%s." %
+                                 (k, v, k, self.params[k]))
+            else:
+                self.params[k] = v
 
         context = zmq.Context.instance()
         self.socket = context.socket(zmq.SUB)
@@ -243,7 +254,10 @@ class InputStream(object):
             chunk.
 
         """
-        return self.receiver.recv(**kargs)
+        index, data = self.receiver.recv(**kargs)
+        if self._own_buffer and data is not None and self.buffer is not None:
+            self.buffer.new_chunk(data, index=index)
+        return index, data
 
     def close(self):
         """Close the Input.
@@ -255,7 +269,7 @@ class InputStream(object):
         self.socket.close()
         del self.socket
     
-    def get_array_slice(self, index, length, **kargs):
+    def get_array_slice(self, index, length):
         """Return a slice from the ring buffer that accumulates data.
         
         Requires `bufferSize` to be specified at initialization.
@@ -269,14 +283,40 @@ class InputStream(object):
             be greater than the ring size. If length is None, then return the
             last chunk received.
         """
-        # assert self.params['transfermode'] == 'sharedarray', 'For sharedarray only'
         if length is None:
-            return self.receiver.get_array_slice(index, self.receiver.last_chunk_size, **kargs)
+            length = self.receiver.last_chunk_size
         
-        return self.receiver.get_array_slice(index, length, **kargs)
+        return self[index:index+length]
 
     def __getitem__(self, *args):
-        return self.receiver.__getitem__(*args)
+        if self.buffer is None:
+            raise TypeError("No ring buffer configured for this InputStream.")
+        return self.buffer.__getitem__(*args)
+
+    def set_buffer(self, size=None, double=True, axisorder=None):
+        """Ensure that this InputStream has a RingBuffer at least as large as 
+        *size* and with the specified double-mode and axis order.
+        
+        If necessary, this will attach a new RingBuffer to the stream and remove
+        any existing buffer.
+        """
+        # first see if we already have a buffer that meets requirements
+        bufs = []
+        if self.buffer is not None:
+            bufs.append((self.buffer, self._own_buffer))
+        if self.receiver.buffer is not None:
+            bufs.append((self.receiver.buffer, False))
+        for buf, own in bufs:
+            if buf.shape[0] >= size and buf.double == double and (axisorder is None or all(buf.axisorder == axisorder)):
+                self.buffer = buf
+                self._own_buffer = own
+                return
+            
+        # attach a new buffer
+        shape = (size,) + self.params['shape'][1:]
+        dtype = self.params['dtype']
+        self.buffer = RingBuffer(shape=shape, dtype=dtype, double=double, axisorder=axisorder)
+        self._own_buffer = True
 
 
 class DataSender:
@@ -327,33 +367,13 @@ class PlainDataSender(DataSender):
 
 
 class DataReceiver:
-    def __init__(self, socket, params, ring_size=0, ring_double=True):
+    def __init__(self, socket, params):
         self.socket = socket
         self.params = params
-        if ring_size > 0:
-            ring_shape = (ring_size,) + params['shape'][1:]
-            self._ring_buffer = RingBuffer(ring_shape, dtype=params['dtype'],
-                                           double=ring_double, axisorder=params['axisorder'])
-        else:
-            self._ring_buffer = None
+        self.buffer = None
             
-    def _recv(self):
-        # must be re-implemented in subclass
-        raise NotImplementedError()
-
     def recv(self):
-        index, chunk = self._recv()
-        if self._ring_buffer is not None:
-            self._ring_buffer.new_chunk(chunk, index)
-        return index, chunk
-
-    def __getitem__(self, *args):
-        if self._ring_buffer is None:
-            raise TypeError("DataReceiver indexing requires a ring buffer.")
-        return self._ring_buffer[args]
-    
-    def get_array_slice(self, index, length):
-        return self[index:index+length]
+        raise NotImplementedError()
     
     def close(self):
         pass
@@ -367,10 +387,9 @@ class PlainDataReceiver(DataReceiver):
     See PlainDataSender.
     """
     def __init__(self, socket, params):
-        ring_size = params['buffer_size']
-        DataReceiver.__init__(self, socket, params, ring_size=ring_size)
+        DataReceiver.__init__(self, socket, params)
     
-    def _recv(self):
+    def recv(self):
         # receive and unpack structure
         stat, data = self.socket.recv_multipart()
         ndim = struct.unpack('!Q', stat[:8])[0]
@@ -428,21 +447,17 @@ class SharedMemReceiver(DataReceiver):
 
         self.size = self.params['buffer_size']
         shape = (self.size,) + self.params['shape'][1:]
-        self._buffer = RingBuffer(shape=shape, dtype=self.params['dtype'],
+        self.buffer = RingBuffer(shape=shape, dtype=self.params['dtype'],
                                   shmem=self.params['shm_id'], axisorder=self.params['axisorder'])
 
-    def _recv(self):
+    def recv(self):
         stat = self.socket.recv_multipart()[0]
         ndim = struct.unpack('!Q', stat[:8])[0]
         stat = struct.unpack('!' + 'Q' * (ndim + 1), stat[8:])
         index = stat[0]
         shape = stat[1:1+ndim]
-        data = self._buffer[index+1-shape[0]:index+1]
+        data = self.buffer[index+1-shape[0]:index+1]
         return index, data
-    
-    def __getitem__(self, *args):
-        # make shm buffer publicly readable
-        return self._buffer[args]
 
 
 class RingBuffer:
