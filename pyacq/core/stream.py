@@ -628,7 +628,7 @@ class RingBuffer:
             first = item
             rest = None
         
-        if isinstance(first, int):
+        if isinstance(first, (int, np.integer)):
             index = self._interpret_index(first)
             #print("  index:", first, index, index%bsize)
             data = self.buffer[index % bsize]
@@ -672,7 +672,7 @@ class RingBuffer:
         the forward direction and handle the step later.
         """
         start_index = self._write_index + 1 - self.shape[0]
-        if isinstance(index, int):
+        if isinstance(index, (int, np.integer)):
             if index < 0:
                 index += self._read_index + 1
             if index > self._read_index or index < start_index:

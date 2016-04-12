@@ -110,6 +110,7 @@ def test_ringbuffer():
         assert_array_eq(buf[i+5::-3], buf[:][5::-3])
         assert_array_eq(buf[:i+7:-1], buf[:][:7:-1])
         assert_array_eq(buf[:i+7:-1, 3, ::-2], buf[:][:7:-1, 3, ::-2])
+        assert_array_eq(buf[i+2, 3, ::-2], buf[:][2, 3, ::-2])
         
         # check copy/no-copy
         buf.new_chunk(np.arange(350).astype(buf.dtype).reshape(10, 5, 7), index=1005)
