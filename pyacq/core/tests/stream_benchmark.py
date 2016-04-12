@@ -23,12 +23,10 @@ def benchmark_stream(protocol, transfertmode, compression, chunksize, nb_channel
 
     arr = np.random.rand(chunksize, nb_channels).astype(stream_spec['dtype'])
     
-    index = 0
     perf = []
     for i in range(nloop):
         start = time.perf_counter()
-        index += chunksize        
-        outstream.send(index, arr)
+        outstream.send(arr)
         index2, arr2 = instream.recv()
         perf.append(time.perf_counter() - start)
 
