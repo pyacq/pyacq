@@ -313,7 +313,7 @@ class InputStream(object):
                 return
             
         # attach a new buffer
-        shape = (size,) + self.params['shape'][1:]
+        shape = (size,) + tuple(self.params['shape'][1:])
         dtype = self.params['dtype']
         self.buffer = RingBuffer(shape=shape, dtype=dtype, double=double, axisorder=axisorder)
         self._own_buffer = True
@@ -618,9 +618,6 @@ class RingBuffer:
             self.buffer[:dsize-n] = value[n:]
         
     def __getitem__(self, item):
-        #print("GET:", item, "write_ind:", self._write_index, "read_ind:", self._read_index, "shape:", self.shape, "buf_shape:", self.buffer.shape)
-        bsize = self.shape[0]
-        
         if isinstance(item, tuple):
             first = item[0]
             rest = (slice(None),) + item[1:]
@@ -629,38 +626,46 @@ class RingBuffer:
             rest = None
         
         if isinstance(first, (int, np.integer)):
-            index = self._interpret_index(first)
-            #print("  index:", first, index, index%bsize)
-            data = self.buffer[index % bsize]
+            start = self._interpret_index(first)
+            stop = start + 1
+            data = self.get_data(start, stop)[0]
+            if rest is not None:
+                data = data[rest[1:]]
         elif isinstance(first, slice):
             start, stop, step = self._interpret_index(first)
-            if self.double:
-                start_ind = start % bsize
-                stop_ind = start_ind + (stop - start)
-                #print("  double:", (start, stop), (start_ind, stop_ind), bsize)
-                data = self.buffer[start_ind:stop_ind]
-            else:
-                break_index = (self._write_index + 1) - ((self._write_index + 1) % bsize)
-                if (start < break_index) == (stop <= break_index):
-                    start_ind = start % bsize
-                    stop_ind = start_ind + (stop - start)
-                    #print("  single; contig:", (start, stop), (start_ind, stop_ind), bsize, break_index)
-                    data = self.buffer[start_ind:stop_ind]
-                else:
-                    #print("  single; discontig:", (start, stop), (start%bsize, stop%bsize), bsize, break_index)
-                    # need to reconstruct from two pieces
-                    newshape = np.array((stop-start,) + self.shape[1:])[self.axisorder]
-                    data = np.empty(newshape, self.buffer.dtype).transpose(np.argsort(self.axisorder))
-                    data[:break_index-start] = self.buffer[start%bsize:]
-                    data[break_index-start:] = self.buffer[:stop%bsize]
-            if step is not None:
-                data = data[::step]
-                        
+            data = self.get_data(start, stop)[::step]
+            if rest is not None:
+                data = data[rest]
         else:
             raise TypeError("Invalid index type %s" % type(first))
-                    
-        if rest is not None:
-            data = data[rest]
+        
+        return data
+
+    def get_data(self, start, stop, copy=False, join=True):
+        bsize = self.shape[0]
+        copied = False
+        
+        if self.double:
+            start_ind = start % bsize
+            stop_ind = start_ind + (stop - start)
+            data = self.buffer[start_ind:stop_ind]
+        else:
+            break_index = (self._write_index + 1) - ((self._write_index + 1) % bsize)
+            if (start < break_index) == (stop <= break_index):
+                start_ind = start % bsize
+                stop_ind = start_ind + (stop - start)
+                data = self.buffer[start_ind:stop_ind]
+            else:
+                # need to reconstruct from two pieces
+                newshape = np.array((stop-start,) + self.shape[1:])[self.axisorder]
+                data = np.empty(newshape, self.buffer.dtype).transpose(np.argsort(self.axisorder))
+                data[:break_index-start] = self.buffer[start%bsize:]
+                data[break_index-start:] = self.buffer[:stop%bsize]
+                copied = True
+        
+        if copy and not copied:
+            data = data.copy()
+            
         return data
 
     def _interpret_index(self, index):
@@ -717,33 +722,6 @@ class RingBuffer:
             return start, stop, step
         else:
             raise TypeError("Invalid index %s" % index)
-        
-    def get_data(self, size, copy=False):
-        """Return *size* most recent data frames.
-        
-        If *copy* is True, then the returned array is copied from the ring buffer
-        and is safe to be modified. Otherwise, the returned buffer may be a
-        direct view on the internal ring buffer.
-        """
-        assert size <= self.size, ("Requested data size (%d) is larger than ring buffer (%d)." %
-                                   size, self.size)
-        if self.double:
-            ind = (self._ptr - size) % self.size
-            data = self.buffer[ind:ind+size]
-            if copy:
-                data = data.copy()
-        else:
-            ind = self._ptr - size
-            if ind < 0:
-                data = np.empty((size,) + self.buffer.shape[1:], dtype=self.buffer.dtype)
-                data[:abs(ind)] = self.buffer[ind:]
-                data[abs(ind):] = self.buffer[:self._ptr]
-            else:
-                data = self.buffer[ind:ind+size]
-                if copy:
-                    data = data.copy()
-                
-        return data
     
 
 def axis_order_copy(data, out=None):
