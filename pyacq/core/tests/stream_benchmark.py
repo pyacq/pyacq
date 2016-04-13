@@ -1,11 +1,13 @@
 import time
 import numpy as np
-from test_stream import protocols, compressions
+import cProfile
+import sys
 
+from test_stream import protocols, compressions
 from pyacq.core.stream  import OutputStream, InputStream
 
 
-def benchmark_stream(protocol, transfertmode, compression, chunksize, nb_channels=16, nloop=10):
+def benchmark_stream(protocol, transfertmode, compression, chunksize, nb_channels=16, nloop=10, profile=False):
     ring_size = chunksize*20
     stream_spec = dict(protocol=protocol, interface='127.0.0.1', port='*',
                        transfertmode=transfertmode, streamtype = 'analogsignal',
@@ -24,12 +26,18 @@ def benchmark_stream(protocol, transfertmode, compression, chunksize, nb_channel
     arr = np.random.rand(chunksize, nb_channels).astype(stream_spec['dtype'])
     
     perf = []
+    prof = cProfile.Profile()
     for i in range(nloop):
         start = time.perf_counter()
+        if profile:
+            prof.enable()
         outstream.send(arr)
         index2, arr2 = instream.recv()
+        if profile:
+            prof.disable()
         perf.append(time.perf_counter() - start)
-
+    if profile:
+        prof.print_stats('cumulative')
     
     outstream.close()
     instream.close()
@@ -40,14 +48,22 @@ def benchmark_stream(protocol, transfertmode, compression, chunksize, nb_channel
     return dt
 
 
-nb_channels = 16
-for chunksize in [2**10, 2**14, 2**16]:
-    print('#'*5)
-    for compression in compressions:
-        for protocol in protocols:            
-            benchmark_stream(protocol=protocol, transfertmode='plaindata', 
-                             compression=compression,
-                             chunksize=chunksize, nb_channels=nb_channels)
 
-    benchmark_stream(protocol='tcp', transfertmode='sharedarray', compression='',
-                     chunksize=chunksize, nb_channels=nb_channels)
+if len(sys.argv) > 1 and sys.argv[1] == 'profile':
+    benchmark_stream(protocol='inproc', transfertmode='plaindata', 
+                    compression='', chunksize=100000, nb_channels=16,
+                    profile=True, nloop=100)
+    
+
+else:
+    nb_channels = 16
+    for chunksize in [2**10, 2**14, 2**16]:
+        print('#'*5)
+        for compression in compressions:
+            for protocol in protocols:
+                benchmark_stream(protocol=protocol, transfertmode='plaindata', 
+                                compression=compression,
+                                chunksize=chunksize, nb_channels=nb_channels)
+
+        benchmark_stream(protocol='tcp', transfertmode='sharedarray', compression='',
+                        chunksize=chunksize, nb_channels=nb_channels)
