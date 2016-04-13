@@ -642,6 +642,31 @@ class RingBuffer:
         return data
 
     def get_data(self, start, stop, copy=False, join=True):
+        """Return a segment of the ring buffer.
+        
+        Parameters
+        ----------
+        start : int
+            The starting index of the segment to return.
+        stop : int
+            The stop index of the segment to return (the sample at this index
+            will not be included in the returned data)
+        copy : bool
+            If True, then a copy of the data is returned to ensure that modifying
+            the data will not affect the ring buffer. If False, then a reference to
+            the buffer will be returned if possible. Default is False.
+        join : bool
+            If True, then a single contiguous array is returned for the entire
+            requested segment. If False, then two separate arrays are returned
+            for the beginning and end of the requested segment. This can be
+            used to avoid an unnecessary copy when the buffer has double=False
+            and the caller does not require a contiguous array.
+        """
+        first, last = self.first_index(), self.last_index()+1
+        if start < first or stop > last:
+            raise IndexError("Requested segment (%d, %d) is out of bounds for ring buffer. "
+                             "Current bounds are (%d, %d)." % (start, stop, first, last))
+        
         bsize = self.shape[0]
         copied = False
         
@@ -658,15 +683,27 @@ class RingBuffer:
             else:
                 # need to reconstruct from two pieces
                 newshape = np.array((stop-start,) + self.shape[1:])[self.axisorder]
-                data = np.empty(newshape, self.buffer.dtype).transpose(np.argsort(self.axisorder))
-                data[:break_index-start] = self.buffer[start%bsize:]
-                data[break_index-start:] = self.buffer[:stop%bsize]
-                copied = True
+                a = self.buffer[start%bsize:]
+                b = self.buffer[:stop%bsize]
+                if join is False:
+                    if copy is True:
+                        return (a.copy(), b.copy())
+                    else:
+                        return (a, b)
+                else:
+                    data = np.empty(newshape, self.buffer.dtype).transpose(np.argsort(self.axisorder))
+                    data[:break_index-start] = a
+                    data[break_index-start:] = b
+                    copied = True
         
         if copy and not copied:
             data = data.copy()
             
-        return data
+        if join:
+            return data
+        else:
+            empty = np.empty((0,) + data.shape[1:], dtype=data.dtype)
+            return data, empty
 
     def _interpret_index(self, index):
         """Return normalized index, accounting for negative and None values.
