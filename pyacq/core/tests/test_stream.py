@@ -127,7 +127,16 @@ def test_ringbuffer():
             assert_array_eq(c, d)
         else:
             assert not np.all(c == d)
-
+            
+        # test get_data method
+        assert_array_eq(buf[:], buf.get_data(buf.first_index(), buf.last_index()+1))
+        a, b = buf.get_data(buf.first_index(), buf.last_index()+1, join=False)
+        assert a.shape[0] + b.shape[0] == buf.shape[0]
+        if a.shape[0] > 0:
+            assert_array_eq(buf[:][:a.shape[0]], a)
+        if b.shape[0] > 0:
+            assert_array_eq(buf[-b.shape[0]:], b)
+        
 
 def test_ringbuffer_shm():
     buf1 = RingBuffer(shape=(10, 5, 7), dtype=np.ubyte, double=True, shmem=True, axisorder=(0, 2, 1))
