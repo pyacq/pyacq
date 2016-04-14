@@ -11,7 +11,7 @@ except ImportError:
     HAVE_BLOSC = False
 
 from .sharedarray import SharedMem, SharedArray
-from .rpc import ObjectProxy
+from ..rpc import ObjectProxy
 
 
 default_stream = dict(
