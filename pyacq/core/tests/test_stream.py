@@ -3,7 +3,8 @@ import timeit
 import pytest
 import sys
 
-from pyacq.core.stream import OutputStream, InputStream, is_contiguous, RingBuffer
+from pyacq.core.stream import OutputStream, InputStream, RingBuffer
+from pyacq.core.stream.arraytools import is_contiguous
 import numpy as np
 
 

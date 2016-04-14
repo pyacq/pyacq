@@ -1,17 +1,10 @@
-import struct
-import zmq
-import numpy as np
 import random
 import string
-import weakref
-try:
-    import blosc
-    HAVE_BLOSC = True
-except ImportError:
-    HAVE_BLOSC = False
+import zmq
+import numpy as np
 
 from .ringbuffer import RingBuffer
-from .arraytools import is_contiguous, decompose_array
+from .streamhelpers import all_transfermodes
 from ..rpc import ObjectProxy
 
 
@@ -129,12 +122,11 @@ class OutputStream(object):
         self.port = self.addr.rpartition(':')[2]
         self.params['port'] = self.port
         
-        if self.params['transfermode'] == 'plaindata':
-            self.sender = PlainDataSender(self.socket, self.params)
-        elif self.params['transfermode'] == 'sharedarray':
-            self.sender = SharedArraySender(self.socket, self.params)
-        elif self.params['transfermode'] == 'sharedmem':
-            self.sender = SharedMemSender(self.socket, self.params)
+        transfermode = self.params['transfermode']
+        if transfermode not in all_transfermodes:
+            raise ValueError("Unsupported transfer mode '%s'" % transfermode)
+        sender_class = all_transfermodes[transfermode][0]
+        self.sender = sender_class(self.socket, self.params)
 
         self.configured = True
         if self.node and self.node():
@@ -220,14 +212,11 @@ class InputStream(object):
         #~ self.socket.setsockopt(zmq.DELAY_ATTACH_ON_CONNECT,1)
         self.socket.connect(self.url)
         
-        if self.params['transfermode'] == 'plaindata':
-            self.receiver = PlainDataReceiver(self.socket, self.params)
-        elif self.params['transfermode'] == 'sharedarray':
-            self.receiver = SharedArrayReceiver(self.socket, self.params)
-        elif self.params['transfermode'] == 'sharedmem':
-            self.receiver = SharedMemReceiver(self.socket, self.params)
-        else:
-            raise ValueError('Unsupported transfermode "%s"' % self.params['transfermode'])
+        transfermode = self.params['transfermode']
+        if transfermode not in all_transfermodes:
+            raise ValueError("Unsupported transfer mode '%s'" % transfermode)
+        receiver_class = all_transfermodes[transfermode][1]
+        self.receiver = receiver_class(self.socket, self.params)
         
         self.connected = True
         if self.node and self.node():
@@ -318,146 +307,3 @@ class InputStream(object):
         dtype = self.params['dtype']
         self.buffer = RingBuffer(shape=shape, dtype=dtype, double=double, axisorder=axisorder)
         self._own_buffer = True
-
-
-class DataSender:
-    def __init__(self, socket, params):
-        self.socket = socket
-        self.params = params
-        self.funcs = []
-
-    def send(self, index, data):
-        raise NotImplementedError()
-    
-    def close(self):
-        pass
-
-
-class PlainDataSender(DataSender):
-    """
-    Helper class to send data in 2 parts with a zmq socket:
-    
-    * index
-    * data
-    
-    The data parts can be compressed.
-    """
-    def send(self, index, data):
-        # optional pre-processing before send
-        if isinstance(data, np.ndarray):
-            for f in self.funcs:
-                index, data = f(index, data)
-                
-        # serialize
-        dtype = data.dtype
-        shape = data.shape
-        buf, offset, strides = decompose_array(data)
-        
-        # compress
-        comp = self.params['compression']
-        if comp.startswith('blosc-'):
-            assert HAVE_BLOSC, "Cannot use blosclz4 compression; blosc package is not importable."
-            buf = blosc.compress(buf, data.itemsize, cname=comp[6:])
-        elif comp != '':
-            raise ValueError("Unknown compression method '%s'" % comp)
-        
-        # Pack and send
-        stat = struct.pack('!' + 'Q' * (3+len(shape)) + 'q' * len(strides), len(shape), index, offset, *(shape + strides))
-        copy = self.params.get('copy', False)
-        self.socket.send_multipart([stat, buf], copy=copy)
-
-
-class DataReceiver:
-    def __init__(self, socket, params):
-        self.socket = socket
-        self.params = params
-        self.buffer = None
-            
-    def recv(self):
-        raise NotImplementedError()
-    
-    def close(self):
-        pass
-    
-    
-
-class PlainDataReceiver(DataReceiver):
-    """
-    Helper class to receive data in 2 parts.
-    
-    See PlainDataSender.
-    """
-    def __init__(self, socket, params):
-        DataReceiver.__init__(self, socket, params)
-    
-    def recv(self):
-        # receive and unpack structure
-        stat, data = self.socket.recv_multipart()
-        ndim = struct.unpack('!Q', stat[:8])[0]
-        stat = struct.unpack('!' + 'Q' * (ndim + 2) + 'q' * ndim, stat[8:])
-        index = stat[0]
-        offset = stat[1]
-        shape = stat[2:2+ndim]
-        strides = stat[-ndim:]
-        
-        # uncompress
-        comp = self.params['compression']
-        if comp.startswith('blosc-'):
-            assert HAVE_BLOSC, "Cannot use blosc decompression; blosc package is not importable."
-            data = blosc.decompress(data)
-        elif comp != '':
-            raise ValueError("Unknown compression method '%s'" % comp)
-        
-        # convert to array
-        dtype = self.params['dtype']
-        data = np.ndarray(buffer=data, shape=shape,
-                          strides=strides, offset=offset, dtype=dtype)        
-        return index, data
-
-
-class SharedMemSender(DataSender):
-    """
-    """
-    def __init__(self, socket, params):
-        DataSender.__init__(self, socket, params)
-        self.size = self.params['buffer_size']
-        dtype = np.dtype(self.params['dtype'])
-        shape = (self.size,) + self.params['shape'][1:]
-        self._buffer = RingBuffer(shape=shape, dtype=self.params['dtype'],
-                                  shmem=True, axisorder=self.params['axisorder'])
-        self.params['shm_id'] = self._buffer.shm_id
-    
-    def send(self, index, data):
-        assert data.dtype == self.params['dtype']
-        shape = data.shape
-        if self.params['shape'][0] != -1:
-            assert shape == self.params['shape']
-        else:
-            assert shape[1:] == self.params['shape'][1:]
- 
-        self._buffer.new_chunk(data, index)
-        
-        stat = struct.pack('!' + 'Q' * (2+len(shape)), len(shape), index, *shape)
-        self.socket.send_multipart([stat])
-
-
-class SharedMemReceiver(DataReceiver):
-    def __init__(self, socket, params):
-        # init data receiver with no ring buffer; we will implement our own from shm.
-        DataReceiver.__init__(self, socket, params)
-
-        self.size = self.params['buffer_size']
-        shape = (self.size,) + self.params['shape'][1:]
-        self.buffer = RingBuffer(shape=shape, dtype=self.params['dtype'],
-                                  shmem=self.params['shm_id'], axisorder=self.params['axisorder'])
-
-    def recv(self):
-        stat = self.socket.recv_multipart()[0]
-        ndim = struct.unpack('!Q', stat[:8])[0]
-        stat = struct.unpack('!' + 'Q' * (ndim + 1), stat[8:])
-        index = stat[0]
-        shape = stat[1:1+ndim]
-        data = self.buffer[index+1-shape[0]:index+1]
-        return index, data
-
-
