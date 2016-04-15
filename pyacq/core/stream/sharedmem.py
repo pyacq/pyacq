@@ -27,7 +27,7 @@ class SharedMemSender(DataSender):
  
         self._buffer.new_chunk(data, index)
         
-        stat = struct.pack('!' + 'Q' * (2+len(shape)), len(shape), index, *shape)
+        stat = struct.pack('!' + 'QQ', index, shape[0])
         self.socket.send_multipart([stat])
 
 
@@ -39,7 +39,7 @@ class SharedMemReceiver(DataReceiver):
         self.size = self.params['buffer_size']
         shape = (self.size,) + self.params['shape'][1:]
         self.buffer = RingBuffer(shape=shape, dtype=self.params['dtype'],
-                                  shmem=self.params['shm_id'], axisorder=self.params['axisorder'])
+                                 shmem=self.params['shm_id'], axisorder=self.params['axisorder'])
 
     def recv(self, return_data=True):
         """Receive message indicating the index of the next data chunk.
@@ -52,12 +52,9 @@ class SharedMemReceiver(DataReceiver):
             of data (the new data can still be accessed form the buffer).
         """
         stat = self.socket.recv_multipart()[0]
-        ndim = struct.unpack('!Q', stat[:8])[0]
-        stat = struct.unpack('!' + 'Q' * (ndim + 1), stat[8:])
-        index = stat[0]
+        index, size = struct.unpack('!QQ', stat)
         if return_data:
-            shape = stat[1:1+ndim]
-            data = self.buffer[index+1-shape[0]:index+1]
+            data = self.buffer[index+1-size:index+1]
         else:
             data = None
         return index, data
