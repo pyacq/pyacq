@@ -41,13 +41,25 @@ class SharedMemReceiver(DataReceiver):
         self.buffer = RingBuffer(shape=shape, dtype=self.params['dtype'],
                                   shmem=self.params['shm_id'], axisorder=self.params['axisorder'])
 
-    def recv(self):
+    def recv(self, return_data=True):
+        """Receive message indicating the index of the next data chunk.
+        
+        Parameters:
+        -----------
+        return_data : bool
+            If True, return the new data chunk (this may involve copying data
+            from the shared ring buffer). If False, then return None in place
+            of data (the new data can still be accessed form the buffer).
+        """
         stat = self.socket.recv_multipart()[0]
         ndim = struct.unpack('!Q', stat[:8])[0]
         stat = struct.unpack('!' + 'Q' * (ndim + 1), stat[8:])
         index = stat[0]
-        shape = stat[1:1+ndim]
-        data = self.buffer[index+1-shape[0]:index+1]
+        if return_data:
+            shape = stat[1:1+ndim]
+            data = self.buffer[index+1-shape[0]:index+1]
+        else:
+            data = None
         return index, data
 
 
