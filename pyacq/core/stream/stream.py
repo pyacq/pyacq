@@ -259,26 +259,11 @@ class InputStream(object):
         self.socket.close()
         del self.socket
     
-    def get_array_slice(self, index, length):
-        """Return a slice from the ring buffer that accumulates data.
-        
-        Requires `bufferSize` to be specified at initialization.
-        
-        Parameters
-        ----------
-        index : int
-            The starting index to read from the array.
-        length : int or None
-            The lengfth of the slice to read from the array. This value may not
-            be greater than the ring size. If length is None, then return the
-            last chunk received.
-        """
-        if length is None:
-            length = self.receiver.last_chunk_size
-        
-        return self[index:index+length]
-
     def __getitem__(self, *args):
+        """Return a data slice from the RingBuffer attached to this InputStream.
+        
+        If no RingBuffer is attached, raise an exception. See ``set_buffer()``.
+        """
         if self.buffer is None:
             raise TypeError("No ring buffer configured for this InputStream.")
         return self.buffer.__getitem__(*args)
