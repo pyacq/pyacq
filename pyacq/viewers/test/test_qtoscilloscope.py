@@ -13,7 +13,7 @@ sample_rate = 10000.
 chunksize = 100
 
 
-def test_qoscilloscope():
+def lauch_qoscilloscope(transfermode, timeaxis):
     
     man = create_manager(auto_close_at_exit=False)
     ng = man.create_nodegroup()
@@ -25,12 +25,17 @@ def test_qoscilloscope():
     buffer = np.random.rand(length, nb_channel)*.3
     buffer += np.sin(2*np.pi*1.2*t)[:,None]*.5
     buffer = buffer.astype('float32')
+    if timeaxis==1:
+        buffer = buffer.T.copy()
 
     #~ dev =NumpyDeviceBuffer()
     dev = ng.create_node('NumpyDeviceBuffer')
     dev.configure(nb_channel=nb_channel, sample_interval=1./sample_rate, chunksize=chunksize,
-                    buffer=buffer)
-    dev.output.configure(protocol='tcp', interface='127.0.0.1', transfermode='plaindata')
+                    buffer=buffer, timeaxis=timeaxis)
+    if transfermode== 'plaindata':
+        dev.output.configure(protocol='tcp', interface='127.0.0.1', transfermode='plaindata')
+    elif transfermode== 'sharedmem':
+        dev.output.configure(protocol='tcp', interface='127.0.0.1', transfermode='sharedmem', buffer_size=int(sample_rate*62.))
     dev.initialize()
 
     
@@ -62,7 +67,24 @@ def test_qoscilloscope():
     man.close()
 
 
+def test_qoscilloscope1():
+    lauch_qoscilloscope(transfermode='sharedmem', timeaxis=0)
+
+def test_qoscilloscope2():
+    lauch_qoscilloscope(transfermode='plaindata', timeaxis=0)
+
+def test_qoscilloscope3():
+    #only case where one channel is continuous in memory for oscilloscope
+    lauch_qoscilloscope(transfermode='sharedmem', timeaxis=1)
+
+def test_qoscilloscope4():
+    lauch_qoscilloscope(transfermode='plaindata', timeaxis=1)
+
+
   
 
 if __name__ == '__main__':
-    test_qoscilloscope()
+    test_qoscilloscope1()
+    test_qoscilloscope2()
+    test_qoscilloscope3()
+    test_qoscilloscope4()

@@ -81,7 +81,7 @@ class BaseOscilloscope(WidgetNode):
         assert len(self.input.params['shape']) == 2, 'Are you joking ?'
         self.nb_channel = self.input.params['shape'][1]
         buf_size = int(self.input.params['sample_rate'] * self.max_xsize)
-        self.input.set_buffer(size=buf_size)
+        self.input.set_buffer(size=buf_size)#axisorder=[1,0]
 
         # Create parameters
         all = []
@@ -103,7 +103,6 @@ class BaseOscilloscope(WidgetNode):
         else:
             self.params_controller = None
         
-        
         # poller
         self.poller = ThreadPollInput(input_stream=self.input)
         self.poller.new_data.connect(self._on_new_data)
@@ -120,6 +119,7 @@ class BaseOscilloscope(WidgetNode):
     
     def _stop(self):
         self.poller.stop()
+        self.poller.wait()
         self.timer.stop()
     
     def _close(self):
@@ -417,8 +417,8 @@ class QOscilloscope(BaseOscilloscope):
             return None, None
         head = self._head
         sr = self.input.params['sample_rate']
-        xsize = self.params['xsize'] 
-        np_arr = self.input[head:head+self.full_size]
+        xsize = self.params['xsize']
+        np_arr = self.input[head-self.full_size:head]
         self.all_sd = np.std(np_arr, axis=1)
         # self.all_mean = np.mean(np_arr, axis = 1)
         self.all_mean = np.median(np_arr, axis=1)

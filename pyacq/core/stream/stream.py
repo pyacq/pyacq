@@ -2,6 +2,7 @@ import random
 import string
 import zmq
 import numpy as np
+import weakref
 
 from .ringbuffer import RingBuffer
 from .streamhelpers import all_transfermodes

@@ -40,14 +40,12 @@ class NumpyDeviceBuffer(Node):
         self.chunksize = chunksize
         self.timeaxis = timeaxis
         
-        
+        self.output.spec['shape'] = (-1, nb_channel)
         if self.timeaxis == 0:
-            self.output.spec['shape'] = (-1, nb_channel)
-            self.output.spec['timeaxis'] = self.timeaxis
+            self.output.spec['axisorder'] = None
             self.channelaxis = 1
         else:
-            self.output.spec['shape'] = (nb_channel, -1)
-            self.output.spec['timeaxis'] = self.timeaxis
+            self.output.spec['axisorder'] = [1, 0]
             self.channelaxis = 0
         self.output.spec['sample_rate'] = 1./sample_interval
         self.output.spec['nb_channel'] = nb_channel
@@ -86,8 +84,8 @@ class NumpyDeviceBuffer(Node):
         self.head += self.chunksize
         i2 = i1 + self.chunksize
         if self.timeaxis==0:
-            self.output.send(self.head, self.buffer[i1:i2, :])
+            self.output.send(self.buffer[i1:i2, :], index=self.head)
         else:
-            self.output.send(self.head, self.buffer[:,i1:i2], autoswapaxes = False)
+            self.output.send(self.buffer[:,i1:i2].transpose(), index=self.head)
 
 register_node_type(NumpyDeviceBuffer)
