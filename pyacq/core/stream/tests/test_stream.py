@@ -238,7 +238,7 @@ def check_stream_ringbuffer(**kwds):
         chunk = data[i*256:(i+1)*256]
         outstream.send(chunk)
         instream.recv()
-    data2 = instream.get_array_slice(0, 4096)
+    data2 = instream[0:4096]
     assert np.all(data2 == data)
     if outstream.params['axisorder'] is not None:
         assert np.all(np.argsort(data2.strides)[::-1] == outstream.params['axisorder'])
