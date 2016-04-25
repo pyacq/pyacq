@@ -23,7 +23,8 @@ default_stream = dict(
     scale=None,
     offset=None,
     units='',
-    sample_rate=1.
+    sample_rate=1.,
+    double=False,#make sens only for transfermode='sharemem',
 )
 
 
@@ -269,7 +270,8 @@ class InputStream(object):
             raise TypeError("No ring buffer configured for this InputStream.")
         return self.buffer.__getitem__(*args)
 
-    def set_buffer(self, size=None, double=True, axisorder=None):
+    #~ def set_buffer(self, size=None, double=True, axisorder=None):
+    def set_buffer(self, size=None, double=True, axisorder=None, shmem=None, fill=None):
         """Ensure that this InputStream has a RingBuffer at least as large as 
         *size* and with the specified double-mode and axis order.
         
@@ -291,5 +293,6 @@ class InputStream(object):
         # attach a new buffer
         shape = (size,) + tuple(self.params['shape'][1:])
         dtype = self.params['dtype']
-        self.buffer = RingBuffer(shape=shape, dtype=dtype, double=double, axisorder=axisorder)
+        #~ self.buffer = RingBuffer(shape=shape, dtype=dtype, double=double, axisorder=axisorder)
+        self.buffer = RingBuffer(shape=shape, dtype=dtype, double=double, axisorder=axisorder, shmem=shmem, fill=fill)
         self._own_buffer = True

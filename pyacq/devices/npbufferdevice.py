@@ -10,8 +10,7 @@ class NumpyDeviceBuffer(Node):
     This node streams data from a predefined buffer in an endless loop.
     """
     _output_specs = {'signals': dict(streamtype='analogsignal',dtype='float32',
-                                                shape=(-1, 16), compression ='', timeaxis=0,
-                                                sample_rate =30.
+                                                shape=(-1, 16), compression ='', sample_rate =30.
                                                 )}
 
     def __init__(self, **kargs):
@@ -33,22 +32,13 @@ class NumpyDeviceBuffer(Node):
         """
         return Node.configure(self, *args, **kwargs)
 
-    def _configure(self, nb_channel=16, sample_interval=0.001, chunksize=256,
-                timeaxis=0, buffer=None):
+    def _configure(self, nb_channel=16, sample_interval=0.001, chunksize=256, buffer=None):
         self.nb_channel = nb_channel
         self.sample_interval = sample_interval
         self.chunksize = chunksize
-        self.timeaxis = timeaxis
         
         self.output.spec['shape'] = (-1, nb_channel)
-        if self.timeaxis == 0:
-            self.output.spec['axisorder'] = None
-            self.channelaxis = 1
-        else:
-            self.output.spec['axisorder'] = [1, 0]
-            self.channelaxis = 0
         self.output.spec['sample_rate'] = 1./sample_interval
-        self.output.spec['nb_channel'] = nb_channel
         
         if buffer is None:
             nloop = 40
@@ -57,13 +47,11 @@ class NumpyDeviceBuffer(Node):
             self.buffer = np.random.rand(self.length, nb_channel)*.05
             self.buffer += np.sin(2*np.pi*440.*t)[:,None]*.5
             self.buffer = self.buffer.astype('float32')
-            if self.timeaxis == 1:
-                self.buffer = self.buffer.transpose().copy()
         else:
-            assert buffer.shape[self.channelaxis] == self.nb_channel, 'Wrong nb_channel'
-            assert buffer.shape[self.timeaxis]%chunksize == 0, 'Wrong buffer.shape[0] not multiple chunksize'
+            assert buffer.shape[1] == self.nb_channel, 'Wrong nb_channel'
+            assert buffer.shape[0]%chunksize == 0, 'Wrong buffer.shape[0] not multiple chunksize'
             self.buffer = buffer
-            self.length = buffer.shape[self.timeaxis]
+            self.length = buffer.shape[0]
     
     def _initialize(self):
         self.head = 0
@@ -83,9 +71,6 @@ class NumpyDeviceBuffer(Node):
         i1 = self.head%self.length
         self.head += self.chunksize
         i2 = i1 + self.chunksize
-        if self.timeaxis==0:
-            self.output.send(self.buffer[i1:i2, :], index=self.head)
-        else:
-            self.output.send(self.buffer[:,i1:i2].transpose(), index=self.head)
+        self.output.send(self.buffer[i1:i2, :], index=self.head)
 
 register_node_type(NumpyDeviceBuffer)

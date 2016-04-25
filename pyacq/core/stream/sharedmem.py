@@ -14,7 +14,8 @@ class SharedMemSender(DataSender):
         dtype = np.dtype(self.params['dtype'])
         shape = (self.size,) + self.params['shape'][1:]
         self._buffer = RingBuffer(shape=shape, dtype=self.params['dtype'],
-                                  shmem=True, axisorder=self.params['axisorder'])
+                                  shmem=True, axisorder=self.params['axisorder'],
+                                  double=self.params['double'])
         self.params['shm_id'] = self._buffer.shm_id
     
     def send(self, index, data):

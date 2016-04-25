@@ -13,7 +13,7 @@ sample_rate = 10000.
 chunksize = 100
 
 
-def lauch_qoscilloscope(transfermode, timeaxis):
+def lauch_qoscilloscope(transfermode, axisorder):
     
     man = create_manager(auto_close_at_exit=False)
     ng = man.create_nodegroup()
@@ -25,17 +25,15 @@ def lauch_qoscilloscope(transfermode, timeaxis):
     buffer = np.random.rand(length, nb_channel)*.3
     buffer += np.sin(2*np.pi*1.2*t)[:,None]*.5
     buffer = buffer.astype('float32')
-    if timeaxis==1:
-        buffer = buffer.T.copy()
 
     #~ dev =NumpyDeviceBuffer()
     dev = ng.create_node('NumpyDeviceBuffer')
-    dev.configure(nb_channel=nb_channel, sample_interval=1./sample_rate, chunksize=chunksize,
-                    buffer=buffer, timeaxis=timeaxis)
+    dev.configure(nb_channel=nb_channel, sample_interval=1./sample_rate, chunksize=chunksize, buffer=buffer)
     if transfermode== 'plaindata':
         dev.output.configure(protocol='tcp', interface='127.0.0.1', transfermode='plaindata')
     elif transfermode== 'sharedmem':
-        dev.output.configure(protocol='tcp', interface='127.0.0.1', transfermode='sharedmem', buffer_size=int(sample_rate*62.))
+        dev.output.configure(protocol='tcp', interface='127.0.0.1', transfermode='sharedmem',
+                    buffer_size=int(sample_rate*62.), axisorder=axisorder, double=True)
     dev.initialize()
 
     
@@ -68,17 +66,17 @@ def lauch_qoscilloscope(transfermode, timeaxis):
 
 
 def test_qoscilloscope1():
-    lauch_qoscilloscope(transfermode='sharedmem', timeaxis=0)
+    lauch_qoscilloscope(transfermode='sharedmem', axisorder=[0,1])
 
 def test_qoscilloscope2():
-    lauch_qoscilloscope(transfermode='plaindata', timeaxis=0)
+    lauch_qoscilloscope(transfermode='plaindata', axisorder=None)
 
 def test_qoscilloscope3():
     #only case where one channel is continuous in memory for oscilloscope
-    lauch_qoscilloscope(transfermode='sharedmem', timeaxis=1)
+    lauch_qoscilloscope(transfermode='sharedmem', axisorder=[1, 0])
 
 def test_qoscilloscope4():
-    lauch_qoscilloscope(transfermode='plaindata', timeaxis=1)
+    lauch_qoscilloscope(transfermode='plaindata',axisorder=None)
 
 
   

@@ -41,7 +41,6 @@ class BaseOscilloscope(WidgetNode):
     The BaseOscilloscope requires its input stream to have the following properties:
     
     * transfermode==sharedarray
-    * timeaxis==1
     
     If the input stream does not meet these requirements, then a StreamConverter
     is created to proxy the input. This can degrade performance when multiple
@@ -81,7 +80,7 @@ class BaseOscilloscope(WidgetNode):
         assert len(self.input.params['shape']) == 2, 'Are you joking ?'
         self.nb_channel = self.input.params['shape'][1]
         buf_size = int(self.input.params['sample_rate'] * self.max_xsize)
-        self.input.set_buffer(size=buf_size)#axisorder=[1,0]
+        self.input.set_buffer(size=buf_size, axisorder=[1,0], double=True)
 
         # Create parameters
         all = []
@@ -329,6 +328,7 @@ class QOscilloscope(BaseOscilloscope):
                 head = head - head%decimate
             
         full_arr = self.input[-self.full_size:].T  # transpose to (channel, time)
+        #print(full_arr[0,:].flags['C_CONTIGUOUS' ])
         full_arr = full_arr.astype(float)
         
         if decimate>1:
