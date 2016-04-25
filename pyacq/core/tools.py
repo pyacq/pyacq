@@ -22,10 +22,11 @@ class ThreadPollInput(QtCore.QThread):
     The `process_data()` method may be reimplemented to define other behaviors.
     """
     new_data = QtCore.Signal(int,object)
-    def __init__(self, input_stream, timeout=200, parent=None):
+    def __init__(self, input_stream, timeout=200, return_data=True, parent=None):
         QtCore.QThread.__init__(self, parent)
         self.input_stream = weakref.ref(input_stream)
         self.timeout = timeout
+        self.return_data = return_data
         
         self.running = False
         self.running_lock = Mutex()
@@ -45,7 +46,7 @@ class ThreadPollInput(QtCore.QThread):
                     break
             ev = self.input_stream().poll(timeout=self.timeout)
             if ev>0:
-                pos, data = self.input_stream().recv()
+                pos, data = self.input_stream().recv(return_data=self.return_data)
                 with self.lock:
                     self._pos = pos
                 self.process_data(self._pos, data)
@@ -102,7 +103,7 @@ class ThreadStreamConverter(ThreadPollInput):
             data = self.input_stream().get_array_slice(self, pos, None)
         #~ if 'timeaxis' in self.conversions:
             #~ data = data.swapaxes(*self.conversions['timeaxis'])
-        self.output_stream().send(pos, data)
+        self.output_stream().send(data, index=pos)
 
 
 class StreamConverter(Node):

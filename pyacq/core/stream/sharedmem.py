@@ -12,10 +12,10 @@ class SharedMemSender(DataSender):
         DataSender.__init__(self, socket, params)
         self.size = self.params['buffer_size']
         dtype = np.dtype(self.params['dtype'])
-        shape = (self.size,) + self.params['shape'][1:]
+        shape = (self.size,) + tuple(self.params['shape'][1:])
         self._buffer = RingBuffer(shape=shape, dtype=self.params['dtype'],
                                   shmem=True, axisorder=self.params['axisorder'],
-                                  double=self.params['double'])
+                                  double=self.params['double'], fill=self.params['fill'])
         self.params['shm_id'] = self._buffer.shm_id
     
     def send(self, index, data):
@@ -24,7 +24,7 @@ class SharedMemSender(DataSender):
         if self.params['shape'][0] != -1:
             assert shape == self.params['shape']
         else:
-            assert shape[1:] == self.params['shape'][1:]
+            assert tuple(shape[1:]) == tuple(self.params['shape'][1:])
  
         self._buffer.new_chunk(data, index)
         
@@ -42,7 +42,8 @@ class SharedMemReceiver(DataReceiver):
         self.buffer = RingBuffer(shape=shape, dtype=self.params['dtype'],
                                  shmem=self.params['shm_id'], axisorder=self.params['axisorder'])
 
-    def recv(self, return_data=True):
+    #~ def recv(self, return_data=True):
+    def recv(self, return_data=False):
         """Receive message indicating the index of the next data chunk.
         
         Parameters:

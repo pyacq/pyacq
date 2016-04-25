@@ -25,6 +25,7 @@ default_stream = dict(
     units='',
     sample_rate=1.,
     double=False,#make sens only for transfermode='sharemem',
+    fill=None,
 )
 
 

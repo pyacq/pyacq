@@ -51,12 +51,16 @@ class PlainDataReceiver(DataReceiver):
     def __init__(self, socket, params):
         DataReceiver.__init__(self, socket, params)
     
-    def recv(self):
+    def recv(self, return_data=True):
         # receive and unpack structure
         stat, data = self.socket.recv_multipart()
         ndim = struct.unpack('!Q', stat[:8])[0]
         stat = struct.unpack('!' + 'Q' * (ndim + 2) + 'q' * ndim, stat[8:])
         index = stat[0]
+        
+        if not return_data:
+            return index, None
+        
         offset = stat[1]
         shape = stat[2:2+ndim]
         strides = stat[-ndim:]

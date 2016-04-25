@@ -46,7 +46,6 @@ def lauch_qtimefreq(transfermode, axisorder, localworker):
     dev.configure(nb_channel=nb_channel, sample_interval=1./sample_rate, chunksize=chunksize, buffer=buffer)
     if transfermode=='sharedmem':
         buffer_size = int(62.*sample_rate)
-        print('buffer_size', buffer_size)
     else:
         buffer_size = 0
     dev.output.configure(protocol='tcp', interface='127.0.0.1', transfermode=transfermode,

@@ -81,6 +81,8 @@ class BaseOscilloscope(WidgetNode):
         self.nb_channel = self.input.params['shape'][1]
         buf_size = int(self.input.params['sample_rate'] * self.max_xsize)
         self.input.set_buffer(size=buf_size, axisorder=[1,0], double=True)
+        #TODO : check that this not lead 
+        
 
         # Create parameters
         all = []
@@ -103,7 +105,11 @@ class BaseOscilloscope(WidgetNode):
             self.params_controller = None
         
         # poller
-        self.poller = ThreadPollInput(input_stream=self.input)
+        if  self.input.params['transfermode']=='sharedmem':
+            return_data=False
+        else:
+            return_data=True
+        self.poller = ThreadPollInput(input_stream=self.input, return_data=return_data)
         self.poller.new_data.connect(self._on_new_data)
         # timer
         self._head = 0
@@ -326,7 +332,8 @@ class QOscilloscope(BaseOscilloscope):
                 head = head - head%(decimate*2)
             else:
                 head = head - head%decimate
-            
+        
+        #full_arr = self.input[head-self.full_size:head].T #this I want
         full_arr = self.input[-self.full_size:].T  # transpose to (channel, time)
         #print(full_arr[0,:].flags['C_CONTIGUOUS' ])
         full_arr = full_arr.astype(float)
