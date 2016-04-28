@@ -22,11 +22,13 @@ class ThreadPollInput(QtCore.QThread):
     The `process_data()` method may be reimplemented to define other behaviors.
     """
     new_data = QtCore.Signal(int,object)
-    def __init__(self, input_stream, timeout=200, return_data=True, parent=None):
+    def __init__(self, input_stream, timeout=200, return_data=None, parent=None):
         QtCore.QThread.__init__(self, parent)
         self.input_stream = weakref.ref(input_stream)
         self.timeout = timeout
         self.return_data = return_data
+        if self.return_data is None:
+            self.return_data = self.input_stream()._own_buffer
         
         self.running = False
         self.running_lock = Mutex()
@@ -94,13 +96,13 @@ class ThreadStreamConverter(ThreadPollInput):
     mode or time axis of the data before relaying it through its output.
     """
     def __init__(self, input_stream, output_stream, conversions,timeout=200, parent=None):
-        ThreadPollInput.__init__(self, input_stream, timeout=timeout, parent=parent)
+        ThreadPollInput.__init__(self, input_stream, timeout=timeout, return_data=True, parent=parent)
         self.output_stream = weakref.ref(output_stream)
         self.conversions = conversions
     
     def process_data(self, pos, data):
-        if 'transfermode' in self.conversions and self.conversions['transfermode'][0]=='sharedarray':
-            data = self.input_stream().get_array_slice(self, pos, None)
+        #~ if 'transfermode' in self.conversions and self.conversions['transfermode'][0]=='sharedmem':
+            #~ data = self.input_stream().get_array_slice(self, pos, None)
         #~ if 'timeaxis' in self.conversions:
             #~ data = data.swapaxes(*self.conversions['timeaxis'])
         self.output_stream().send(data, index=pos)

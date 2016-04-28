@@ -214,8 +214,15 @@ class RingBuffer:
         copied = False
         
         if self.double:
-            start_ind = start % bsize
-            stop_ind = start_ind + (stop - start)
+            # This do not work when get_data(-10, 50) meaning stop=50 length=60 (start=stop-length)
+            # this is util at the beging to get larger buffer than already possible
+            #start_ind = start % bsize
+            #stop_ind = start_ind + (stop - start)
+            
+            # I prefer this which equivalent but work with start<0:
+            stop_ind = stop%bsize + bsize
+            start_ind = stop_ind - (stop - start)
+            
             data = self.buffer[start_ind:stop_ind]
         else:
             break_index = (self._write_index + 1) - ((self._write_index + 1) % bsize)

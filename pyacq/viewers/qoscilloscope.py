@@ -105,11 +105,7 @@ class BaseOscilloscope(WidgetNode):
             self.params_controller = None
         
         # poller
-        if  self.input.params['transfermode']=='sharedmem':
-            return_data=False
-        else:
-            return_data=True
-        self.poller = ThreadPollInput(input_stream=self.input, return_data=return_data)
+        self.poller = ThreadPollInput(input_stream=self.input, return_data=None)
         self.poller.new_data.connect(self._on_new_data)
         # timer
         self._head = 0
@@ -333,9 +329,8 @@ class QOscilloscope(BaseOscilloscope):
             else:
                 head = head - head%decimate
         
-        #full_arr = self.input[head-self.full_size:head].T #this I want
-        full_arr = self.input[-self.full_size:].T  # transpose to (channel, time)
-        #print(full_arr[0,:].flags['C_CONTIGUOUS' ])
+        full_arr = self.input.get_data(head-self.full_size, head, copy=False, join=True).T
+        
         full_arr = full_arr.astype(float)
         
         if decimate>1:
@@ -425,10 +420,10 @@ class QOscilloscope(BaseOscilloscope):
         head = self._head
         sr = self.input.params['sample_rate']
         xsize = self.params['xsize']
-        np_arr = self.input[head-self.full_size:head]
-        self.all_sd = np.std(np_arr, axis=1)
-        # self.all_mean = np.mean(np_arr, axis = 1)
-        self.all_mean = np.median(np_arr, axis=1)
+        np_arr = self.input.get_data(head-self.full_size, head)
+        self.all_sd = np.nanstd(np_arr, axis=0)
+        # self.all_mean = np.nanmean(np_arr, axis = 1)
+        self.all_mean = np.nanmedian(np_arr, axis=0)
         return self.all_mean, self.all_sd
 
     def auto_gain_and_offset(self, mode=0, visibles=None):

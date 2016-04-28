@@ -86,3 +86,4 @@ if __name__ == '__main__':
     test_qoscilloscope2()
     test_qoscilloscope3()
     test_qoscilloscope4()
+

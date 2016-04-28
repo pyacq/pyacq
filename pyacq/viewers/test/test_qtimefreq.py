@@ -81,12 +81,12 @@ def lauch_qtimefreq(transfermode, axisorder, localworker):
     # start for a while
     timer = QtCore.QTimer(singleShot=True, interval=3000)
     timer.timeout.connect(terminate)
-    #~ timer.start()
+    timer.start()
     
     app.exec_()
     
     man.close()
-
+    
 
 @pytest.mark.skipif(not HAVE_SCIPY, reason='no HAVE_SCIPY')
 def test_qtimefreq_local_worker():
@@ -106,7 +106,7 @@ def test_qtimefreq_distributed_worker():
 
 
 if __name__ == '__main__':
-    #~ test_qtimefreq_local_worker()
+    test_qtimefreq_local_worker()
     test_qtimefreq_distributed_worker()
 
 

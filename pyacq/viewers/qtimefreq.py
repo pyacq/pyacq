@@ -155,7 +155,7 @@ class QTimeFreq(WidgetNode):
         self.workers = []
         self.input_maps = []
 
-        self.global_poller = ThreadPollInput(input_stream=self.input, return_data=False)
+        self.global_poller = ThreadPollInput(input_stream=self.input, return_data=None)
         self.global_timer = QtCore.QTimer(interval=500)
         self.global_timer.timeout.connect(self.compute_maps)
         
@@ -553,7 +553,11 @@ class ComputeThread(QtCore.QThread):
             head = head - head%downsample_factor
         
         #full_arr = self.in_stream[head-sig_chunk_size:head, self.channel] #TODO keep this when working
-        full_arr = self.in_stream[-sig_chunk_size:, self.channel]
+        #~ full_arr = self.in_stream[-sig_chunk_size:, self.channel]
+        full_arr = self.in_stream.get_data(head-sig_chunk_size, head, copy=False, join=True)[:, self.channel]
+        #~ print(full_arr.flags)
+        
+        
         #~ t2 = time.time()
         
         if downsample_factor>1:

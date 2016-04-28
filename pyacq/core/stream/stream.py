@@ -270,7 +270,17 @@ class InputStream(object):
         if self.buffer is None:
             raise TypeError("No ring buffer configured for this InputStream.")
         return self.buffer.__getitem__(*args)
-
+    
+    def get_data(self, *args, **kargs):
+        """
+        Return a segment of the RingBuffer attached to this InputStream.
+        
+        If no RingBuffer is attached, raise an exception. See ``set_buffer()``.
+        """
+        if self.buffer is None:
+            raise TypeError("No ring buffer configured for this InputStream.")
+        return self.buffer.get_data(*args, **kargs)
+    
     #~ def set_buffer(self, size=None, double=True, axisorder=None):
     def set_buffer(self, size=None, double=True, axisorder=None, shmem=None, fill=None):
         """Ensure that this InputStream has a RingBuffer at least as large as 
