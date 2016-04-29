@@ -1,7 +1,17 @@
 
-from pyacq.core.sharedarray import SharedArray
+from pyacq.core.sharedarray import SharedArray, SharedMem
 import numpy as np
 import pyqtgraph.multiprocess as mp
+
+
+def test_sharedmem():
+    shm1 = SharedMem(nbytes=10)
+    arr1 = shm1.to_numpy(offset=2, shape=8, dtype='ubyte')
+    assert arr1.flags['WRITEABLE']
+    
+    shm2 = SharedMem(nbytes=10, shm_id=shm1.shm_id)
+    arr2 = shm2.to_numpy(offset=2, shape=8, dtype='ubyte')
+    assert not arr2.flags['WRITEABLE']
 
 
 def test_sharedarray():    
