@@ -35,7 +35,7 @@ class OutputStream(object):
     """
     def __init__(self, spec=None, node=None, name=None):
         spec = {} if spec is None else spec
-        self.last_index = -1
+        self.last_index = 0
         self.configured = False
         self.spec = spec  # this is a priori stream params, and must be change when Node.configure
         if node is not None:
@@ -138,8 +138,7 @@ class OutputStream(object):
         Parameters
         ----------
         index: int
-            The absolute sample index. If the chunk contains multiple samples,
-            then this is the index of the last sample.
+            The absolute sample index. This is the index of the last sample + 1.
         data: np.ndarray or bytes
             The chunk of data to send.
         """
@@ -234,8 +233,7 @@ class InputStream(object):
         Returns:
         ----
         index: int
-            The absolute sample index. If the chunk contains multiple samples,
-            then this is the index of the last sample.
+            The absolute sample index. This is the index of the last sample + 1.
         data: np.ndarray or bytes
             The received chunk of data.
             If the stream uses `transfermode='sharedarray'`, then the data is 

@@ -54,7 +54,7 @@ class SharedMemReceiver(DataReceiver):
         stat = self.socket.recv_multipart()[0]
         index, size = struct.unpack('!QQ', stat)
         if return_data:
-            data = self.buffer[index+1-size:index+1]
+            data = self.buffer[index-size:index]
         else:
             data = None
         return index, data
