@@ -93,12 +93,19 @@ class PyAudio(Node):
                 raise ValueError(msg) from err
 
         self.output.spec['shape'] = (chunksize, self.nb_channel)
+        #~ self.output.spec['shape'] = (-1, self.nb_channel)
         self.output.spec['nb_channel'] = self.nb_channel
-        self.output.spec['dtype = '] = format
+        self.output.spec['dtype'] = format
         self.output.spec['sample_rate'] = float(int(self.sample_rate))
         gains = {'int16': 1./2**15, 'int32': 1./2**31, 'float32':1.}
         self.output.spec['gain'] = gains[self.format]
         self.output.spec['offset'] = 0.
+
+        self.input.spec['shape'] = (chunksize, self.nb_channel)
+        #~ self.input.spec['shape'] = (-1, self.nb_channel)
+        self.input.spec['nb_channel'] = self.nb_channel
+        self.input.spec['dtype'] = format
+        
     
     def check_input_specs(self):
         pass
@@ -139,7 +146,7 @@ class PyAudio(Node):
         self.lock = Mutex()
         
         if self.output_device_index is not None:
-            self.thread = ThreadPollInput(self.input)
+            self.thread = ThreadPollInput(self.input, return_data=True)
             self.thread.new_data.connect(self._new_output_buffer)
     
     def _start(self):
