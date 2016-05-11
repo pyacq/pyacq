@@ -129,7 +129,6 @@ class TriggerAccumulator(Node,  QtCore.QObject):
         
 
     def on_new_trig(self, trig_num, trig_indexes):
-        print('yop')
         for trig_index in trig_indexes:
             self.limit_poller.append_limit(trig_index+self.limit2)
     

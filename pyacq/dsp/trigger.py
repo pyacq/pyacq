@@ -129,11 +129,10 @@ class TriggerBase(Node,  QtCore.QObject):
         self.params.sigTreeStateChanged.connect(self.on_params_change)
 
     def after_input_connect(self, inputname):
-        self.nb_channel, _ = self.input.params['shape']
-        self.params.param('channel').setLimits([0, self.nb_channel])
+        self.nb_channel = self.input.params['shape'][1]
+        self.params.param('channel').setLimits([0, self.nb_channel-1])
 
     def _initialize(self):
-        #~ self.nb_channel = self.input.params['shape'][1]
         buf_size = int(self.input.params['sample_rate'] * self.max_size)
         self.input.set_buffer(size=buf_size, axisorder=[1,0], double=True)
         
