@@ -29,7 +29,7 @@ class ThreadSender(QtCore.QThread):
         for i in range(500):
             index += chunksize
             arr = np.random.rand(chunksize, nb_channel).astype(stream_spec['dtype'])
-            self.output_stream().send(index, arr)
+            self.output_stream().send(arr, index=index)
             time.sleep(chunksize/sr)
         self.terminated.emit()
 
@@ -43,7 +43,7 @@ def test_ThreadPollInput():
     instream.connect(outstream)
     
     sender = ThreadSender(output_stream=outstream)
-    poller = ThreadPollInput(input_stream=instream)
+    poller = ThreadPollInput(input_stream=instream, return_data=True)
     
     
     global last_pos
@@ -74,8 +74,7 @@ def test_streamconverter():
     
     stream_spec = dict(protocol='tcp', interface='127.0.0.1', port='*', 
                        transfermode='plaindata', streamtype='analogsignal',
-                       dtype='float32', shape=(-1, nb_channel), timeaxis = 0, 
-                       compression ='', scale = None, offset = None, units = '')
+                       dtype='float32', shape=(-1, nb_channel))
     
     outstream = OutputStream()
     outstream.configure(**stream_spec)
@@ -141,13 +140,13 @@ def test_stream_splitter():
     all_instream = []
     all_poller = []
     splitter = ChannelSplitter()
-    splitter.configure(output_channels = { 'out0' : [0,1,2], 'out1' : [1,4,9, 12] }, output_timeaxis = 1)
+    splitter.configure(output_channels = { 'out0' : [0,1,2], 'out1' : [1,4,9, 12] })
     splitter.input.connect(outstream)
     for name, output in splitter.outputs.items():
         output.configure()
         instream = InputStream()
         instream.connect(output)
-        poller = ThreadPollInput(input_stream=instream)
+        poller = ThreadPollInput(input_stream=instream, return_data=True)
         poller.new_data.connect(on_new_data)
         all_instream.append(instream)
         all_poller.append(poller)
@@ -175,6 +174,6 @@ def test_stream_splitter():
     
 
 if __name__ == '__main__':
-    test_ThreadPollInput()
-    test_streamconverter()
+    #~ test_ThreadPollInput()
+    #~ test_streamconverter()
     test_stream_splitter()

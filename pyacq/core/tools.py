@@ -225,7 +225,6 @@ class ChannelSplitter(Node):
                                                 sample_rate=self.input.params['sample_rate'])
             stream_spec['port'] = '*'
             stream_spec['nb_channel'] = len(chans)
-            stream_spec['timeaxis'] = timeaxis
             stream_spec['shape'] = (-1, len(chans))
             output = OutputStream(spec=stream_spec)
             self.outputs[k] = output
