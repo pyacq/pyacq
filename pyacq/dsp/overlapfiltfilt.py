@@ -4,7 +4,7 @@ import weakref
 import numpy as np
 
 from ..core import (Node, register_node_type, ThreadPollInput)
-from ..core.stream import SharedArraySender
+from ..core.stream.ringbuffer import RingBuffer
 
 import distutils.version
 try:
@@ -36,23 +36,24 @@ class SosFiltfilt_Base:
         self.overlapsize = overlapsize
         
         shape = ((chunksize+overlapsize)*5, nb_channel)
-        self.forward_buffer = ArrayRingBuffer(shape, dtype, double=True)
+        self.forward_buffer = RingBuffer(shape, dtype, double=True)
+        
+        self.backward_chunksize = self.chunksize+self.overlapsize
     
     def compute_one_chunk(self, pos, data):
         forward_chunk_filtered = self.compute_forward(data)
-        forward_chunk_filtered = forward_chunk_filtered.astype(self.dtype)
-        print('yep', data.shape, forward_chunk_filtered.shape, pos)
-        self.forward_buffer.new_chunk(forward_chunk_filtered, pos)
+        #~ forward_chunk_filtered = forward_chunk_filtered.astype(self.dtype)
+        self.forward_buffer.new_chunk(forward_chunk_filtered, index=pos)
         
         start = pos-self.chunksize-self.overlapsize
         if start>0:
-            backward_chunk = self.forward_buffer[start:pos, :]
-            backward_filtered = self.compute_forward(backward_chunk)
-            backward_filtered = backward_filtered[:chunksize]
+            backward_chunk = self.forward_buffer.get_data(start,pos)
+            backward_filtered = self.compute_backward(backward_chunk)
+            backward_filtered = backward_filtered[:self.chunksize]
             return pos-self.overlapsize, backward_filtered
         elif pos>self.overlapsize:
-            backward_chunk = self.forward_buffer[0:pos, :]
-            backward_filtered = self.compute_forward(backward_chunk)
+            backward_chunk = self.forward_buffer.get_data(0,pos)
+            backward_filtered = self.compute_backward(backward_chunk)
             backward_filtered = backward_filtered[:-self.overlapsize]
             return pos-self.overlapsize, backward_filtered
         else:
@@ -75,11 +76,13 @@ class SosFiltfilt_Scipy(SosFiltfilt_Base):
     
     def compute_forward(self, chunk):
         forward_chunk_filtered, self.zi = scipy.signal.sosfilt(self.coefficients, chunk, zi=self.zi, axis=0)
+        forward_chunk_filtered = forward_chunk_filtered.astype(self.dtype)
         return forward_chunk_filtered
     
     def compute_backward(self, chunk):
         backward_filtered = scipy.signal.sosfilt(self.coefficients, chunk[::-1, :], zi=None, axis=0)
         backward_filtered = backward_filtered[::-1, :]
+        backward_filtered = backward_filtered.astype(self.dtype)
         return backward_filtered
 
 
@@ -107,9 +110,10 @@ class SosFiltfilt_OpenCl_Base(SosFiltfilt_Base):
         self.queue = pyopencl.CommandQueue(self.ctx)
 
         #host arrays
-        self.zi1 = np.zeros((nb_channel, self.n_section, 2), dtype= self.dtype)
+        self.zi1 = np.zeros((nb_channel, self.nb_section, 2), dtype= self.dtype)
+        self.zi2 = np.zeros((nb_channel, self.nb_section, 2), dtype= self.dtype)
         self.output1 = np.zeros((self.chunksize, self.nb_channel), dtype= self.dtype)
-        self.output2 = np.zeros((self.chunksize2, self.nb_channel), dtype= self.dtype)
+        self.output2 = np.zeros((self.backward_chunksize, self.nb_channel), dtype= self.dtype)
         
         #GPU buffers
         self.coefficients_cl = pyopencl.Buffer(self.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=self.coefficients)
@@ -121,27 +125,27 @@ class SosFiltfilt_OpenCl_Base(SosFiltfilt_Base):
         self.output2_cl = pyopencl.Buffer(self.ctx, mf.READ_WRITE, size=self.output2.nbytes)
 
         #nb works
-        kernel = self.kernel%dict(forward_chunksize=self.chunksize, backward_chunksize=self.chunksize+self.overlapsize,
+        kernel = self.kernel%dict(forward_chunksize=self.chunksize, backward_chunksize=self.backward_chunksize,
                                                             nb_section=self.nb_section, nb_channel=self.nb_channel)
         prg = pyopencl.Program(self.ctx, kernel)
         self.opencl_prg = prg.build(options='-cl-mad-enable')
 
+
 class SosFilfilt_OpenCL_V1(SosFiltfilt_OpenCl_Base):
     def __init__(self, coefficients, nb_channel, dtype, chunksize, overlapsize):
-        SosFiltfilt_OpenCl_Base.__init__(self, coefficients, nb_channel, dtype, chunksize)
+        SosFiltfilt_OpenCl_Base.__init__(self, coefficients, nb_channel, dtype, chunksize, overlapsize)
         self.global_size = (self.nb_channel, )
         self.local_size = (self.nb_channel, )
-        self.kernel_func_name1 = 'forward_filter'
-        self.kernel_func_name2 = 'backward_filter'
+
         
     def compute_forward(self, chunk):
         if not chunk.flags['C_CONTIGUOUS']:
             chunk = chunk.copy()
         pyopencl.enqueue_copy(self.queue,  self.input1_cl, chunk)
 
-        kern_call = getattr(self.opencl_prg, self.kernel_func_name1)
+        kern_call = getattr(self.opencl_prg, 'forward_filter')
         event = kern_call(self.queue, self.global_size, self.local_size,
-                                self.input1_cl, self.output1_cl, self.coefficients_cl, self.zi_cl)
+                                self.input1_cl, self.output1_cl, self.coefficients_cl, self.zi1_cl)
         event.wait()
         
         pyopencl.enqueue_copy(self.queue,  self.output1, self.output1_cl)
@@ -151,20 +155,34 @@ class SosFilfilt_OpenCL_V1(SosFiltfilt_OpenCl_Base):
     def compute_backward(self, chunk):
         if not chunk.flags['C_CONTIGUOUS']:
             chunk = chunk.copy()
+        
         self.zi2[:]=0
         pyopencl.enqueue_copy(self.queue,  self.zi2_cl, self.zi2)
-        pyopencl.enqueue_copy(self.queue,  self.input2_cl, chunk)
-
-        kern_call = getattr(self.opencl_prg, self.kernel_func_name2)
+        
+        if chunk.shape[0]==self.backward_chunksize:
+            pyopencl.enqueue_copy(self.queue,  self.input2_cl, chunk)
+        else:
+            print('oups')
+            chunk2 = np.zeros((self.backward_chunksize, self.nb_channel), dtype=self.dtype)
+            chunk2[-chunk.shape[0]:, :] = chunk
+            pyopencl.enqueue_copy(self.queue,  self.input2_cl, chunk2)
+            
+        kern_call = getattr(self.opencl_prg, 'backward_filter')
         event = kern_call(self.queue, self.global_size, self.local_size,
-                                self.input2_cl, self.output2_cl, self.coefficients_cl, self.zi_cl)
+                                self.input2_cl, self.output2_cl, self.coefficients_cl, self.zi2_cl)
         event.wait()
         
         pyopencl.enqueue_copy(self.queue,  self.output2, self.output2_cl)
-        forward_data_filtered = self.output2
+        
+        if chunk.shape[0]==self.backward_chunksize:        
+            forward_chunk_filtered = self.output2
+        else:
+            print('oups2')
+            forward_chunk_filtered = self.output2[-chunk.shape[0]:, :]
         return forward_chunk_filtered
+            
     
-        kernel = """
+    kernel = """
     #define forward_chunksize %(forward_chunksize)d
     #define backward_chunksize %(backward_chunksize)d
     #define nb_section %(nb_section)d
@@ -218,7 +236,7 @@ class SosFilfilt_OpenCL_V1(SosFiltfilt_OpenCl_Base):
     }
 
     __kernel void backward_filter(__global  float *input, __global  float *output, __constant  float *coefficients, __global float *zi) {
-        sos_filter(input, output, coefficients, zi, forward_chunksize, -1);
+        sos_filter(input, output, coefficients, zi, backward_chunksize, -1);
     }
     
     """
@@ -228,23 +246,16 @@ sosfiltfilt_engines = { 'scipy' : SosFiltfilt_Scipy, 'opencl' : SosFilfilt_OpenC
 
 
 
-#TODO when branch stream-performence is done
-from .ringbuffer import ArrayRingBuffer
-
-
 class SosFiltfiltThread(ThreadPollInput):
     def __init__(self, input_stream, output_stream, timeout = 200, parent = None):
-        ThreadPollInput.__init__(self, input_stream, timeout = timeout, parent = parent)
+        ThreadPollInput.__init__(self, input_stream, timeout = timeout, return_data=True, parent = parent)
         self.output_stream = output_stream
 
 
     def process_data(self, pos, data):
-        if data is None:
-            #sharred_array case
-            data =  self.input_stream().get_array_slice(pos, None)
-        pos2, chunk_filtered = self.filter_engine.compute_one_chunk(data)
+        pos2, chunk_filtered = self.filter_engine.compute_one_chunk(pos, data)
         if pos2 is not None:
-            self.output_stream.send(pos2, chunk_filtered)
+            self.output_stream.send(chunk_filtered, index=pos2)
         
     def set_params(self, engine, coefficients, nb_channel, dtype, chunksize, overlapsize):
         #TODO put mutex for self.filter_engine
@@ -277,10 +288,10 @@ class OverlapFiltfilt(Node,  QtCore.QObject):
     the computed chunk at [-(chunksize+overlapsize):-overlapsize] is released.
 
 
-    The coefficients.shape must be (n_section, 6).
+    The coefficients.shape must be (nb_section, 6).
     
     If pyopencl is avaible you can do SosFilter.configure(engine='opencl')
-    In that cases the coefficients.shape can also be (n_channel, n_section, 6)
+    In that cases the coefficients.shape can also be (nb_channel, nb_section, 6)
     this help for having different filter on each channels.
     
     The opencl engine prefer inernally (channel, sample) ordered.
@@ -309,8 +320,8 @@ class OverlapFiltfilt(Node,  QtCore.QObject):
         self.set_coefficients(coefficients)
 
     def after_input_connect(self, inputname):
-        self.nb_channel = self.input.params['nb_channel']
-        for k in ['sample_rate', 'dtype', 'nb_channel', 'shape', 'timeaxis']:
+        self.nb_channel = self.input.params['shape'][1]
+        for k in ['sample_rate', 'dtype', 'shape', ]:
             self.output.spec[k] = self.input.params[k]
     
     def _initialize(self):

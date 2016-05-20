@@ -36,10 +36,12 @@ class SosFilter_Scipy:
         self.nb_section = coefficients.shape[0]
         self.nb_channel = nb_channel
         self.zi = np.zeros((self.nb_section, 2, self.nb_channel), dtype= dtype)
+        self.dtype=dtype
         self.chunksize = chunksize
     
     def compute_one_chunk(self, chunk):
         chunk_filtered, self.zi = scipy.signal.sosfilt(self.coefficients, chunk, zi = self.zi, axis = 0)
+        chunk_filtered = chunk_filtered.astype(self.dtype)
         return chunk_filtered
 
 
@@ -336,17 +338,12 @@ sosfilter_engines = { 'scipy' : SosFilter_Scipy, 'opencl' : SosFilter_OpenCL_V1,
 
 class SosFilterThread(ThreadPollInput):
     def __init__(self, input_stream, output_stream, timeout = 200, parent = None):
-        ThreadPollInput.__init__(self, input_stream, timeout = timeout, parent = parent)
-        #~ self.output_stream = weakref.ref(output_stream)
+        ThreadPollInput.__init__(self, input_stream, timeout = timeout, return_data=True, parent = parent)
         self.output_stream = output_stream
 
     def process_data(self, pos, data):
-        if data is None:
-            #sharred_array case
-            data =  self.input_stream().get_array_slice(pos, None)
-        
         chunk_filtered = self.filter_engine.compute_one_chunk(data)
-        self.output_stream.send(pos, chunk_filtered)
+        self.output_stream.send(chunk_filtered, index=pos)
         
     def set_params(self, engine, coefficients, nb_channel, dtype, chunksize):
         #TODO put mutex for self.filter_engine
@@ -407,8 +404,8 @@ class SosFilter(Node,  QtCore.QObject):
         self.chunksize = chunksize
 
     def after_input_connect(self, inputname):
-        self.nb_channel = self.input.params['nb_channel']
-        for k in ['sample_rate', 'dtype', 'nb_channel', 'shape', 'timeaxis']:
+        self.nb_channel = self.input.params['shape'][1]
+        for k in ['sample_rate', 'dtype', 'shape']:
             self.output.spec[k] = self.input.params[k]
     
     def _initialize(self):

@@ -10,6 +10,7 @@ from pyacq.viewers.qoscilloscope import QOscilloscope
 from pyqtgraph.Qt import QtCore, QtGui
 import scipy.signal
 
+import time
 
 nb_channel = 10
 sample_rate =1000.
@@ -30,16 +31,15 @@ buffer = buffer.astype('float32')
 
 
 def do_filtertest(engine):
-    stream_spec = dict(protocol='tcp', interface='127.0.0.1', transfermode='sharedarray',
-                            sharedarray_shape=(2048*50, nb_channel), ring_buffer_method = 'double',
-                            dtype = 'float32',)
+    stream_spec = dict(protocol='tcp', interface='127.0.0.1', transfermode='sharedmem',
+                            double=True, dtype = 'float32',buffer_size=2048*50, shape=(-1,nb_channel))
     
     app = pg.mkQApp()
     
                             
     dev = NumpyDeviceBuffer()
     dev.configure(nb_channel=nb_channel, sample_interval=1./sample_rate, chunksize=chunksize,
-                    buffer=buffer, timeaxis=0,)
+                    buffer=buffer)
     dev.output.configure( **stream_spec)
     dev.initialize()
     
@@ -94,6 +94,7 @@ def test_sosfilter():
 def test_openclsosfilter():
     do_filtertest('opencl')
     do_filtertest('opencl2')
+    do_filtertest('opencl3')
 
 
 
@@ -112,6 +113,7 @@ def compare_online_offline_engines():
                 btype = 'bandpass', ftype = 'butter', output = 'sos')
     
     offline_arr =  scipy.signal.sosfilt(coefficients.astype('float32'), buffer.astype('float32'), axis=0, zi=None)
+    offline_arr = offline_arr.astype('float32')
     
     for engine in engines:
         print(engine)
@@ -120,6 +122,7 @@ def compare_online_offline_engines():
         print(filter_engine)
         online_arr = np.zeros_like(offline_arr)
         
+        t1 = time.clock()
         for i in range(nloop):
             #~ print(i)
             chunk = buffer[i*chunksize:(i+1)*chunksize,:]
@@ -128,9 +131,11 @@ def compare_online_offline_engines():
             #~ print(online_arr[i*chunksize:(i+1)*chunksize,:])
             online_arr[i*chunksize:(i+1)*chunksize,:] = chunk_filtered
             #~ print(online_arr[i*chunksize:(i+1)*chunksize,:])
+        t2 = time.clock()
 
         residual = np.abs((online_arr.astype('float64')-offline_arr.astype('float64'))/np.mean(np.abs(offline_arr.astype('float64'))))
         print(np.max(residual))
+        print(t2-t1)
         #~ assert np.max(residual)<1e-4, 'online differt from offline'
     
         from matplotlib import pyplot
