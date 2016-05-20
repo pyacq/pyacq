@@ -1,4 +1,5 @@
-from pyacq.core.stream import OutputStream, InputStream
+from pyacq.core import OutputStream, InputStream
+
 from pyacq.core.tools import ThreadPollInput, StreamConverter, ChannelSplitter
 from pyqtgraph.Qt import QtCore, QtGui
 import pyqtgraph as pg
@@ -13,7 +14,7 @@ sr = 20000.
 
 stream_spec = dict(protocol='tcp', interface='127.0.0.1', port='*', 
                    transfermode='plaindata', streamtype='analogsignal',
-                   dtype='float32', shape=(-1, nb_channel), timeaxis = 0, 
+                   dtype='float32', shape=(-1, nb_channel),
                    nb_channel =nb_channel,
                    compression ='', scale = None, offset = None, units = '')
 

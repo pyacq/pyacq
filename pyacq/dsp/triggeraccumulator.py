@@ -62,7 +62,7 @@ class TriggerAccumulator(Node,  QtCore.QObject):
     
     
     """
-    _input_specs = {'signals' : dict(streamtype = 'signals', transfermode='sharedarray', timeaxis = 1), 
+    _input_specs = {'signals' : dict(streamtype = 'signals'), 
                                 'events' : dict(streamtype = 'events',  shape = (-1, )), #dtype ='int64',
                                 }
     _output_specs = {}
@@ -81,12 +81,14 @@ class TriggerAccumulator(Node,  QtCore.QObject):
         self.params = pg.parametertree.Parameter.create( name='Accumulator options',
                                                     type='group', children =self._default_params)
     
-    def _configure(self, max_stack_size = 10, events_dtype_field = None):
+    def _configure(self, max_stack_size = 10, max_xsize=2., events_dtype_field = None):
         """
         Arguments
         ---------------
         max_stack_size: int
             maximum size for the event size
+        max_xsize: int 
+            maximum sample chunk size
         events_dtype_field : None or str
             Standart dtype for 'events' input is 'int64',
             In case of complex dtype (ex : dtype = [('index', 'int64'), ('label', 'S12), ) ] you can precise which
@@ -94,15 +96,15 @@ class TriggerAccumulator(Node,  QtCore.QObject):
             
         
         """
-        
         self.params.sigTreeStateChanged.connect(self.on_params_change)
         self.max_stack_size = max_stack_size
         self.events_dtype_field = events_dtype_field
         self.params.param('stack_size').setLimits([1, self.max_stack_size])
-        
+        self.max_xsize = max_xsize
+    
     def after_input_connect(self, inputname):
         if inputname == 'signals':
-            self.nb_channel, _ = self.inputs['signals'].params['shape']
+            self.nb_channel = self.inputs['signals'].params['shape'][1]
             self.sample_rate = self.inputs['signals'].params['sample_rate']
         elif inputname == 'events':
             dt = np.dtype(self.inputs['events'].params['dtype'])
@@ -112,7 +114,10 @@ class TriggerAccumulator(Node,  QtCore.QObject):
                 assert self.events_dtype_field in dt.names, 'events_dtype_field not in input dtype {}'.format(dt)
     
     def _initialize(self):
-        self.trig_poller  = ThreadPollInput(self.inputs['events'])
+        buf_size = int(self.inputs['signals'].params['sample_rate'] * self.max_xsize)
+        self.inputs['signals'].set_buffer(size=buf_size, axisorder=[1,0], double=True)
+        
+        self.trig_poller  = ThreadPollInput(self.inputs['events'], return_data=True)
         self.trig_poller.new_data.connect(self.on_new_trig)
         
         self.limit_poller = ThreadPollInputUntilPosLimit(self.inputs['signals'])
@@ -152,7 +157,7 @@ class TriggerAccumulator(Node,  QtCore.QObject):
                 self.limit_poller.append_limit(trig_index[ self.events_dtype_field]+self.limit2)
     
     def on_limit_reached(self, limit_index):
-        arr = self.inputs['signals'].get_array_slice(limit_index, self.size).transpose()
+        arr = self.inputs['signals'].get_data(limit_index-self.size, limit_index).transpose()
         if arr is not None:
             self.stack[self.stack_pos,:,:] = arr
             

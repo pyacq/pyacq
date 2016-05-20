@@ -9,7 +9,7 @@ from ..core import (Node, register_node_type, ThreadPollInput, StreamConverter)
 
 class TriggerThread(ThreadPollInput):
     def __init__(self, input_stream, output_stream, timeout = 200, parent = None):
-        ThreadPollInput.__init__(self, input_stream, timeout = timeout, parent = parent)
+        ThreadPollInput.__init__(self, input_stream, timeout = timeout, return_data=None, parent = parent)
         self.output_stream = weakref.ref(output_stream)
         
         self.sample_rate = input_stream.params['sample_rate']
@@ -78,7 +78,7 @@ class TriggerThread(ThreadPollInput):
         if crossings.size>0:
             self.n += crossings.size
             crossings += self.last_pos
-            self.output_stream().send(self.n, crossings.astype('int64'))
+            self.output_stream().send(crossings.astype('int64'), index=self.n)
         
         self.last_pos = pos-1
     
@@ -89,12 +89,12 @@ class TriggerThread(ThreadPollInput):
 
 class AnalogTriggerThread(TriggerThread):
     def get_buffer_from_channel(self, index, length):
-        return self.input_stream().get_array_slice(index, length)[:, self.channel, ]
+        return self.input_stream().get_data(index-length, index)[:, self.channel, ]
 
 
 class DigitalTriggerThread(TriggerThread):
     def get_buffer_from_channel(self, index, length):
-        return self.input_stream().get_array_slice(index, length)[:, self.b] & self.mask
+        return self.input_stream().get_data(index-length, index)[:, self.b] & self.mask
     
     def change_params(self, params):
         TriggerThread.change_params(self, params)
@@ -104,7 +104,7 @@ class DigitalTriggerThread(TriggerThread):
 
 
 class TriggerBase(Node,  QtCore.QObject):
-    _input_specs = {'signals' : dict(streamtype = 'signals', transfermode='sharedarray', timeaxis = 1)}
+    _input_specs = {'signals' : dict(streamtype = 'signals')}
     _output_specs = {'events' : dict(streamtype = 'events', dtype ='int64', shape = (-1, ))}
     
     _default_params = [
@@ -124,14 +124,18 @@ class TriggerBase(Node,  QtCore.QObject):
         self.params = pg.parametertree.Parameter.create( name='Trigger options',
                                                     type='group', children =self._default_params)
     
-    def _configure(self):
+    def _configure(self, max_size=2.):
+        self.max_size = max_size
         self.params.sigTreeStateChanged.connect(self.on_params_change)
 
     def after_input_connect(self, inputname):
-        self.nb_channel, _ = self.input.params['shape']
-        self.params.param('channel').setLimits([0, self.nb_channel])
+        self.nb_channel = self.input.params['shape'][1]
+        self.params.param('channel').setLimits([0, self.nb_channel-1])
 
     def _initialize(self):
+        buf_size = int(self.input.params['sample_rate'] * self.max_size)
+        self.input.set_buffer(size=buf_size, axisorder=[1,0], double=True)
+        
         self.thread = self._TriggerThread(self.input, self.output)
         self.thread.change_params(self.params)
         self.new_params.connect(self.thread.change_params)

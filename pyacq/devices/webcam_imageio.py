@@ -32,7 +32,7 @@ class ImageIOThread(QtCore.QThread):
                     break
             
             n += 1
-            self.out_stream.send(n, im)
+            self.out_stream.send(im, index=n)
             # this is bad 
             # TODO : find a way to do trhis loop in blocking mode
             time.sleep(1./self.out_stream.params['sample_rate'])

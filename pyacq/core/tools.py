@@ -22,16 +22,19 @@ class ThreadPollInput(QtCore.QThread):
     The `process_data()` method may be reimplemented to define other behaviors.
     """
     new_data = QtCore.Signal(int,object)
-    def __init__(self, input_stream, timeout=200, parent=None):
+    def __init__(self, input_stream, timeout=200, return_data=None, parent=None):
         QtCore.QThread.__init__(self, parent)
         self.input_stream = weakref.ref(input_stream)
         self.timeout = timeout
+        self.return_data = return_data
+        if self.return_data is None:
+            self.return_data = self.input_stream()._own_buffer
         
         self.running = False
         self.running_lock = Mutex()
         self.lock = Mutex()
         self._pos = None
-        
+    
     def run(self):
         with self.running_lock:
             self.running = True
@@ -45,7 +48,7 @@ class ThreadPollInput(QtCore.QThread):
                     break
             ev = self.input_stream().poll(timeout=self.timeout)
             if ev>0:
-                pos, data = self.input_stream().recv()
+                pos, data = self.input_stream().recv(return_data=self.return_data)
                 with self.lock:
                     self._pos = pos
                 self.process_data(self._pos, data)
@@ -93,14 +96,16 @@ class ThreadStreamConverter(ThreadPollInput):
     mode or time axis of the data before relaying it through its output.
     """
     def __init__(self, input_stream, output_stream, conversions,timeout=200, parent=None):
-        ThreadPollInput.__init__(self, input_stream, timeout=timeout, parent=parent)
+        ThreadPollInput.__init__(self, input_stream, timeout=timeout, return_data=True, parent=parent)
         self.output_stream = weakref.ref(output_stream)
         self.conversions = conversions
     
     def process_data(self, pos, data):
-        if data is None:
-            data = self.input_stream().get_array_slice(pos, None)
-        self.output_stream().send(pos, data)
+        #~ if 'transfermode' in self.conversions and self.conversions['transfermode'][0]=='sharedmem':
+            #~ data = self.input_stream().get_array_slice(self, pos, None)
+        #~ if 'timeaxis' in self.conversions:
+            #~ data = data.swapaxes(*self.conversions['timeaxis'])
+        self.output_stream().send(data, index=pos)
 
 
 class StreamConverter(Node):
@@ -137,13 +142,13 @@ class StreamConverter(Node):
     def _initialize(self):
         self.conversions = {}
         # check convertion
-        #~ for k in self.input.params:
-            #~ if k in ('port', 'protocol', 'interface', 'dtype'):
-                #~ continue  # the OutputStream/InputStream already do it
+        for k in self.input.params:
+            if k in ('port', 'protocol', 'interface', 'dtype'):
+                continue  # the OutputStream/InputStream already do it
             
-            #~ old, new = self.input.params.get(k, None), self.output.params.get(k, None)
-            #~ if old != new and old is not None:
-                #~ self.conversions[k] = (old, new)
+            old, new = self.input.params.get(k, None), self.output.params.get(k, None)
+            if old != new and old is not None:
+                self.conversions[k] = (old, new)
                 
         # DO some check ???
         # if 'shape' in self.conversions:
@@ -163,21 +168,16 @@ class StreamConverter(Node):
 register_node_type(StreamConverter)
 
 
-
 class ThreadSplitter(ThreadPollInput):
     def __init__(self, input_stream, outputs_stream, output_channels, timeout=200, parent=None):
-        ThreadPollInput.__init__(self, input_stream, timeout=timeout, parent=parent)
+        ThreadPollInput.__init__(self, input_stream, timeout=timeout, return_data=True, parent=parent)
         self.outputs_stream = weakref.WeakValueDictionary()
         self.outputs_stream.update(outputs_stream)
         self.output_channels = output_channels
     
     def process_data(self, pos, data):
-        if data is None:
-            #sharred_array case
-            data =  self.input_stream().get_array_slice(pos, None)
-        
         for k , chans in self.output_channels.items():
-            self.outputs_stream[k].send(pos, data[:, chans])
+            self.outputs_stream[k].send(data[:, chans], index=pos)
 
 
 class ChannelSplitter(Node):
@@ -202,7 +202,7 @@ class ChannelSplitter(Node):
     def __init__(self, **kargs):
         Node.__init__(self, **kargs)
     
-    def _configure(self, output_channels = {}, output_timeaxis = 'same'):
+    def _configure(self, output_channels = {}):
         """
         Params
         -----------
@@ -213,29 +213,20 @@ class ChannelSplitter(Node):
             The output timeaxis is set here.
         """
         self.output_channels = output_channels
-        self.output_timeaxis = output_timeaxis
     
     def after_input_connect(self, inputname):
-        if self.output_timeaxis == 'same':
-            self.output_timeaxis = self.input.params['timeaxis']
-        timeaxis = self.output_timeaxis
         
-        n =  self.input.params['nb_channel']
+        nb_channel =  self.input.params['shape'][1]
         self.outputs = OrderedDict()
         for k, chans in self.output_channels.items():
-            assert min(chans)>=0 and max(chans)<n, 'output_channels do not match channel count {}'.format(n)
+            assert min(chans)>=0 and max(chans)<nb_channel, 'output_channels do not match channel count {}'.format(nb_channel)
 
-            stream_spec = dict(streamtype='analogsignal', dtype = self.input.params['dtype'],
-                                                sample_rate = self.input.params['sample_rate'])
-            stream_spec['shape'] = None
+            stream_spec = dict(streamtype='analogsignal', dtype=self.input.params['dtype'],
+                                                sample_rate=self.input.params['sample_rate'])
             stream_spec['port'] = '*'
             stream_spec['nb_channel'] = len(chans)
             stream_spec['timeaxis'] = timeaxis
-            if timeaxis==0:
-                stream_spec['shape'] = (-1, len(chans))
-            else:
-                stream_spec['shape'] = (len(chans), -1)
-            
+            stream_spec['shape'] = (-1, len(chans))
             output = OutputStream(spec=stream_spec)
             self.outputs[k] = output
     
