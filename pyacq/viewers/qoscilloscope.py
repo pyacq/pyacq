@@ -48,6 +48,9 @@ class BaseOscilloscope(WidgetNode):
     better to manually create single StreamConverter to provide shared input
     for all Oscilloscopes.
     """
+    
+    #In the code  willingly : self.input is self.inputs['signal'] because some subclass can have several inputs
+    
     def __init__(self, **kargs):
         WidgetNode.__init__(self, **kargs)
         
@@ -77,10 +80,11 @@ class BaseOscilloscope(WidgetNode):
         self.max_xsize = max_xsize
     
     def _initialize(self):
-        assert len(self.input.params['shape']) == 2, 'Are you joking ?'
-        self.nb_channel = self.input.params['shape'][1]
-        buf_size = int(self.input.params['sample_rate'] * self.max_xsize)
-        self.input.set_buffer(size=buf_size, axisorder=[1,0], double=True)
+        assert len(self.inputs['signals'].params['shape']) == 2, 'Are you joking ?'
+        self.nb_channel = self.inputs['signals'].params['shape'][1]
+        self.sample_rate = self.inputs['signals'].params['sample_rate']
+        buf_size = int(self.sample_rate * self.max_xsize)
+        self.inputs['signals'].set_buffer(size=buf_size, axisorder=[1,0], double=True)
         #TODO : check that this not lead 
         
 
@@ -105,7 +109,7 @@ class BaseOscilloscope(WidgetNode):
             self.params_controller = None
         
         # poller
-        self.poller = ThreadPollInput(input_stream=self.input, return_data=None)
+        self.poller = ThreadPollInput(input_stream=self.inputs['signals'], return_data=None)
         self.poller.new_data.connect(self._on_new_data)
         # timer
         self._head = 0
@@ -138,20 +142,20 @@ class BaseOscilloscope(WidgetNode):
     def reset_curves_data(self):
         xsize = self.params['xsize']
         decimate = self.params['decimate']
-        sr = self.input.params['sample_rate']
-        self.full_size = int(xsize*sr)
+        #~ sr = self.input.params['sample_rate']
+        self.full_size = int(xsize*self.sample_rate)
         self.small_size = self.full_size//decimate
         if self.small_size%2!=0:  # ensure for min_max decimate
             self.small_size -=1
         self.full_size = self.small_size*decimate
-        self.t_vect = np.arange(0,self.small_size, dtype=float)/(sr/decimate)
+        self.t_vect = np.arange(0,self.small_size, dtype=float)/(self.sample_rate/decimate)
         self.t_vect -= self.t_vect[-1]
         self.curves_data = [np.zeros((self.small_size), dtype=float) for i in range(self.nb_channel)]
 
     def estimate_decimate(self, nb_point=4000):
         xsize = self.params['xsize']
-        sr = self.input.params['sample_rate']
-        self.params['decimate'] = max(int(xsize*sr)//nb_point, 1)
+        #~ sr = self.input.params['sample_rate']
+        self.params['decimate'] = max(int(xsize*self.sample_rate)//nb_point, 1)
 
     def xsize_zoom(self, xmove):
         factor = xmove/100.
@@ -298,7 +302,8 @@ class QOscilloscope(BaseOscilloscope):
 
     def _initialize(self):
         BaseOscilloscope._initialize(self)
-        self.params.param('xsize').setLimits([2./self.input.params['sample_rate'], self.max_xsize*.95])
+        #~ self.params.param('xsize').setLimits([2./self.input.params['sample_rate'], self.max_xsize*.95])
+        self.params.param('xsize').setLimits([2./self.sample_rate, self.max_xsize*.95])
         
         self.curves = []
         self.channel_labels = []
@@ -319,7 +324,7 @@ class QOscilloscope(BaseOscilloscope):
         gains = np.array([p['gain'] for p in self.by_channel_params.children()])
         offsets = np.array([p['offset'] for p in self.by_channel_params.children()])
         visibles = np.array([p['visible'] for p in self.by_channel_params.children()], dtype=bool)
-        sr = self.input.params['sample_rate']
+        #~ sr = self.input.params['sample_rate']
         xsize = self.params['xsize'] 
         
         head = self._head
@@ -329,7 +334,7 @@ class QOscilloscope(BaseOscilloscope):
             else:
                 head = head - head%decimate
         
-        full_arr = self.input.get_data(head-self.full_size, head, copy=False, join=True).T
+        full_arr = self.inputs['signals'].get_data(head-self.full_size, head, copy=False, join=True).T
         
         full_arr = full_arr.astype(float)
         
@@ -418,9 +423,9 @@ class QOscilloscope(BaseOscilloscope):
         if self._head is None:
             return None, None
         head = self._head
-        sr = self.input.params['sample_rate']
+        #~ sr = self.input.params['sample_rate']
         xsize = self.params['xsize']
-        np_arr = self.input.get_data(head-self.full_size, head)
+        np_arr = self.inputs['signals'].get_data(head-self.full_size, head)
         self.all_sd = np.nanstd(np_arr, axis=0)
         # self.all_mean = np.nanmean(np_arr, axis = 1)
         self.all_mean = np.nanmedian(np_arr, axis=0)

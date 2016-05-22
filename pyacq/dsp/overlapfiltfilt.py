@@ -254,10 +254,13 @@ class SosFiltfiltThread(ThreadPollInput):
 
 
     def process_data(self, pos, data):
+        print('filtfilt', pos, data.shape)
         with self.mutex:
             pos2, chunk_filtered = self.filter_engine.compute_one_chunk(pos, data)
         
+        
         if pos2 is not None:
+            print(pos2, chunk_filtered.shape)
             self.output_stream.send(chunk_filtered, index=pos2)
         
     def set_params(self, engine, coefficients, nb_channel, dtype, chunksize, overlapsize):
@@ -312,7 +315,7 @@ class OverlapFiltfilt(Node,  QtCore.QObject):
         Node.__init__(self, **kargs)
         assert HAVE_SCIPY, "SosFilter need scipy>0.16"
     
-    def _configure(self, chunksize=1024, overlapsize=512, coefficients = None, engine='numpy'):
+    def _configure(self, chunksize=1024, overlapsize=512, coefficients = None, engine='scipy'):
         """
         Set the coefficient of the filter.
         See http://scipy.github.io/devdocs/generated/scipy.signal.sosfilt.html for details.
