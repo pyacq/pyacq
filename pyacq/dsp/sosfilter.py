@@ -1,6 +1,6 @@
 from pyqtgraph.Qt import QtCore
 import pyqtgraph as pg
-import weakref
+from pyqtgraph.util.mutex import Mutex
 import numpy as np
 
 from ..core import (Node, register_node_type, ThreadPollInput, StreamConverter)
@@ -340,16 +340,18 @@ class SosFilterThread(ThreadPollInput):
     def __init__(self, input_stream, output_stream, timeout = 200, parent = None):
         ThreadPollInput.__init__(self, input_stream, timeout = timeout, return_data=True, parent = parent)
         self.output_stream = output_stream
+        self.mutex = Mutex()
 
     def process_data(self, pos, data):
-        chunk_filtered = self.filter_engine.compute_one_chunk(data)
+        with self.mutex:
+            chunk_filtered = self.filter_engine.compute_one_chunk(data)
         self.output_stream.send(chunk_filtered, index=pos)
         
     def set_params(self, engine, coefficients, nb_channel, dtype, chunksize):
-        #TODO put mutex for self.filter_engine
         assert engine in sosfilter_engines
         EngineClass = sosfilter_engines[engine]
-        self.filter_engine = EngineClass(coefficients, nb_channel, dtype, chunksize)
+        with self.mutex:
+            self.filter_engine = EngineClass(coefficients, nb_channel, dtype, chunksize)
 
 
 class SosFilter(Node,  QtCore.QObject):
@@ -394,7 +396,7 @@ class SosFilter(Node,  QtCore.QObject):
         Node.__init__(self, **kargs)
         assert HAVE_SCIPY, "SosFilter need scipy>0.16"
     
-    def _configure(self, coefficients = None, engine='numpy', chunksize=None):
+    def _configure(self, coefficients = None, engine='scipy', chunksize=None):
         """
         Set the coefficient of the filter.
         See http://scipy.github.io/devdocs/generated/scipy.signal.sosfilt.html for details.

@@ -1,6 +1,6 @@
 from pyqtgraph.Qt import QtCore
 import pyqtgraph as pg
-import weakref
+from pyqtgraph.util.mutex import Mutex
 import numpy as np
 
 from ..core import (Node, register_node_type, ThreadPollInput)
@@ -162,7 +162,7 @@ class SosFilfilt_OpenCL_V1(SosFiltfilt_OpenCl_Base):
         if chunk.shape[0]==self.backward_chunksize:
             pyopencl.enqueue_copy(self.queue,  self.input2_cl, chunk)
         else:
-            print('oups')
+            #side effect at the begining
             chunk2 = np.zeros((self.backward_chunksize, self.nb_channel), dtype=self.dtype)
             chunk2[-chunk.shape[0]:, :] = chunk
             pyopencl.enqueue_copy(self.queue,  self.input2_cl, chunk2)
@@ -177,10 +177,10 @@ class SosFilfilt_OpenCL_V1(SosFiltfilt_OpenCl_Base):
         if chunk.shape[0]==self.backward_chunksize:        
             forward_chunk_filtered = self.output2
         else:
-            print('oups2')
+            #side effect at the begining
             forward_chunk_filtered = self.output2[-chunk.shape[0]:, :]
         return forward_chunk_filtered
-            
+        
     
     kernel = """
     #define forward_chunksize %(forward_chunksize)d
@@ -250,18 +250,21 @@ class SosFiltfiltThread(ThreadPollInput):
     def __init__(self, input_stream, output_stream, timeout = 200, parent = None):
         ThreadPollInput.__init__(self, input_stream, timeout = timeout, return_data=True, parent = parent)
         self.output_stream = output_stream
+        self.mutex = Mutex()
 
 
     def process_data(self, pos, data):
-        pos2, chunk_filtered = self.filter_engine.compute_one_chunk(pos, data)
+        with self.mutex:
+            pos2, chunk_filtered = self.filter_engine.compute_one_chunk(pos, data)
+        
         if pos2 is not None:
             self.output_stream.send(chunk_filtered, index=pos2)
         
     def set_params(self, engine, coefficients, nb_channel, dtype, chunksize, overlapsize):
-        #TODO put mutex for self.filter_engine
         assert engine in sosfiltfilt_engines
         EngineClass = sosfiltfilt_engines[engine]
-        self.filter_engine = EngineClass(coefficients, nb_channel, dtype, chunksize, overlapsize)
+        with self.mutex:
+            self.filter_engine = EngineClass(coefficients, nb_channel, dtype, chunksize, overlapsize)
 
 
 class OverlapFiltfilt(Node,  QtCore.QObject):
