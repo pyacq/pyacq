@@ -24,7 +24,7 @@ class SharedMemSender(DataSender):
         if self.params['shape'][0] != -1:
             assert shape == self.params['shape']
         else:
-            assert tuple(shape[1:]) == tuple(self.params['shape'][1:])
+            assert tuple(shape[1:]) == tuple(self.params['shape'][1:]), '{} {}'.format(shape, self.params['shape'])
  
         self._buffer.new_chunk(data, index)
         
