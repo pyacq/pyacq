@@ -240,9 +240,124 @@ class SosFilfilt_OpenCL_V1(SosFiltfilt_OpenCl_Base):
     }
     
     """
-    
 
-sosfiltfilt_engines = { 'scipy' : SosFiltfilt_Scipy, 'opencl' : SosFilfilt_OpenCL_V1 }
+
+class SosFilfilt_OpenCL_V3(SosFiltfilt_OpenCl_Base):
+    def __init__(self, coefficients, nb_channel, dtype, chunksize, overlapsize):
+        SosFiltfilt_OpenCl_Base.__init__(self, coefficients, nb_channel, dtype, chunksize, overlapsize)
+        self.global_size = (self.nb_channel, self.nb_section)
+        self.local_size = (1, self.nb_section)
+
+        
+    def compute_forward(self, chunk):
+        if not chunk.flags['C_CONTIGUOUS']:
+            chunk = chunk.copy()
+        pyopencl.enqueue_copy(self.queue,  self.input1_cl, chunk)
+
+        kern_call = getattr(self.opencl_prg, 'forward_filter')
+        event = kern_call(self.queue, self.global_size, self.local_size,
+                                self.input1_cl, self.output1_cl, self.coefficients_cl, self.zi1_cl)
+        event.wait()
+        
+        pyopencl.enqueue_copy(self.queue,  self.output1, self.output1_cl)
+        forward_chunk_filtered = self.output1
+        return forward_chunk_filtered
+        
+    def compute_backward(self, chunk):
+        if not chunk.flags['C_CONTIGUOUS']:
+            chunk = chunk.copy()
+        
+        self.zi2[:]=0
+        pyopencl.enqueue_copy(self.queue,  self.zi2_cl, self.zi2)
+        
+        if chunk.shape[0]==self.backward_chunksize:
+            pyopencl.enqueue_copy(self.queue,  self.input2_cl, chunk)
+        else:
+            #side effect at the begining
+            chunk2 = np.zeros((self.backward_chunksize, self.nb_channel), dtype=self.dtype)
+            chunk2[-chunk.shape[0]:, :] = chunk
+            pyopencl.enqueue_copy(self.queue,  self.input2_cl, chunk2)
+            
+        kern_call = getattr(self.opencl_prg, 'backward_filter')
+        event = kern_call(self.queue, self.global_size, self.local_size,
+                                self.input2_cl, self.output2_cl, self.coefficients_cl, self.zi2_cl)
+        event.wait()
+        
+        pyopencl.enqueue_copy(self.queue,  self.output2, self.output2_cl)
+        
+        if chunk.shape[0]==self.backward_chunksize:        
+            forward_chunk_filtered = self.output2
+        else:
+            #side effect at the begining
+            forward_chunk_filtered = self.output2[-chunk.shape[0]:, :]
+        return forward_chunk_filtered
+        
+    
+    kernel = """
+    #define forward_chunksize %(forward_chunksize)d
+    #define backward_chunksize %(backward_chunksize)d
+    #define nb_section %(nb_section)d
+    #define nb_channel %(nb_channel)d
+
+    __kernel void sos_filter(__global  float *input, __global  float *output, __constant  float *coefficients, 
+                                                                            __global float *zi, int chunksize, int direction) {
+
+        int chan = get_global_id(0); //channel indice
+        int section = get_global_id(1); //section indice
+        
+        int offset_filt2;  //offset channel within section
+        int offset_zi = chan*nb_section*2;
+        
+        int idx;
+
+        float w0, w1,w2;
+        float res;
+        int s2;
+
+        w1 = zi[offset_zi+section*2+0];
+        w2 = zi[offset_zi+section*2+1];
+        
+        for (int s=0; s<chunksize+(3*nb_section);s++){
+            barrier(CLK_GLOBAL_MEM_FENCE);
+
+            s2 = s-section*3;
+            
+            if (s2>=0 && (s2<chunksize)){
+                
+                offset_filt2 = chan*nb_section*6+section*6;
+                
+                if (direction==1) {idx = s*nb_channel+chan;}
+                else if (direction==-1) {idx = (chunksize-s-1)*nb_channel+chan;}
+                
+                if (section==0)  {w0 = input[idx];}
+                else {w0 = output[idx];}
+                
+                w0 -= coefficients[offset_filt2+4] * w1;
+                w0 -= coefficients[offset_filt2+5] * w2;
+                res = coefficients[offset_filt2+0] * w0 + coefficients[offset_filt2+1] * w1 +  coefficients[offset_filt2+2] * w2;
+                w2 = w1; w1 =w0;
+                
+                output[idx] = res;
+            }
+        }
+
+        zi[offset_zi+section*2+0] = w1;
+        zi[offset_zi+section*2+1] = w2;
+       
+    }
+    
+    __kernel void forward_filter(__global  float *input, __global  float *output, __constant  float *coefficients, __global float *zi){
+        sos_filter(input, output, coefficients, zi, forward_chunksize, 1);
+    }
+
+    __kernel void backward_filter(__global  float *input, __global  float *output, __constant  float *coefficients, __global float *zi) {
+        sos_filter(input, output, coefficients, zi, backward_chunksize, -1);
+    }
+    
+    """
+
+
+sosfiltfilt_engines = { 'scipy' : SosFiltfilt_Scipy, 'opencl' : SosFilfilt_OpenCL_V1, 'opencl3' : SosFilfilt_OpenCL_V3 }
 
 
 
@@ -254,13 +369,11 @@ class SosFiltfiltThread(ThreadPollInput):
 
 
     def process_data(self, pos, data):
-        print('filtfilt', pos, data.shape)
         with self.mutex:
             pos2, chunk_filtered = self.filter_engine.compute_one_chunk(pos, data)
         
         
         if pos2 is not None:
-            print(pos2, chunk_filtered.shape)
             self.output_stream.send(chunk_filtered, index=pos2)
         
     def set_params(self, engine, coefficients, nb_channel, dtype, chunksize, overlapsize):

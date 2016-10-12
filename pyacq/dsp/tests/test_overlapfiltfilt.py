@@ -102,7 +102,9 @@ def compare_online_offline_engines():
     
 
     if HAVE_PYOPENCL:
-        engines = ['scipy', 'opencl',]
+        #~ engines = ['scipy', 'opencl', 'opencl3']
+        #~ engines = ['scipy', 'opencl',]
+        engines = [ 'opencl3']
     else:
         engines = ['scipy']
     
@@ -126,10 +128,11 @@ def compare_online_offline_engines():
         #TODO loop over overlapsize
         for i in range(nloop):
             #~ print(i)
-            chunk = buffer[i*chunksize:(i+1)*chunksize:,:]
+            pos = (i+1)*chunksize
+            chunk = buffer[pos-chunksize:pos:,:]
             print()
-            print('in', chunk.shape, (i+1)*chunksize)
-            pos, chunk_filtered = filter_engine.compute_one_chunk((i+1)*chunksize, chunk)
+            print('in', chunk.shape, pos)
+            pos, chunk_filtered = filter_engine.compute_one_chunk(pos, chunk)
             
             if pos is not None:
                 print('out', chunk_filtered.shape, pos)
@@ -149,8 +152,9 @@ def compare_online_offline_engines():
         from matplotlib import pyplot
         fig, ax = pyplot.subplots()
         #~ ax.plot(buffer[:, 2], color = 'b')
-        ax.plot(online_arr[:, 2], color = 'r')
         ax.plot(offline_arr[:, 2], color = 'g')
+        ax.plot(online_arr[:, 2], color = 'r', ls='--')
+        
         ax.set_title(engine)
         fig, ax = pyplot.subplots()
         for c in range(nb_channel):
