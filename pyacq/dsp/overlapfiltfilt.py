@@ -41,6 +41,8 @@ class SosFiltfilt_Base:
         self.backward_chunksize = self.chunksize+self.overlapsize
     
     def compute_one_chunk(self, pos, data):
+        assert self.chunksize == data.shape[0], 'Chunksize is bad {} instead of{}'.format(data.shape[0], self.chunksize)
+        
         forward_chunk_filtered = self.compute_forward(data)
         #~ forward_chunk_filtered = forward_chunk_filtered.astype(self.dtype)
         self.forward_buffer.new_chunk(forward_chunk_filtered, index=pos)
@@ -284,8 +286,7 @@ class SosFilfilt_OpenCL_V3(SosFiltfilt_OpenCl_Base):
         event.wait()
         
         pyopencl.enqueue_copy(self.queue,  self.output2, self.output2_cl)
-        
-        if chunk.shape[0]==self.backward_chunksize:        
+        if chunk.shape[0]==self.backward_chunksize:
             forward_chunk_filtered = self.output2
         else:
             #side effect at the begining
@@ -326,8 +327,8 @@ class SosFilfilt_OpenCL_V3(SosFiltfilt_OpenCl_Base):
                 
                 offset_filt2 = chan*nb_section*6+section*6;
                 
-                if (direction==1) {idx = s*nb_channel+chan;}
-                else if (direction==-1) {idx = (chunksize-s-1)*nb_channel+chan;}
+                if (direction==1) {idx = s2*nb_channel+chan;}
+                else if (direction==-1) {idx = (chunksize-s2-1)*nb_channel+chan;}
                 
                 if (section==0)  {w0 = input[idx];}
                 else {w0 = output[idx];}

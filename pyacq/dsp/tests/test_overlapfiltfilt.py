@@ -130,12 +130,12 @@ def compare_online_offline_engines():
             #~ print(i)
             pos = (i+1)*chunksize
             chunk = buffer[pos-chunksize:pos:,:]
-            print()
-            print('in', chunk.shape, pos)
+            #~ print()
+            #~ print('in', chunk.shape, pos)
             pos, chunk_filtered = filter_engine.compute_one_chunk(pos, chunk)
             
             if pos is not None:
-                print('out', chunk_filtered.shape, pos)
+                #~ print('out', chunk_filtered.shape, pos)
                 
                 #~ print(online_arr[pos-chunk_filtered.shape[0]:pos,:].shape)
                 #~ print(online_arr.shape)
@@ -144,6 +144,7 @@ def compare_online_offline_engines():
         offline_arr = offline_arr[:-overlapsize, :]
         online_arr = online_arr[:-overlapsize, :]
         
+        print(np.mean(np.abs(offline_arr.astype('float64'))))
         residual = np.abs((online_arr.astype('float64')-offline_arr.astype('float64'))/np.mean(np.abs(offline_arr.astype('float64'))))
         print(np.max(residual))
         #~ print(np.mean(np.abs(offline_arr.astype('float64'))))
