@@ -1,5 +1,15 @@
 """
 Some benchmark to compare CPU with numpy solution and home made OpenCL implementation.
+
+For each filter there is several implementation that do not have
+the same bench depending on the hardware.
+On nvidia, the opencl seems to be the faster.
+On intel GPU, opencl3 seems to be the faster.
+In any case for low, nb_channel and nb_section scipy (CPU) implementation 
+is the fastest.
+
+
+
 """
 import numpy as np
 import pyopencl
@@ -116,6 +126,6 @@ def benchmark_overlapfiltfilt():
     
     
 if __name__ == '__main__':
-    #~ benchmark_sosfilter()
-    benchmark_overlapfiltfilt()
+    benchmark_sosfilter()
+    #~ benchmark_overlapfiltfilt()
 
