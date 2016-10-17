@@ -201,6 +201,7 @@ class InputStream(object):
             
         # allow some keys in self.spec to override self.params
         readonly_params = ['protocol', 'transfermode', 'shape', 'dtype']
+        #~ readonly_params = ['protocol', 'transfermode', 'dtype'] # TODO make something for shape
         for k,v in self.spec.items():
             if k in readonly_params and v != self.params[k]:
                 raise ValueError("InputStream parameter %s=%s does not match connected output %s=%s." %
