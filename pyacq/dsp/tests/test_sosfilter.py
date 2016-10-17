@@ -126,7 +126,7 @@ def compare_online_offline_engines():
         for i in range(nloop):
             #~ print(i)
             chunk = buffer[i*chunksize:(i+1)*chunksize,:]
-            chunk_filtered = filter_engine.compute_one_chunk(chunk)
+            chunk_filtered = filter_engine.compute_one_chunk(None, chunk)
             #~ print(chunk_filtered.shape)
             #~ print(online_arr[i*chunksize:(i+1)*chunksize,:])
             online_arr[i*chunksize:(i+1)*chunksize,:] = chunk_filtered
@@ -140,8 +140,8 @@ def compare_online_offline_engines():
     
         from matplotlib import pyplot
         fig, ax = pyplot.subplots()
-        ax.plot(online_arr[:, 2], color = 'r')
         ax.plot(offline_arr[:, 2], color = 'g')
+        ax.plot(online_arr[:, 2], color = 'r', ls='--')
         fig, ax = pyplot.subplots()
         for c in range(nb_channel):
             ax.plot(residual[:, c], color = 'k')

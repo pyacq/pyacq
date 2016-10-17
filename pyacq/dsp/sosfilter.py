@@ -39,7 +39,7 @@ class SosFilter_Scipy:
         self.dtype=dtype
         self.chunksize = chunksize
     
-    def compute_one_chunk(self, chunk):
+    def compute_one_chunk(self, pos, chunk):
         chunk_filtered, self.zi = scipy.signal.sosfilt(self.coefficients, chunk, zi = self.zi, axis = 0)
         chunk_filtered = chunk_filtered.astype(self.dtype)
         return chunk_filtered
@@ -95,7 +95,7 @@ class SosFilter_OpenCL_V1(SosFilter_OpenCl_Base):
         self.output = np.zeros((self.chunksize, self.nb_channel), dtype= self.dtype)
         self.kernel_func_name = 'sos_filter'
     
-    def compute_one_chunk(self, chunk):
+    def compute_one_chunk(self, pos, chunk):
         assert chunk.dtype==self.dtype
         assert chunk.shape==(self.chunksize, self.nb_channel), 'wrong shape'
         
@@ -173,7 +173,7 @@ class SosFilter_OpenCL_V2:
         self.output = np.zeros((self.nb_channel,self.chunksize), dtype= self.dtype)
         self.kernel_func_name = 'sos_filter'
         
-    def compute_one_chunk(self, chunk):
+    def compute_one_chunk(self, pos, chunk):
         assert chunk.dtype==self.dtype
         assert chunk.shape==(self.chunksize, self.nb_channel), 'wrong shape'
         
@@ -249,17 +249,17 @@ class SosFilter_OpenCL_V2:
 
 class SosFilter_OpenCL_V3(SosFilter_OpenCl_Base):
     """
-    Implementation with OpenCL : this version scale nb_channel and nb_section
-    at the same time.
+    Implementation with OpenCL : similar to SosFilter_OpenCL_V2 but with global
+    memory and no transpose on host.
     """
     def __init__(self, coefficients, nb_channel, dtype, chunksize):
         SosFilter_OpenCl_Base.__init__(self, coefficients, nb_channel, dtype, chunksize)
         self.global_size = (self.nb_channel, self.nb_section)
-        self.local_size = (self.nb_channel, self.nb_section)
+        self.local_size = (1, self.nb_section)
         self.output = np.zeros((self.chunksize, self.nb_channel), dtype= self.dtype)
         self.kernel_func_name = 'sos_filter'
     
-    def compute_one_chunk(self, chunk):
+    def compute_one_chunk(self, pos, chunk):
         assert chunk.dtype==self.dtype
         assert chunk.shape==(self.chunksize, self.nb_channel), 'wrong shape'
         
@@ -344,7 +344,7 @@ class SosFilterThread(ThreadPollInput):
 
     def process_data(self, pos, data):
         with self.mutex:
-            chunk_filtered = self.filter_engine.compute_one_chunk(data)
+            chunk_filtered = self.filter_engine.compute_one_chunk(pos, data)
         self.output_stream.send(chunk_filtered, index=pos)
         
     def set_params(self, engine, coefficients, nb_channel, dtype, chunksize):
