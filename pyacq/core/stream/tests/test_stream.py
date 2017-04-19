@@ -2,6 +2,7 @@ import time
 import timeit
 import pytest
 import sys
+import os
 
 from pyacq.core.stream import OutputStream, InputStream, RingBuffer
 import numpy as np
@@ -56,7 +57,7 @@ def check_stream(chunksize=1024, chan_shape=(16,), **kwds):
         outstream.send(arr)
         
         # recv
-        index, arr2 = instream.recv()
+        index, arr2 = instream.recv(return_data=True)
         assert index == outstream.last_index
         assert np.all((arr-arr2)==0.)
 
@@ -108,6 +109,8 @@ def check_stream_ringbuffer(**kwds):
 
 if __name__ == '__main__':
     test_stream_plaindata()
-    test_stream_sharedarray()
-    test_autoswapaxes()
+    test_stream_sharedmem()
+    test_plaindata_ringbuffer()
+    test_sharedmem_ringbuffer()
+    
 

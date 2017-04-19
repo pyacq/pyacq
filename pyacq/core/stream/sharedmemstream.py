@@ -39,7 +39,7 @@ class SharedMemReceiver(DataReceiver):
 
         self.size = self.params['buffer_size']
         shape = (self.size,) + tuple(self.params['shape'][1:])
-        self.buffer = RingBuffer(shape=shape, dtype=self.params['dtype'],
+        self.buffer = RingBuffer(shape=shape, dtype=self.params['dtype'], double=self.params['double'],
                                  shmem=self.params['shm_id'], axisorder=self.params['axisorder'])
 
     #~ def recv(self, return_data=True):
