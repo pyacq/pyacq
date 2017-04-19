@@ -31,7 +31,7 @@ class ThreadSender(QtCore.QThread):
             arr = np.random.rand(chunksize, nb_channel).astype(stream_spec['dtype'])
             self.output_stream().send(arr, index=index)
             time.sleep(chunksize/sr)
-        self.terminated.emit()
+        self.finished.emit()
 
 
 def test_ThreadPollInput():
@@ -60,7 +60,7 @@ def test_ThreadPollInput():
         poller.wait()
         app.quit()
     
-    sender.terminated.connect(terminate)
+    sender.finished.connect(terminate)
     poller.new_data.connect(on_new_data)
     
     poller.start()
@@ -81,10 +81,9 @@ def test_streamconverter():
     sender = ThreadSender(output_stream=outstream)
     
     stream_spec2 = dict(protocol='tcp', interface='127.0.0.1', port='*', 
-                   transfermode='sharedarray', streamtype='analogsignal',
-                   dtype='float32', shape=(nb_channel, -1), timeaxis = 1, 
-                   compression ='', scale = None, offset = None, units = '',
-                   sharedarray_shape = (nb_channel, chunksize*20), ring_buffer_method = 'double',
+                   transfermode='sharedmem', streamtype='analogsignal',
+                   dtype='float32', shape=(-1, nb_channel), buffer_size=1000,
+                   double=True,
                    )
 
     
@@ -108,13 +107,13 @@ def test_streamconverter():
     
     def terminate():
         sender.wait()
-        conv.stop()        
+        #~ conv.stop()
         poller.stop()
         poller.wait()
         app.quit()
 
-    poller = ThreadPollInput(input_stream=instream)
-    sender.terminated.connect(terminate)
+    poller = ThreadPollInput(input_stream=instream, return_data=None)
+    sender.finished.connect(terminate)
     poller.new_data.connect(on_new_data)
     
     
@@ -160,7 +159,7 @@ def test_stream_splitter():
             poller.wait()
         app.quit()
 
-    sender.terminated.connect(terminate)
+    sender.finished.connect(terminate)
     
     for poller in all_poller:
         poller.start()
@@ -174,6 +173,6 @@ def test_stream_splitter():
     
 
 if __name__ == '__main__':
-    #~ test_ThreadPollInput()
-    #~ test_streamconverter()
+    test_ThreadPollInput()
+    test_streamconverter()
     test_stream_splitter()

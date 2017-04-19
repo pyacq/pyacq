@@ -72,13 +72,13 @@ def test_stream_between_remote_nodes():
     # start them for a while
     sender.start()
     receiver.start()
-    print(nodegroup.any_node_running())
+    #~ print(nodegroup.any_node_running())
     
     time.sleep(2.)
     
     sender.stop()
     receiver.stop()
-    print(nodegroup.any_node_running())
+    #~ print(nodegroup.any_node_running())
     
     man.close()
 
@@ -166,7 +166,7 @@ def test_visual_node_both_in_main_qapp_and_remote_qapp():
     sender.start()
     receiver0.start()
     receiver1.start()
-    print(nodegroup.any_node_running())
+    #~ print(nodegroup.any_node_running())
 
     def terminate():
         sender.stop()

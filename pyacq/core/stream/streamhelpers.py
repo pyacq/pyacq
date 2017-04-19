@@ -32,7 +32,7 @@ class DataReceiver:
         self.params = params
         self.buffer = None
             
-    def recv(self):
+    def recv(self, return_data=False):
         raise NotImplementedError()
     
     def close(self):
