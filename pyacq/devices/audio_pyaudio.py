@@ -93,12 +93,19 @@ class PyAudio(Node):
                 raise ValueError(msg) from err
 
         self.output.spec['shape'] = (chunksize, self.nb_channel)
+        #~ self.output.spec['shape'] = (-1, self.nb_channel)
         self.output.spec['nb_channel'] = self.nb_channel
-        self.output.spec['dtype = '] = format
+        self.output.spec['dtype'] = format
         self.output.spec['sample_rate'] = float(int(self.sample_rate))
         gains = {'int16': 1./2**15, 'int32': 1./2**31, 'float32':1.}
         self.output.spec['gain'] = gains[self.format]
         self.output.spec['offset'] = 0.
+
+        self.input.spec['shape'] = (chunksize, self.nb_channel)
+        #~ self.input.spec['shape'] = (-1, self.nb_channel)
+        self.input.spec['nb_channel'] = self.nb_channel
+        self.input.spec['dtype'] = format
+        
     
     def check_input_specs(self):
         pass
@@ -131,16 +138,15 @@ class PyAudio(Node):
                     frames_per_buffer=self._chunksize,
                     stream_callback=self._audiocallback,
                     start=False)
-        self._head = 0
         
         # outbuffer
         size = self.nb_channel * self._chunksize * np.dtype(self.format).itemsize
-        self.enmpty_outputbuffer = b'\x00' * size
+        self.empty_outputbuffer = b'\x00' * size
         self.out_queue = collections.deque()
         self.lock = Mutex()
         
         if self.output_device_index is not None:
-            self.thread = ThreadPollInput(self.input)
+            self.thread = ThreadPollInput(self.input, return_data=True)
             self.thread.new_data.connect(self._new_output_buffer)
     
     def _start(self):
@@ -162,15 +168,16 @@ class PyAudio(Node):
     def _audiocallback(self, in_data, frame_count, time_info, status):
         #~ print('audiocallback', len(self.out_queue))
         if in_data is not None:
-            self._head += self._chunksize
-            self.output.send(self._head, in_data)
+            data = np.frombuffer(in_data, dtype=self.output.spec['dtype'])
+            data = data.reshape(frame_count, *self.output.spec['shape'][1:])
+            self.output.send(data)
         with self.lock:
             if len(self.out_queue)>0:
                 out = self.out_queue.popleft()
             else:
                 logging.info('Node PyAudio', self.name, 'lost output buffer')
                 #~ print('lost output buffer')
-                out = self.enmpty_outputbuffer
+                out = self.empty_outputbuffer
         return (out, pyaudio.paContinue)    
     
     def _new_output_buffer(self, pos, data):

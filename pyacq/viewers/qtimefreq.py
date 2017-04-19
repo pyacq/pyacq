@@ -73,7 +73,7 @@ class QTimeFreq(WidgetNode):
     This node requires its input stream to use:
     
     * ``transfermode==sharedarray``
-    * ``timeaxis==1``
+    * ``axisorder==[1,0]``
     
     If the input stream does not meet these requirements, then a StreamConverter
     will be created to proxy the input.
@@ -97,7 +97,8 @@ class QTimeFreq(WidgetNode):
     
     """
     
-    _input_specs = {'signal': dict(streamtype='signals', shape=(-1), )}
+    #~ _input_specs = {'signal': dict(streamtype='signals', shape=(-1), )}
+    _input_specs = {'signal': dict(streamtype='signals', )}
     
     _default_params = default_params
     _default_by_channel_params = default_by_channel_params
@@ -122,12 +123,14 @@ class QTimeFreq(WidgetNode):
         
     
     def _initialize(self, ):
+        assert len(self.input.params['shape']) == 2, 'Are you joking ?'
         self.sample_rate = sr = self.input.params['sample_rate']
-        d0, d1 = self.input.params['shape']
-        self.nb_channel = self.input.params['nb_channel']
+        self.nb_channel = self.input.params['shape'][1]
+        buf_size = int(self.input.params['sample_rate'] * self.max_xsize)
         
         # create proxy input to ensure sharedarray with time axis 1
-        if self.input.params['transfermode'] == 'sharedarray' and self.input.params['timeaxis'] == 1:
+        if self.input.params['transfermode'] == 'sharedmem' and self.input.params['axisorder'] is not None \
+                and tuple(self.input.params['axisorder']) == (1,0):
             self.conv = None
         else:
             # if input is not transfermode creat a proxy
@@ -143,21 +146,16 @@ class QTimeFreq(WidgetNode):
             input_spec = dict(self.input.params)
             self.conv.input.connect(input_spec)
             
-            if self.input.params['timeaxis']==0:
-                new_shape = (d1, d0)
-            else:
-                new_shape = (d0, d1)
             self.conv.output.configure(protocol='tcp', interface='127.0.0.1', port='*', dtype='float32',
-                   transfermode='sharedarray', streamtype='analogsignal', shape=new_shape, timeaxis=1, 
-                   compression='', scale=None, offset=None, units='',
-                   sharedarray_shape=(self.nb_channel, int(sr*self.max_xsize)), ring_buffer_method = 'double',
+                   transfermode='sharedmem', streamtype='analogsignal', buffer_size=buf_size,
+                   axisorder=[1,0], shape=(-1, self.nb_channel), double=True, fill=0,
                    )
             self.conv.initialize()
             
         self.workers = []
         self.input_maps = []
 
-        self.global_poller = ThreadPollInput(input_stream=self.input)
+        self.global_poller = ThreadPollInput(input_stream=self.input, return_data=None)
         self.global_timer = QtCore.QTimer(interval=500)
         self.global_timer.timeout.connect(self.compute_maps)
         
@@ -173,7 +171,7 @@ class QTimeFreq(WidgetNode):
                 ng = self.nodegroup_friends[i%max(len(self.nodegroup_friends)-1, 1)]
                 worker = ng.create_node('TimeFreqWorker')
                 worker.ng_proxy = ng
-            worker.configure(max_xsize=self.max_xsize, channel=i, local=self.local_workers)
+            worker.configure(channel=i, local=self.local_workers)
             worker.input.connect(self.conv.output)
             if self.local_workers:
                 protocol = 'inproc'
@@ -198,7 +196,7 @@ class QTimeFreq(WidgetNode):
             if self.local_workers:
                 worker.wt_map_done.connect(self.on_new_map_local)
             else:
-                poller = ThreadPollInput(input_stream=input_map)
+                poller = ThreadPollInput(input_stream=input_map, return_data=True)
                 poller.new_data.connect(self.on_new_map_socket)
                 poller.chan = i
                 self.map_pollers.append(poller)
@@ -530,8 +528,8 @@ class ComputeThread(QtCore.QThread):
     """
     def __init__(self, in_stream, out_stream, channel, local, parent=None):
         QtCore.QThread.__init__(self, parent)
-        self.in_stream = weakref.ref(in_stream)
-        self.out_stream = weakref.ref(out_stream)
+        self.in_stream = in_stream
+        self.out_stream = out_stream
         self.channel = channel
         self.local = local
         
@@ -553,7 +551,12 @@ class ComputeThread(QtCore.QThread):
         
         if downsample_factor>1:
             head = head - head%downsample_factor
-        full_arr = self.in_stream().get_array_slice(head, sig_chunk_size, autoswapaxes = False)[self.channel, :]
+        
+        #full_arr = self.in_stream[head-sig_chunk_size:head, self.channel] #TODO keep this when working
+        #~ full_arr = self.in_stream[-sig_chunk_size:, self.channel]
+        full_arr = self.in_stream.get_data(head-sig_chunk_size, head, copy=False, join=True)[:, self.channel]
+        #~ print(full_arr.flags)
+        
         
         #~ t2 = time.time()
         
@@ -569,9 +572,8 @@ class ComputeThread(QtCore.QThread):
         wt = scipy.fftpack.fftshift(wt_tmp,axes=[0])
         wt = np.abs(wt).astype('float32')
         wt = wt[-plot_length:]
-        
         #~ self.last_wt_map = wt
-        self.out_stream().send(head, wt)
+        self.out_stream.send(wt, index=head)
         #~ t3 = time.time()
         
         # print('compute', self.channel,  t2-t1, t3-t2, t3-t1, QtCore.QThread.currentThreadId())
@@ -594,7 +596,7 @@ class TimeFreqWorker(Node, QtCore.QObject):
 
     For visualization of this analysis, use QTimeFreq.
     """
-    _input_specs = {'signal': dict(streamtype='signals', transfermode='sharedarray', timeaxis=1, ring_buffer_method='double')}
+    _input_specs = {'signal': dict(streamtype='signals', transfermode='sharedmem', axisorder=[1,0], double=True)}
     _output_specs = {'timefreq': dict(streamtype='image', dtype='float32')}
     
     wt_map_done = QtCore.pyqtSignal(int)
@@ -604,19 +606,17 @@ class TimeFreqWorker(Node, QtCore.QObject):
         Node.__init__(self, **kargs)
         assert HAVE_SCIPY, "TimeFreqWorker node depends on the `scipy` package, but it could not be imported."
     
-    def _configure(self, max_xsize=60., channel=None, local=True):
-        self.max_xsize = max_xsize
+    def _configure(self, channel=None, local=True):
         self.channel = channel
         self.local = local
     
     def after_input_connect(self, inputname):
         assert len(self.input.params['shape']) == 2, 'Wrong shape: TimeFreqWorker'
-        assert self.input.params['timeaxis'] == 1, 'Wrong timeaxis: TimeFreqWorker'
-        assert self.input.params['transfermode'] == 'sharedarray', 'Wrong shape: sharedarray'
-        
-        
+    
     def _initialize(self):
         self.sample_rate = sr = self.input.params['sample_rate']
+        self.input.set_buffer(size=self.input.params['buffer_size'], axisorder=self.input.params['axisorder'],
+                double=self.input.params['double'])#TODO this should be removed when automatic for sharedmem
         self.thread = ComputeThread(self.input, self.output, self.channel, self.local)
         self.thread.finished.connect(self.on_thread_done)
 
@@ -653,6 +653,7 @@ class TimeFreqWorker(Node, QtCore.QObject):
     
     def compute_one_map(self, head):
         assert self.running(), 'TimeFreqWorker is not running'
+        
         if self.thread.isRunning():
             return
         if self.closed():

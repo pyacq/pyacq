@@ -201,9 +201,9 @@ class Emotiv(Node, QtCore.QObject):
         self.gyro[1] = data[30] - 105  # Y
         
         self.n += 1
-        self.outputs['signals'].send(self.n, self.values)
-        self.outputs['impedances'].send(self.n, self.imp)
-        self.outputs['gyro'].send(self.n, self.gyro)
+        self.outputs['signals'].send(self.values, index=self.n)
+        self.outputs['impedances'].send(self.imp, index=self.n)
+        self.outputs['gyro'].send(self.gyro, index=self.n)
 
     def win_emotiv_process(self, data):
         #assert data[0] == 0

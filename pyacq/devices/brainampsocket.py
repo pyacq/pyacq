@@ -72,7 +72,7 @@ class BrainAmpThread(QtCore.QThread):
                 sigs = np.frombuffer(rawdata[hs:hs+sigsize], dtype=dt)
                 sigs = sigs.reshape(points, self.nb_channel)
                 head += points
-                self.outputs['signals'].send(head, sigs)
+                self.outputs['signals'].send(sigs, index=head)
 
                 # Extract markers
                 markers = np.empty((nb_marker,), dtype=_dtype_trigger)
@@ -83,7 +83,7 @@ class BrainAmpThread(QtCore.QThread):
                     markers['type'][m], markers['description'][m] = rawdata[index+16:index+markersize].tostring().split('\x00')[:2]
                     index = index + markersize
                 head_marker += nb_marker
-                self.outputs['triggers'].send(nb_marker, markers)
+                self.outputs['triggers'].send(markers, index=nb_marker)
         
         brainamp_socket.close()
     

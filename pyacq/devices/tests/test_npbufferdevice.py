@@ -25,11 +25,11 @@ def test_npbufferdevice():
     
     nodegroup.start_all_nodes()
     
-    print(nodegroup.any_node_running())
+    #~ print(nodegroup.any_node_running())
     time.sleep(1.)
     
     nodegroup.stop_all_nodes()
-    print(nodegroup.any_node_running())
+    #~ print(nodegroup.any_node_running())
     
     man.close()
     
