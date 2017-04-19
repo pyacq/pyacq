@@ -77,7 +77,8 @@ def check_stream_ringbuffer(**kwds):
     stream_spec = dict(protocol='tcp', interface='127.0.0.1', port='*', 
                        transfermode='plaindata', streamtype='analogsignal',
                        dtype='float32', shape=chunk_shape, compression='',
-                       scale=None, offset=None, units='', axisorder=None)
+                       scale=None, offset=None, units='', axisorder=None,
+                       double=True)
     stream_spec.update(kwds)
     print("  %s" % kwds)
     
@@ -86,7 +87,8 @@ def check_stream_ringbuffer(**kwds):
     
     instream = InputStream()
     instream.connect(outstream)
-    instream.set_buffer(stream_spec['buffer_size'], axisorder=stream_spec['axisorder'])
+    instream.set_buffer(stream_spec['buffer_size'], axisorder=stream_spec['axisorder'],
+                double=stream_spec['double'])
     
     # Make sure we are re-using sharedmem buffer
     if instream.receiver.buffer is not None:
