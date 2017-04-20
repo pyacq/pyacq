@@ -39,8 +39,8 @@ class DataReceiver:
         self.params = params
         #~ if isinstance(self.params, ObjectProxy):
             #~ self.params = self.params._get_value()
-        #~ if 'dtype' in self.params:
-            #~ self.params['dtype'] = make_dtype(self.params['dtype'])
+        if 'dtype' in self.params:
+            self.params['dtype'] = make_dtype(self.params['dtype'])
         self.buffer = None
             
     def recv(self, return_data=False):
