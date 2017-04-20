@@ -161,6 +161,29 @@ class OutputStream(object):
         del self.sender
 
 
+def _shape_equal(shape1, shape2):
+    """
+    Check if shape of stream are compatible.
+    More or less shape1==shape2 but deal with:
+      * shape can be list or tupple
+      * shape can have one dim with -1
+    """
+    shape1 = list(shape1)
+    shape2 = list(shape2)
+    if len(shape1) != len(shape2):
+        return False
+    
+    for i in range(len(shape1)):
+        if shape1[i]==-1 or shape2[i]==-1:
+            continue
+        if shape1[i]!=shape2[i]:
+            return False
+    
+    return True
+    
+    
+    
+
 class InputStream(object):
     """Class for streaming data from an OutputStream.
     
@@ -200,15 +223,22 @@ class InputStream(object):
             self.url = '{protocol}://{interface}:{port}'.format(**self.params)
             
         # allow some keys in self.spec to override self.params
-        readonly_params = ['protocol', 'transfermode', 'shape', 'dtype']
+        readonly_params = ['protocol', 'transfermode']#, 'shape', 'dtype']
         #~ readonly_params = ['protocol', 'transfermode', 'dtype'] # TODO make something for shape
         for k,v in self.spec.items():
-            if k in readonly_params and v != self.params[k]:
-                raise ValueError("InputStream parameter %s=%s does not match connected output %s=%s." %
-                                 (k, v, k, self.params[k]))
+            if k in readonly_params:
+                if k=='shape':
+                    valid = _shape_equal(v, self.params[k])
+                elif k=='dtype':
+                    valid = np.dtype(v) == np.dtype(self.params[k])
+                else:
+                    valid = (v == self.params[k])
+                if not valid:
+                    raise ValueError("InputStream parameter %s=%s does not match connected output %s=%s." %
+                                (k, v, k, self.params[k]))
             else:
                 self.params[k] = v
-
+        
         context = zmq.Context.instance()
         self.socket = context.socket(zmq.SUB)
         self.socket.setsockopt(zmq.SUBSCRIBE, b'')
