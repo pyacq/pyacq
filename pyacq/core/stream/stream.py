@@ -7,6 +7,7 @@ import weakref
 from .ringbuffer import RingBuffer
 from .streamhelpers import all_transfermodes
 from ..rpc import ObjectProxy
+from .arraytools import make_dtype
 
 
 default_stream = dict(
@@ -180,8 +181,11 @@ def _shape_equal(shape1, shape2):
             return False
     
     return True
+
+
+
     
-    
+
     
 
 class InputStream(object):
@@ -224,13 +228,13 @@ class InputStream(object):
             
         # allow some keys in self.spec to override self.params
         readonly_params = ['protocol', 'transfermode', 'shape', 'dtype']
-        #~ readonly_params = ['protocol', 'transfermode', 'dtype'] # TODO make something for shape
         for k,v in self.spec.items():
             if k in readonly_params:
                 if k=='shape':
                     valid = _shape_equal(v, self.params[k])
                 elif k=='dtype':
-                    valid = np.dtype(v) == np.dtype(self.params[k])
+                    #~ valid = v == self.params[k]
+                    valid = make_dtype(v) == make_dtype(self.params[k])
                 else:
                     valid = (v == self.params[k])
                 if not valid:
@@ -332,7 +336,7 @@ class InputStream(object):
             
         # attach a new buffer
         shape = (size,) + tuple(self.params['shape'][1:])
-        dtype = self.params['dtype']
+        dtype = make_dtype(self.params['dtype'])
         #~ self.buffer = RingBuffer(shape=shape, dtype=dtype, double=double, axisorder=axisorder)
         self.buffer = RingBuffer(shape=shape, dtype=dtype, double=double, axisorder=axisorder, shmem=shmem, fill=fill)
         self._own_buffer = True

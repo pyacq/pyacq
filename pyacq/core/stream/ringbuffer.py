@@ -1,6 +1,7 @@
 import numpy as np
 
 from .sharedarray import SharedMem, SharedArray
+from .arraytools import make_dtype
 
 
 class RingBuffer:
@@ -27,17 +28,17 @@ class RingBuffer:
         
         # initialize int buffers with 0 and float buffers with nan
         if fill is None:
-            fill = 0 if np.dtype(dtype).kind in 'ui' else np.nan
+            fill = 0 if make_dtype(dtype).kind in 'ui' else np.nan
         self._filler = fill
         
         if shmem is None:
-            self.buffer = np.empty(nativeshape, dtype=dtype).transpose(np.argsort(axisorder))
+            self.buffer = np.empty(nativeshape, dtype=make_dtype(dtype)).transpose(np.argsort(axisorder))
             self.buffer[:] = self._filler
             self._indexes = np.zeros((2,), dtype='int64')
             self._shmem = None
             self.shm_id = None
         else:
-            size = np.product(shape) * np.dtype(dtype).itemsize + 16
+            size = np.product(shape) * make_dtype(dtype).itemsize + 16
             if shmem is True:
                 # create new shared memory buffer
                 self._shmem = SharedMem(nbytes=size)
