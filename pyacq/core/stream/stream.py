@@ -223,7 +223,7 @@ class InputStream(object):
             self.url = '{protocol}://{interface}:{port}'.format(**self.params)
             
         # allow some keys in self.spec to override self.params
-        readonly_params = ['protocol', 'transfermode']#, 'shape', 'dtype']
+        readonly_params = ['protocol', 'transfermode', 'shape', 'dtype']
         #~ readonly_params = ['protocol', 'transfermode', 'dtype'] # TODO make something for shape
         for k,v in self.spec.items():
             if k in readonly_params:
