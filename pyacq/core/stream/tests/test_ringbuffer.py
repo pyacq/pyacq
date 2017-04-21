@@ -141,3 +141,8 @@ def test_ringbuffer_shm():
     assert buf2.index() == buf1.index()
     assert np.all(buf1[:] == buf2[:])
 
+
+
+if __name__ =='__main__':
+    test_ringbuffer()
+    test_ringbuffer_shm()

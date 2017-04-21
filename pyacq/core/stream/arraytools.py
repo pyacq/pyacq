@@ -108,5 +108,8 @@ def make_dtype(dt):
     elif isinstance(dt, list):
         dt = np.dtype([ (k,v) for k,v in dt])
     else:
-        raise(NotImplementedError('make_dtype {}'.format(type(dt))))
+        try:
+            dt = np.dtype(dt)
+        except:
+            raise(NotImplementedError('make_dtype {} {}'.format(dt, type(dt))))
     return dt
