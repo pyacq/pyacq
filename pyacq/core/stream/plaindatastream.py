@@ -74,7 +74,7 @@ class PlainDataReceiver(DataReceiver):
             raise ValueError("Unknown compression method '%s'" % comp)
         
         # convert to array
-        dtype = make_dtype(self.params['dtype'])
+        dtype = make_dtype(self.params['dtype']) # this avoid some bugs but is not efficient because this is call every sends...
         #~ dtype = self.params['dtype']
         data = np.ndarray(buffer=data, shape=shape,
                           strides=strides, offset=offset, dtype=dtype)        

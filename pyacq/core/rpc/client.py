@@ -369,7 +369,7 @@ class RPCClient(object):
         #self.send('release_all', return_type=None) 
         self._socket.close()
 
-    def close_server(self, sync='sync', **kwds):
+    def close_server(self, sync='sync', timeout=1.0, **kwds):
         """Ask the server to close.
         
         The server returns True if it has closed. All clients known to the
@@ -380,7 +380,7 @@ class RPCClient(object):
         """
         if self.disconnected():
             return True
-        return self.send('close', sync=sync, **kwds)
+        return self.send('close', sync=sync, timeout=timeout, **kwds)
 
     def measure_clock_diff(self):
         rcounter = self._import('time').perf_counter
