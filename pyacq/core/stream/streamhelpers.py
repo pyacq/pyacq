@@ -1,3 +1,6 @@
+from .arraytools import make_dtype
+from pyacq.core.rpc.proxy import ObjectProxy
+
 all_transfermodes = {}
 
 def register_transfermode(modename, sender, receiver):
@@ -13,6 +16,10 @@ class DataSender:
     def __init__(self, socket, params):
         self.socket = socket
         self.params = params
+        #~ if isinstance(self.params, ObjectProxy):
+            #~ self.params = self.params._get_value()
+        #~ if 'dtype' in self.params:
+            #~ self.params['dtype'] = make_dtype(self.params['dtype'])
         self.funcs = []
 
     def send(self, index, data):
@@ -30,9 +37,13 @@ class DataReceiver:
     def __init__(self, socket, params):
         self.socket = socket
         self.params = params
+        #~ if isinstance(self.params, ObjectProxy):
+            #~ self.params = self.params._get_value()
+        #~ if 'dtype' in self.params:
+            #~ self.params['dtype'] = make_dtype(self.params['dtype'])
         self.buffer = None
             
-    def recv(self):
+    def recv(self, return_data=False):
         raise NotImplementedError()
     
     def close(self):

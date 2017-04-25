@@ -15,7 +15,7 @@ length = int(sample_rate*20)
 t = np.arange(length)/sample_rate
 buffer = np.random.rand(length, nb_channel)*.3
 buffer[:, 0] = 0
-for i in range(1,20):
+for i in range(1,5):
     buffer[(t>i)&(t<i+.4), 0] = 2.
     if i%3==0:
         #add  rebounce every 3 triggers
@@ -44,12 +44,12 @@ def setup_nodes():
     return dev, trigger
 
 
-def test_AnalogTrigger_nodebounce():
+def check_trigger(debounce_time, debounce_mode, targeted_trigs):
     app = pg.mkQApp()
     
     dev, trigger = setup_nodes()
-    trigger.params['debounce_time'] = 0.1
-    trigger.params['debounce_mode'] = 'no-debounce'
+    trigger.params['debounce_time'] = debounce_time
+    trigger.params['debounce_mode'] = debounce_mode
     
     all_triggers = []
     def on_new_trigger(pos, indexes):
@@ -76,84 +76,125 @@ def test_AnalogTrigger_nodebounce():
     timer.start()
     
     app.exec_()
-    target = [1001, 2001, 3001, 3015, 3025, 4001]
-    assert np.array_equal(all_triggers, target), '{} should be {}'.format(all_triggers, target)
+
+    assert np.array_equal(all_triggers, targeted_trigs), '{} should be {}'.format(all_triggers, targeted_trigs)    
+    
+
+def test_AnalogTrigger_nodebounce():
+    targeted_trigs = [1001, 2001, 3001, 3015, 3025, 4001]
+    check_trigger(0.1, 'no-debounce', targeted_trigs)
+    
+    #~ app = pg.mkQApp()
+    
+    #~ dev, trigger = setup_nodes()
+    #~ trigger.params['debounce_time'] = 0.1
+    #~ trigger.params['debounce_mode'] = 'no-debounce'
+    
+    #~ all_triggers = []
+    #~ def on_new_trigger(pos, indexes):
+        #~ print(pos, indexes)
+        #~ all_triggers.extend(indexes)
+    #~ poller = ThreadPollOutput(trigger.output, return_data=True)
+    #~ poller.new_data.connect(on_new_trigger)
+    
+    #~ poller.start()
+    #~ trigger.start()
+    #~ dev.start()
+    
+    
+    #~ def terminate():
+        #~ dev.stop()
+        #~ trigger.stop()
+        #~ poller.stop()
+        #~ poller.wait()
+        #~ app.quit()
+    
+    #~ # start for a while
+    #~ timer = QtCore.QTimer(singleShot=True, interval=5000)
+    #~ timer.timeout.connect(terminate)
+    #~ timer.start()
+    
+    #~ app.exec_()
+    #~ target = [1001, 2001, 3001, 3015, 3025, 4001]
+    #~ assert np.array_equal(all_triggers, target), '{} should be {}'.format(all_triggers, target)
 
 
 
 def test_AnalogTrigger_after_stable():
-    app = pg.mkQApp()
+    targeted_trigs = [1001, 2001,  3025, 4001]
+    check_trigger(0.1,  'after-stable', targeted_trigs)
     
-    dev, trigger = setup_nodes()
-    trigger.params['debounce_time'] = 0.1
-    trigger.params['debounce_mode'] = 'after-stable'
+    #~ app = pg.mkQApp()
     
-    all_triggers = []
-    def on_new_trigger(pos, indexes):
+    #~ dev, trigger = setup_nodes()
+    #~ trigger.params['debounce_time'] = 0.1
+    #~ trigger.params['debounce_mode'] = 'after-stable'
+    
+    #~ all_triggers = []
+    #~ def on_new_trigger(pos, indexes):
         #~ print(pos, indexes)
-        all_triggers.extend(indexes)
-    poller = ThreadPollOutput(trigger.output, return_data=True)
-    poller.new_data.connect(on_new_trigger)
+        #~ all_triggers.extend(indexes)
+    #~ poller = ThreadPollOutput(trigger.output, return_data=True)
+    #~ poller.new_data.connect(on_new_trigger)
     
-    dev.start()
-    trigger.start()
-    poller.start()
+    #~ dev.start()
+    #~ trigger.start()
+    #~ poller.start()
     
-    def terminate():
-        dev.stop()
-        trigger.stop()
-        poller.stop()
-        poller.wait()
-        app.quit()
+    #~ def terminate():
+        #~ dev.stop()
+        #~ trigger.stop()
+        #~ poller.stop()
+        #~ poller.wait()
+        #~ app.quit()
     
-    # start for a while
-    timer = QtCore.QTimer(singleShot=True, interval=5000)
-    timer.timeout.connect(terminate)
-    timer.start()
+    #~ # start for a while
+    #~ timer = QtCore.QTimer(singleShot=True, interval=5000)
+    #~ timer.timeout.connect(terminate)
+    #~ timer.start()
     
-    app.exec_()
-    #~ print(all_triggers)
-    #~ assert np.array_equal(all_triggers, [1001, 2001,  3025, 4001])
-    target = [1001, 2001,  3025, 4001]
-    assert np.array_equal(all_triggers, target), '{} should be {}'.format(all_triggers, target)
+    #~ app.exec_()
+    #~ target = [1001, 2001,  3025, 4001]
+    #~ assert np.array_equal(all_triggers, target), '{} should be {}'.format(all_triggers, target)
 
 
 
 def test_AnalogTrigger_before_stable():
-    app = pg.mkQApp()
+    targeted_trigs = [1001, 2001,  3001, 4001]
+    check_trigger(0.1,  'before-stable', targeted_trigs)
     
-    dev, trigger = setup_nodes()
-    trigger.params['debounce_time'] = 0.1
-    trigger.params['debounce_mode'] = 'before-stable'
     
-    all_triggers = []
-    def on_new_trigger(pos, indexes):
-        #~ print(pos, indexes)
-        all_triggers.extend(indexes)
-    poller = ThreadPollOutput(trigger.output, return_data=True)
-    poller.new_data.connect(on_new_trigger)
+    #~ app = pg.mkQApp()
     
-    dev.start()
-    trigger.start()
-    poller.start()
+    #~ dev, trigger = setup_nodes()
+    #~ trigger.params['debounce_time'] = 0.1
+    #~ trigger.params['debounce_mode'] = 'before-stable'
     
-    def terminate():
-        dev.stop()
-        trigger.stop()
-        poller.stop()
-        poller.wait()
-        app.quit()
+    #~ all_triggers = []
+    #~ def on_new_trigger(pos, indexes):
+        #~ all_triggers.extend(indexes)
+    #~ poller = ThreadPollOutput(trigger.output, return_data=True)
+    #~ poller.new_data.connect(on_new_trigger)
     
-    # start for a while
-    timer = QtCore.QTimer(singleShot=True, interval=5000)
-    timer.timeout.connect(terminate)
-    timer.start()
+    #~ dev.start()
+    #~ trigger.start()
+    #~ poller.start()
     
-    app.exec_()
-    #~ print(all_triggers)
-    #~ assert np.array_equal(all_triggers, [1001, 2001,  3001, 4001])
-    target = [1001, 2001,  3001, 4001]
-    assert np.array_equal(all_triggers, target), '{} should be {}'.format(all_triggers, target)
+    #~ def terminate():
+        #~ dev.stop()
+        #~ trigger.stop()
+        #~ poller.stop()
+        #~ poller.wait()
+        #~ app.quit()
+    
+    #~ # start for a while
+    #~ timer = QtCore.QTimer(singleShot=True, interval=5000)
+    #~ timer.timeout.connect(terminate)
+    #~ timer.start()
+    
+    #~ app.exec_()
+    #~ target = [1001, 2001,  3001, 4001]
+    #~ assert np.array_equal(all_triggers, target), '{} should be {}'.format(all_triggers, target)
 
 
 if __name__ == '__main__':

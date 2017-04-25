@@ -10,7 +10,7 @@ import time
 from collections import OrderedDict
 
 from ..core import (WidgetNode, Node, register_node_type, InputStream, OutputStream,
-        ThreadPollInput, StreamConverter, StreamSplitter)
+        ThreadPollInput, StreamConverter)
 
 from .qoscilloscope import MyViewBox
 
@@ -311,19 +311,19 @@ class QTimeFreq(WidgetNode):
         
         # we take sample_rate = f_stop*4 or (original sample_rate)
         if tfr_params['f_stop']*4 < self.sample_rate:
-            sub_sample_rate = tfr_params['f_stop']*4
+            wanted_sub_sample_rate = tfr_params['f_stop']*4
         else:
-            sub_sample_rate = self.sample_rate
+            wanted_sub_sample_rate = self.sample_rate
         
         # this try to find the best size to get a timefreq of 2**N by changing
         # the sub_sample_rate and the sig_chunk_size
         self.wanted_size = self.params['xsize']
-        self.len_wavelet = l = int(2**np.ceil(np.log(self.wanted_size*sub_sample_rate)/np.log(2)))
+        self.len_wavelet = l = int(2**np.ceil(np.log(self.wanted_size*wanted_sub_sample_rate)/np.log(2)))
         self.sig_chunk_size = self.wanted_size*self.sample_rate
         self.downsample_factor = int(np.ceil(self.sig_chunk_size/l))
         self.sig_chunk_size = self.downsample_factor*l
         self.sub_sample_rate = self.sample_rate/self.downsample_factor
-        self.plot_length = int(self.wanted_size*sub_sample_rate)
+        self.plot_length = int(self.wanted_size*self.sub_sample_rate)
         
         self.wavelet_fourrier = generate_wavelet_fourier(self.len_wavelet, tfr_params['f_start'], tfr_params['f_stop'],
                             tfr_params['deltafreq'], self.sub_sample_rate, tfr_params['f0'], tfr_params['normalisation'])
@@ -341,7 +341,7 @@ class QTimeFreq(WidgetNode):
         
         for input_map in self.input_maps:
             input_map.params['shape'] = (self.plot_length, self.wavelet_fourrier.shape[1])
-            input_map.params['sample_rate'] = sub_sample_rate
+            input_map.params['sample_rate'] = self.sub_sample_rate
     
     def initialize_plots(self):
         N = 512

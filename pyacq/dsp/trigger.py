@@ -154,6 +154,21 @@ class TriggerBase(Node,  QtCore.QObject):
 
 
 class AnalogTrigger(TriggerBase):
+    """
+    No so efficient but quite robust trigger on analogsignal.
+    
+    This act like a standart trigger with a threshold and a front.
+    The channel can be selected among all.
+    
+    All params can be set online via AnalogTrigger.params['XXX'] = ...
+    
+    The main feature is the **debounce mode** combinated with **debounce_time**:
+      * **'no-debounce'** all crossing threshold is a trigger
+      * **'after-stable'**  when interval between a series of triggers is too short, the **lastet one** is taken is account.
+      * **'before-stable'** when interval between a series of triggers is too short, the **first one** is taken is account.
+    
+    
+    """
     _TriggerThread = AnalogTriggerThread
     def check_input_specs(self):
         pass #TODO check that stream is analogsignal
@@ -163,6 +178,6 @@ register_node_type(AnalogTrigger)
 class DigitalTrigger(TriggerBase):
     _TriggerThread = DigitalTriggerThread
     def check_input_specs(self):
-        pass #TODO check that stream is analogsignal
+        pass #TODO check that stream is digital
 
 register_node_type(DigitalTrigger)

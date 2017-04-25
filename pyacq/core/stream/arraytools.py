@@ -1,5 +1,5 @@
 import numpy as np
-
+from pyacq.core.rpc.proxy import ObjectProxy
 
 def axis_order_copy(data, out=None):
     """Copy *data* such that the result is contiguous, but preserves the axis order
@@ -86,3 +86,30 @@ def normalized_array(data):
     return data[ind]
 
 
+def make_dtype(dt):
+    """
+    To be used where np.dtype is dangerous.
+    
+    Because:
+      * dt can be a ObjectProxy
+      * due to serialization dtype is a hard case because
+        [('index', 'int64'), ('label', 'int64'), ('jitter', 'float64')]
+        become
+        [['index', 'int64'], ['label', 'int64'], ['jitter', 'float64']]
+    
+    """
+    if isinstance(dt, ObjectProxy):
+        dt = dt._get_value()
+
+    if isinstance(dt, np.dtype):
+        pass
+    elif isinstance(dt, str):
+        dt = np.dtype(dt)
+    elif isinstance(dt, list):
+        dt = np.dtype([ (k,v) for k,v in dt])
+    else:
+        try:
+            dt = np.dtype(dt)
+        except:
+            raise(NotImplementedError('make_dtype {} {}'.format(dt, type(dt))))
+    return dt

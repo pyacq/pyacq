@@ -4,14 +4,12 @@ import numpy as np
 from .streamhelpers import DataSender, DataReceiver, register_transfermode
 from .ringbuffer import RingBuffer
 
-
 class SharedMemSender(DataSender):
     """
     """
     def __init__(self, socket, params):
         DataSender.__init__(self, socket, params)
         self.size = self.params['buffer_size']
-        dtype = np.dtype(self.params['dtype'])
         shape = (self.size,) + tuple(self.params['shape'][1:])
         self._buffer = RingBuffer(shape=shape, dtype=self.params['dtype'],
                                   shmem=True, axisorder=self.params['axisorder'],
@@ -24,7 +22,7 @@ class SharedMemSender(DataSender):
         if self.params['shape'][0] != -1:
             assert shape == self.params['shape']
         else:
-            assert tuple(shape[1:]) == tuple(self.params['shape'][1:])
+            assert tuple(shape[1:]) == tuple(self.params['shape'][1:]), '{} {}'.format(shape, self.params['shape'])
  
         self._buffer.new_chunk(data, index)
         
