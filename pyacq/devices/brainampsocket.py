@@ -131,7 +131,7 @@ class BrainAmpSocket(Node):
         
         self.outputs['signals'].spec['shape'] = (-1, self.nb_channel)
         self.outputs['signals'].spec['sample_rate'] = self.sample_rate
-        self.outputs['signals'].spec['nb_channel'] = nb_channel
+        self.outputs['signals'].spec['nb_channel'] = self.nb_channel
 
     def _initialize(self):
         self._thread = BrainAmpThread(self.outputs, self.brainamp_host, self.brainamp_port,
