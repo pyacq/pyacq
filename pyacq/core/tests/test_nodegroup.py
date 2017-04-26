@@ -8,7 +8,7 @@ from pyacq.core.host import Host
 from pyacq import create_manager
 
 
-#~ logging.getLogger().level=logging.INFO
+logging.getLogger().level=logging.INFO
 
 def test_nodegroup0():
     proc, host = Host.spawn('host1')
@@ -33,13 +33,16 @@ def test_nodegroup0():
         nodes[i].stop()
 
     # test qwidget display
-    qt_node = ng.create_node('_MyTestNodeQWidget', name='myqtnode')
-    qt_node.show()
+    #~ qt_node = ng.create_node('_MyTestNodeQWidget', name='myqtnode')
+    #~ qt_node.show()
     
     for i in range(n):
         ng.remove_node(nodes[i])
     
+    #~ qt_node.close()
+    
     ng.close()
+    proc.stop()
 
 
 if __name__ == '__main__':

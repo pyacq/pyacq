@@ -129,7 +129,7 @@ class ProcessSpawner(object):
             raise RuntimeError("Error while spawning process:\n%s" % err)
         
         # Automatically shut down process when we exit. 
-        atexit.register(self.stop)
+        #~ atexit.register(self.stop)
         
     def wait(self):
         """Wait for the process to exit and return its return code.

@@ -118,7 +118,7 @@ class Manager(object):
         return self.hosts[addr]
     
     def disconnect_host(self, host):
-        host.close_nodegroups(self)
+        host.close_all_nodegroups()
         self.hosts.pop(host._rpc_addr)
 
     def list_hosts(self):
