@@ -69,5 +69,7 @@ class NodeGroup(object):
 
     def close(self):
         self.stop_all_nodes()
-        cli = RPCServer.local_client()
-        cli.close_server(sync='off')
+        #~ cli = RPCServer.local_client()
+        #~ cli.close_server(sync='off')
+        self.host.close_nodegroup(self, _sync='off')
+        

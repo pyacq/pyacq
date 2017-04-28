@@ -46,14 +46,15 @@ def create_manager(mode='rpc', auto_close_at_exit=True):
             server = RPCServer()
             server.run_lazy()
         man = Manager()
+        return man
     else:
         logger.info('Spawning remote manager process..')
         proc = ProcessSpawner(name='manager_proc', log_addr=rpc_log.get_logger_address())
         man = proc.client._import('pyacq.core.manager').Manager()
         if auto_close_at_exit:
             atexit.register(man.close)
-            
-    return man
+        return proc, man
+    
         
 
 class Manager(object):
@@ -201,4 +202,5 @@ class Manager(object):
         If a default host was created by this Manager, then it will be closed 
         as well.
         """
+        logger.debug('Manager.close')
         self.close_all_nodegroups()

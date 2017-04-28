@@ -6,13 +6,14 @@ from pyacq.core.rpc import ProcessSpawner
 import os
 import pytest
 
+logging.getLogger().level=logging.DEBUG
 
 logger = logging.getLogger()
 
 
 def test_manager():
     #~ logger.level = logging.DEBUG
-    mgr = create_manager('rpc', auto_close_at_exit=False)
+    proc, mgr = create_manager('rpc', auto_close_at_exit=False)
     
     #~ print(type(mgr))
     #~ exit()
@@ -45,11 +46,14 @@ def test_manager():
     # kill the nodegroup. In real situations, we do not expect the host to
     # disappear before the manager does. 
     mgr.close()
+    
+    proc.stop()
+    host_proc.stop()
 
 
 def create_some_node_group(man):
     nodegroups = []
-    for i in range(5):
+    for i in range(2):
         nodegroup = man.create_nodegroup(name='nodegroup{}'.format(i))
         nodegroup.register_node_type_from_module('pyacq.core.tests.fakenodes', 'FakeSender')
         nodegroup.register_node_type_from_module('pyacq.core.tests.fakenodes', 'FakeReceiver')
@@ -75,7 +79,7 @@ def create_some_node_group(man):
 
 def test_close_manager_explicit():
     #logging.getLogger().level = logging.DEBUG
-    man = create_manager(auto_close_at_exit=False)
+    proc, man = create_manager(auto_close_at_exit=False)
     nodegroups = create_some_node_group(man)
     
     for ng in nodegroups:
@@ -83,9 +87,10 @@ def test_close_manager_explicit():
     time.sleep(1.)
     for ng in nodegroups:
         ng.stop_all_nodes()
-    
+    print('#'*50)
+    logging.getLogger().level=logging.DEBUG
     man.close()
-
+    proc.stop()
 
 #@pytest.mark.skipif(True, reason='atexit not work at travis')
 #def test_close_manager_implicit():
@@ -102,5 +107,5 @@ def test_close_manager_explicit():
 
 if __name__ == '__main__':
     test_manager()
-    test_close_manager_explicit()
+    #~ test_close_manager_explicit()
     #~ test_close_manager_implicit()

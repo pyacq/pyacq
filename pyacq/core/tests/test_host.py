@@ -4,6 +4,7 @@ import logging
 from pyacq.core.host import Host
 
 #~ logging.getLogger().level=logging.INFO
+logging.getLogger().level=logging.DEBUG
 
 
 def test_host1():
