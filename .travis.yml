@@ -6,7 +6,7 @@ notifications:
   email: false
 
 env:
-    - PYTHON=3.4 TEST=extra
+    - PYTHON=3.6 TEST=extra
 
 
 before_install:

@@ -4,6 +4,7 @@ import logging
 from pyacq.core.host import Host
 
 #~ logging.getLogger().level=logging.INFO
+logging.getLogger().level=logging.DEBUG
 
 
 def test_host1():
@@ -28,4 +29,3 @@ def test_host1():
 
 if __name__ == '__main__':
     test_host1()
-    test_host2()

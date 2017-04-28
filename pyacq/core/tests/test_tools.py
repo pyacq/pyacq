@@ -8,6 +8,8 @@ import numpy as np
 import weakref
 import time
 
+"""
+
 nb_channel = 16
 chunksize = 100
 sr = 20000.
@@ -106,8 +108,9 @@ def test_streamconverter():
         assert last_pos==pos
     
     def terminate():
+        print('test_streamconverter quit')
         sender.wait()
-        #~ conv.stop()
+        conv.stop()
         poller.stop()
         poller.wait()
         app.quit()
@@ -126,6 +129,7 @@ def test_streamconverter():
 
 
 def test_stream_splitter():
+    print('yep test_stream_splitter')
     app = pg.mkQApp()
     
     outstream = OutputStream()
@@ -152,6 +156,7 @@ def test_stream_splitter():
     splitter.initialize()
 
     def terminate():
+        print('test_stream_splitter quit')
         sender.wait()
         splitter.stop()
         for poller in all_poller:
@@ -170,9 +175,9 @@ def test_stream_splitter():
     
     app.exec_()
     
-    
+"""
 
 if __name__ == '__main__':
-    test_ThreadPollInput()
+    #~ test_ThreadPollInput()
     test_streamconverter()
     test_stream_splitter()

@@ -9,6 +9,7 @@ from pyacq import create_manager
 
 
 #~ logging.getLogger().level=logging.INFO
+logging.getLogger().level=logging.DEBUG
 
 def test_nodegroup0():
     proc, host = Host.spawn('host1')
@@ -39,7 +40,12 @@ def test_nodegroup0():
     for i in range(n):
         ng.remove_node(nodes[i])
     
+    qt_node.close()
+    
     ng.close()
+    #~ host.close_nodegroup(ng)
+    
+    proc.stop()
 
 
 if __name__ == '__main__':

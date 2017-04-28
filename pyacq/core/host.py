@@ -25,7 +25,8 @@ class Host(object):
     
     def __init__(self, name, poll_procs=False):
         self.name = name
-        self.spawners = []
+        #~ self.spawners = []
+        self.spawners = {}
         
         # Publish this object so we can easily retrieve it from any other
         # machine.
@@ -58,25 +59,44 @@ class Host(object):
         logger.info("Process started: %s" % sp)
         rng = sp.client._import('pyacq.core.nodegroup')
         
-        # create nodegroup in remote process
+        # create nodegroup in remote processnodegroup_closed
         sp._nodegroup = rng.NodeGroup(host=self, manager=manager)
         
         # publish so others can easily connect to the nodegroup
         sp.client['nodegroup'] = sp._nodegroup
         
         sp._manager = manager
-        self.spawners.append(sp)
+        #~ self.spawners.append(sp)
+        self.spawners[name] = sp
         return sp._nodegroup
+    
+    def close_nodegroup(self, ng):
+        
+        name = None
+        for k, sp in self.spawners.items():
+            if sp._nodegroup==ng:
+                name=k
+                break
+        print('Host.close_nodegroup', name)
+        assert name is not None
 
+        sp = self.spawners.pop(name)
+        if sp._manager is not None:
+            sp._manager.nodegroup_closed(sp._nodegroup)
+        sp.stop()
+    
     def close_all_nodegroups(self, force=False):
         """Close all NodeGroups belonging to this host.
         """
-        for sp in self.spawners:
+        #~ for sp in self.spawners:
+        for sp in self.spawners.values():
             if force:
                 sp.kill()
             else:
                 sp.stop()
-        self.spawners = []
+        #~ self.spawners = []
+        self.spawners = {}
+        
 
     def check_spawners(self):
         """Check for any processes that have exited and report them to their
@@ -85,7 +105,8 @@ class Host(object):
         This method is called by a timer if the host is created with *poll_procs*
         True.
         """
-        for sp in self.spawners[:]:
+        #~ for sp in self.spawners[:]:
+        for sp in self.spawners.values():
             rval = sp.poll()
             if sp.poll() is not None:
                 logger.info("Process exited: %s" % sp)
