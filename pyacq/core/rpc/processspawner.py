@@ -134,7 +134,15 @@ class ProcessSpawner(object):
     def wait(self):
         """Wait for the process to exit and return its return code.
         """
-        return self.proc.wait()
+        # Using proc.wait() can deadlock; use communicate() instead.
+        # see: https://docs.python.org/2/library/subprocess.html#subprocess.Popen.wait
+        try:
+            self.proc.communicate()
+        except (AttributeError, ValueError):
+            # These can happen if we attempt communicate() while shuttting down
+            pass
+        
+        return self.proc.returncode
 
     def kill(self):
         """Kill the spawned process immediately.
@@ -143,7 +151,8 @@ class ProcessSpawner(object):
             return
         logger.info("Kill process: %d", self.proc.pid)
         self.proc.kill()
-        self.proc.wait()
+
+        self.wait()
 
     def stop(self):
         """Stop the spawned process by asking its RPC server to close.
@@ -153,7 +162,8 @@ class ProcessSpawner(object):
         logger.info("Close process: %d", self.proc.pid)
         closed = self.client.close_server()
         assert closed is True, "Server refused to close. (reply: %s)" % closed
-        self.proc.wait()
+
+        self.wait()
 
     def poll(self):
         """Return the spawned process's return code, or None if it has not
