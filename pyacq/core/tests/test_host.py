@@ -27,5 +27,5 @@ def test_host1():
 
 
 if __name__ == '__main__':
+    logging.getLogger().level=logging.INFO
     test_host1()
-    test_host2()
