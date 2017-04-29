@@ -153,7 +153,9 @@ class LogSender(logging.Handler):
         if self.socket is None:
             return
         rec = record.__dict__.copy()
-        rec['msg'] = rec['msg'] % rec.pop('args')
+        args = rec.pop('args')
+        if len(args) > 0:
+            rec['msg'] = rec['msg'] % args
         if process_name is not None:
             rec['process_name'] = process_name
         rec['thread_name'] = thread_names.get(rec['thread'], rec['threadName'])
