@@ -5,6 +5,7 @@ import os
 import zmq
 import logging
 import time
+import atexit
 logger = logging.getLogger(__name__)
 logger.propagate = False
 
@@ -147,6 +148,8 @@ class LogSender(logging.Handler):
             logger = logging.getLogger(logger)
         if logger is not None:
             logger.addHandler(self)
+            
+        atexit.register(self.close)
 
     def handle(self, record):
         global host_name, process_name, thread_names
@@ -168,7 +171,13 @@ class LogSender(logging.Handler):
         `get_logger_address()`.
         """
         self.socket = zmq.Context.instance().socket(zmq.PUSH)
+        self.socket.linger = 1000  # don't let socket deadlock when exiting
         self.socket.connect(addr)
+
+    def close(self):
+        # if this socket is left open when the process exits, it can lead to
+        # deadlock.
+        self.socket.close()
 
 
 class LogServer(threading.Thread):
@@ -185,6 +194,7 @@ class LogServer(threading.Thread):
         threading.Thread.__init__(self, daemon=True)
         self.logger = logger
         self.socket = zmq.Context.instance().socket(zmq.PULL)
+        self.socket.linger = 1000  # don't let socket deadlock when exiting
         self.socket.bind('tcp://*:*')
         self.address = self.socket.getsockopt(zmq.LAST_ENDPOINT)
         self.serializer = JsonSerializer()
