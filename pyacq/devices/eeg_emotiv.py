@@ -13,7 +13,7 @@ except ImportError:
 
 import platform
 WINDOWS = (platform.system() == "Windows")
-if WINDOWS: 
+if WINDOWS:
     try:
         import pywinusb.hid as hid
         HAVE_PYWINUSB = True
@@ -94,9 +94,9 @@ class Unix_EmotivThread(QtCore.QThread):
                 if not self.running:
                     break
 
-            crypted_buffer = self.dev_handle.read(32)        
+            crypted_buffer = self.dev_handle.read(32)
             self.parent().process_data(crypted_buffer)
-        
+
     def stop(self):
         with self.lock:
             self.running = False
@@ -121,6 +121,7 @@ class Emotiv(Node, QtCore.QObject):
     device :
         - For Linux, it's the path to the usb hidraw used
         - For Windows, it's the hid object associated with the USB key
+    This class need pycrypto package. Windows user will need pywinusb.
     """
     _output_specs = {'signals': dict(streamtype='analogsignal', dtype='int64',
                                      shape=(-1, 14), sample_rate=128., timeaxis=0, nb_channel = 14),
@@ -136,13 +137,19 @@ class Emotiv(Node, QtCore.QObject):
         assert HAVE_PYCRYPTO, "Emotiv node depends on the `pycrypto` package, but it could not be imported."
         if WINDOWS:
             assert HAVE_PYWINUSB, "Emotiv node on Windows depends on the `pywinusb` package, but it could not be imported."
-            
+
         self.device_info = dict()
 
     def _configure(self, device_handle='/dev/hidraw0'):
-        
+        '''
+        Parameters
+        ----------
+        device_handle : str
+            Path to the usb hidraw used
+            (for example '/dev/hidraw0' on linux or '...' on windows)
+        '''
         self.device_path = device_handle
-        
+
         if WINDOWS:
             self.dev_handle = hid.core.HidDevice(device_handle)
             self.serial = self.dev_handle.serial_number
@@ -181,10 +188,10 @@ class Emotiv(Node, QtCore.QObject):
 
     def _close(self):
         self.dev_handle.close()
-        
+
     def process_data(self, crypted_buffer):
         data = self.cipher.decrypt(crypted_buffer[:16]) + self.cipher.decrypt(crypted_buffer[16:])
-        
+
         # impedance value
         sensor_num = data[0]
         if sensor_num in _quality_num_to_name:
@@ -199,7 +206,7 @@ class Emotiv(Node, QtCore.QObject):
         # gyro value
         self.gyro[0] = data[29] - 106  # X
         self.gyro[1] = data[30] - 105  # Y
-        
+
         self.n += 1
         self.outputs['signals'].send(self.values, index=self.n)
         self.outputs['impedances'].send(self.imp, index=self.n)
@@ -209,6 +216,6 @@ class Emotiv(Node, QtCore.QObject):
         #assert data[0] == 0
         crypted_buffer = bytes(data[1:])
         self.process_data(crypted_buffer)
-        
+
 
 register_node_type(Emotiv)
