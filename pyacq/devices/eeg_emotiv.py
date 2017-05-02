@@ -163,10 +163,13 @@ class Emotiv(Node, QtCore.QObject):
                 self.serial = f.readline().strip()
 
     def _initialize(self):
-        self.values = np.zeros(len(_channel_names), dtype=np.int64)
-        self.imp = np.zeros(len(_channel_names), dtype=np.float64)
-        self.gyro = np.zeros(2, dtype=np.int64)
+        self.values = np.zeros((1,len(_channel_names)), dtype=np.int64)
+        self.imp = np.zeros((1,len(_channel_names)), dtype=np.float64)
+        self.gyro = np.zeros((1,2), dtype=np.int64)
         self.n = 0
+        self.head_signal = 0
+        self.head_imp = 0
+        self.head_gyro = 0
         self.cipher = setupCrypto(self.serial)
         if not WINDOWS:
             self.dev_handle = open(self.device_path, mode='rb')
@@ -198,14 +201,14 @@ class Emotiv(Node, QtCore.QObject):
             sensor_name = _quality_num_to_name[sensor_num]
             if sensor_name in _channel_names:
                 channel_index = _channel_names.index(sensor_name)
-                self.imp[channel_index] = get_level(data, _quality_bits) / 540
+                self.imp[0,channel_index] = get_level(data, _quality_bits) / 540
         # channel signals value
         for c, channel_name in enumerate(_channel_names):
             bits = _sensorBits[channel_name]
-            self.values[c] = get_level(data, bits)
+            self.values[0,c] = get_level(data, bits)
         # gyro value
-        self.gyro[0] = data[29] - 106  # X
-        self.gyro[1] = data[30] - 105  # Y
+        self.gyro[0,0] = data[29] - 106  # X
+        self.gyro[0,1] = data[30] - 105  # Y
 
         self.n += 1
         self.outputs['signals'].send(self.values, index=self.n)

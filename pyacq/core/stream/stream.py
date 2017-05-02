@@ -32,7 +32,7 @@ default_stream = dict(
 
 class OutputStream(object):
     """Class for streaming data to an InputStream.
-    
+
     Streams allow data to be sent between objects that may exist on different
     threads, processes, or machines. They offer a variety of transfer methods
     including TCP for remote connections and IPC for local connections.
@@ -47,11 +47,11 @@ class OutputStream(object):
         else:
             self.node = None
         self.name = name
-    
+
     def configure(self, **kargs):
         """
         Configure the output stream.
-        
+
         Parameters
         ----------
         protocol : 'tcp', 'udp', 'inproc' or 'inpc' (linux only)
@@ -99,7 +99,7 @@ class OutputStream(object):
             id of the SharedArray when using `transfermode = 'sharedarray'`.
 
         """
-        
+
         self.params = dict(default_stream)
         self.params.update(self.spec)
         for k in kargs:
@@ -107,12 +107,12 @@ class OutputStream(object):
                 assert kargs[k]==self.spec[k], \
                     'Cannot configure {}={}; already in fixed in self.spec {}={}'.format(k, kargs[k], k, self.spec[k])
         self.params.update(kargs)
-        
+
         shape = self.params['shape']
         assert shape[0] == -1 or shape[0] > 0, "First element in shape must be -1 or > 0."
         for i in range(1, len(shape)):
             assert shape[i] > 0, "Shape index %d must be > 0." % i
-        
+
         if self.params['protocol'] in ('inproc', 'ipc'):
             pipename = u'pyacq_pipe_'+''.join(random.SystemRandom().choice(string.ascii_uppercase + string.digits) for _ in range(24))
             self.params['interface'] = pipename
@@ -125,7 +125,7 @@ class OutputStream(object):
         self.addr = self.socket.getsockopt(zmq.LAST_ENDPOINT).decode()
         self.port = self.addr.rpartition(':')[2]
         self.params['port'] = self.port
-        
+
         transfermode = self.params['transfermode']
         if transfermode not in all_transfermodes:
             raise ValueError("Unsupported transfer mode '%s'" % transfermode)
@@ -138,7 +138,7 @@ class OutputStream(object):
 
     def send(self, data, index=None, **kargs):
         """Send a data chunk and its frame index.
-        
+
         Parameters
         ----------
         index: int
@@ -153,7 +153,7 @@ class OutputStream(object):
 
     def close(self):
         """Close the output.
-        
+
         This closes the socket and releases shared memory, if necessary.
         """
         self.sender.close()
@@ -173,24 +173,24 @@ def _shape_equal(shape1, shape2):
     shape2 = list(shape2)
     if len(shape1) != len(shape2):
         return False
-    
+
     for i in range(len(shape1)):
         if shape1[i]==-1 or shape2[i]==-1:
             continue
         if shape1[i]!=shape2[i]:
             return False
-    
+
     return True
 
 
 
-    
 
-    
+
+
 
 class InputStream(object):
     """Class for streaming data from an OutputStream.
-    
+
     Streams allow data to be sent between objects that may exist on different
     threads, processes, or machines. They offer a variety of transfer methods
     including TCP for remote connections and IPC for local connections.
@@ -205,10 +205,10 @@ class InputStream(object):
         self.name = name
         self.buffer = None
         self._own_buffer = False  # whether InputStream should populate buffer
-    
+
     def connect(self, output):
         """Connect an output to this input.
-        
+
         Any data send over the stream using `output.send()` can be retrieved
         using `input.recv()`.
         """
@@ -220,12 +220,12 @@ class InputStream(object):
             self.params = output.params._get_value()
         else:
             raise TypeError("Invalid type for stream: %s" % type(output))
-            
+
         if self.params['protocol'] in ('inproc', 'ipc'):
             self.url = '{protocol}://{interface}'.format(**self.params)
         else:
             self.url = '{protocol}://{interface}:{port}'.format(**self.params)
-            
+
         # allow some keys in self.spec to override self.params
         readonly_params = ['protocol', 'transfermode', 'shape', 'dtype']
         for k,v in self.spec.items():
@@ -242,39 +242,39 @@ class InputStream(object):
                                 (k, v, k, self.params[k]))
             else:
                 self.params[k] = v
-        
+
         context = zmq.Context.instance()
         self.socket = context.socket(zmq.SUB)
         self.socket.setsockopt(zmq.SUBSCRIBE, b'')
         #~ self.socket.setsockopt(zmq.DELAY_ATTACH_ON_CONNECT,1)
         self.socket.connect(self.url)
-        
+
         transfermode = self.params['transfermode']
         if transfermode not in all_transfermodes:
             raise ValueError("Unsupported transfer mode '%s'" % transfermode)
         receiver_class = all_transfermodes[transfermode][1]
         self.receiver = receiver_class(self.socket, self.params)
-        
+
         self.connected = True
         if self.node and self.node():
-            self.node().after_input_connect(self.name)        
-    
+            self.node().after_input_connect(self.name)
+
     def poll(self, timeout=None):
         """Poll the socket of input stream.
         """
         return self.socket.poll(timeout=timeout)
-    
+
     def recv(self, **kargs):
         """
         Receive a chunk of data.
-        
+
         Returns:
         ----
         index: int
             The absolute sample index. This is the index of the last sample + 1.
         data: np.ndarray or bytes
             The received chunk of data.
-            If the stream uses `transfermode='sharedarray'`, then the data is 
+            If the stream uses `transfermode='sharedarray'`, then the data is
             returned as None and you must use `InputStream.get_array_slice(index, length)`
             to read from the shared array or InputStream.recv(with_data=True) to get the last
             chunk.
@@ -287,38 +287,38 @@ class InputStream(object):
 
     def close(self):
         """Close the Input.
-        
+
         This closes the socket.
-        
+
         """
         self.receiver.close()
         self.socket.close()
         del self.socket
-    
+
     def __getitem__(self, *args):
         """Return a data slice from the RingBuffer attached to this InputStream.
-        
+
         If no RingBuffer is attached, raise an exception. See ``set_buffer()``.
         """
         if self.buffer is None:
             raise TypeError("No ring buffer configured for this InputStream.")
         return self.buffer.__getitem__(*args)
-    
+
     def get_data(self, *args, **kargs):
         """
         Return a segment of the RingBuffer attached to this InputStream.
-        
+
         If no RingBuffer is attached, raise an exception. See ``set_buffer()``.
         """
         if self.buffer is None:
             raise TypeError("No ring buffer configured for this InputStream.")
         return self.buffer.get_data(*args, **kargs)
-    
+
     #~ def set_buffer(self, size=None, double=True, axisorder=None):
     def set_buffer(self, size=None, double=True, axisorder=None, shmem=None, fill=None):
-        """Ensure that this InputStream has a RingBuffer at least as large as 
+        """Ensure that this InputStream has a RingBuffer at least as large as
         *size* and with the specified double-mode and axis order.
-        
+
         If necessary, this will attach a new RingBuffer to the stream and remove
         any existing buffer.
         """
@@ -333,7 +333,7 @@ class InputStream(object):
                 self.buffer = buf
                 self._own_buffer = own
                 return
-            
+
         # attach a new buffer
         shape = (size,) + tuple(self.params['shape'][1:])
         dtype = make_dtype(self.params['dtype'])
