@@ -124,42 +124,30 @@ class OpenBCI(Node):
         Node.__init__(self, **kargs)
         assert HAVE_PYSERIAL, "OpenBCI node depends on the `pyserial` package, but it could not be imported."
 
-    def _configure(self, board_name="Daisy", device_handle='/dev/ttyUSB0', device_baud=115200,
-                    nb_channel=8, nb_aux=3, sample_rate=250., packet_bsize=33):  #"Daisy" board params
+    def _configure(self, device_handle='/dev/ttyUSB0'):
         """
         Parameters
         ----------
-        board_name : str
-            Name of the board used
         device_handle : str
             Path to the device. Linux   : '/dev/ttyUSB0'
                                 Mac     : '/dev/tty.usbserial-DN0096XA'
                                 Windows : 'COM3'
-        device_baud : int
-            baud of the serial connection
-        nb_channel : int
-            Board number of channels
-        nb_aux : int
-            Board number of aux signals
-        sample_rate : int
-            Board sample rate
-        packet_bsize : int
-            Number of bytes of data packet
         """
-        self.board_name = board_name
+        #"Daisy" board params
+        self.board_name = "Daisy"
         self.device_handle = device_handle
-        self.device_baud = device_baud
-        self.packet_bsize = packet_bsize
-        self.nb_channel = nb_channel
-        self.nb_aux = nb_aux
+        self.device_baud = 115200
+        self.packet_bsize = 33
+        self.nb_channel = 8
+        self.nb_aux = 3
 
-        self.outputs['chan'].spec['shape'] = (-1, nb_channel)
-        self.outputs['chan'].spec['sample_rate'] = sample_rate
-        self.outputs['chan'].spec['nb_channel'] = nb_channel
+        self.outputs['chan'].spec['shape'] = (-1, self.nb_channel)
+        self.outputs['chan'].spec['sample_rate'] = 250.
+        self.outputs['chan'].spec['nb_channel'] = self.nb_channel
 
-        self.outputs['aux'].spec['shape'] = (-1, nb_aux)
-        self.outputs['aux'].spec['sample_rate'] = sample_rate
-        self.outputs['aux'].spec['nb_channel'] = nb_aux
+        self.outputs['aux'].spec['shape'] = (-1, self.nb_aux)
+        self.outputs['aux'].spec['sample_rate'] = 250
+        self.outputs['aux'].spec['nb_channel'] = self.nb_aux
 
     def _initialize(self):
         self.serial_port = serial.Serial(port=self.device_handle, baudrate=self.device_baud)
@@ -175,7 +163,6 @@ class OpenBCI(Node):
         self._thread.wait()
 
     def _close(self):
-        print('close')
         self.serial_port.close()
         pass
 

@@ -18,7 +18,7 @@ def test_eeg_OpenBCI():
     app = QtGui.QApplication([])
 
     dev = OpenBCI()
-    dev.configure(board_name="Daisy", device_handle='/dev/ttyUSB0', device_baud=115200)
+    dev.configure(device_handle='/dev/ttyUSB0')
     dev.outputs['chan'].configure(protocol='tcp', interface='127.0.0.1',transfermode='plaindata',)
     dev.outputs['aux'].configure(protocol='tcp', interface='127.0.0.1',transfermode='plaindata',)
     dev.initialize()
@@ -41,7 +41,7 @@ def test_eeg_OpenBCI():
         app.quit()
 
     # start for a while
-    timer = QtCore.QTimer(singleShot=True, interval=1000)
+    timer = QtCore.QTimer(singleShot=True, interval=100000)
     timer.timeout.connect(terminate)
     timer.start()
 
