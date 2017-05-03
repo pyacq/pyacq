@@ -146,7 +146,7 @@ class Emotiv(Node, QtCore.QObject):
         ----------
         device_handle : str
             Path to the usb hidraw used
-            (for example '/dev/hidraw0' on linux or '...' on windows)
+            (for example '/dev/hidraw0' on linux or '\\?\hid#vid_1234&pid_ed....' on windows)
         '''
         self.device_path = device_handle
 
