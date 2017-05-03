@@ -105,7 +105,7 @@ class Unix_EmotivThread(QtCore.QThread):
 class Emotiv(Node, QtCore.QObject):
 
     """
-    Simple eeg emotiv device to access eeg, impedances and gyro data in a Node.
+    Simple eeg Emotiv device to access eeg, impedances and gyro data in a Node.
 
     Reverse engineering and original crack code written by
     Cody Brocious (http://github.com/daeken)
@@ -116,11 +116,8 @@ class Emotiv(Node, QtCore.QObject):
     see https://github.com/qdot/emokit/blob/master/doc/emotiv_protocol.asciidoc
     for more details
 
-    Parameters for configure():
-    ----
-    device :
-        - For Linux, it's the path to the usb hidraw used
-        - For Windows, it's the hid object associated with the USB key
+    This class need pycrypto package. Windows user will need pywinusb. 
+
     """
     _output_specs = {'signals': dict(streamtype='analogsignal', dtype='int64',
                                      shape=(-1, 14), sample_rate=128., timeaxis=0, nb_channel = 14),
@@ -140,9 +137,14 @@ class Emotiv(Node, QtCore.QObject):
         self.device_info = dict()
 
     def _configure(self, device_handle='/dev/hidraw0'):
-        
+        '''
+        Parameters
+        ----------
+        device_handle : str
+            Path to the usb hidraw used
+        '''
         self.device_path = device_handle
-        
+
         if WINDOWS:
             self.dev_handle = hid.core.HidDevice(device_handle)
             self.serial = self.dev_handle.serial_number

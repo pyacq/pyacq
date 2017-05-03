@@ -110,6 +110,14 @@ class BrainAmpSocket(Node):
         Node.__init__(self, **kargs)
 
     def _configure(self, brainamp_host='localhost', brainamp_port=51244):
+        '''
+        Parameters
+        ----------
+        brainamp_host : str
+            adress used by Vision recorder to send data. Default is 'localhost'.
+        brainamp_port : int
+            port used by Brain Vision recorder. Default is 51244.
+        '''
         self.brainamp_host = brainamp_host
         self.brainamp_port = brainamp_port
         
