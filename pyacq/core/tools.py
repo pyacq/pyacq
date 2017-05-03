@@ -43,9 +43,9 @@ class ThreadPollInput(QtCore.QThread):
             with self.running_lock:
                 if not self.running:
                     break
-                if self.input_stream() is None:
-                    logging.info("ThreadPollInput has lost InputStream")
-                    break
+            if self.input_stream() is None:
+                logging.info("ThreadPollInput has lost InputStream")
+                break
             ev = self.input_stream().poll(timeout=self.timeout)
             if ev>0:
                 pos, data = self.input_stream().recv(return_data=self.return_data)
