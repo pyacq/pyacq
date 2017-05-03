@@ -11,7 +11,7 @@ import os
 
 import platform
 WINDOWS = (platform.system() == "Windows")
-if WINDOWS: 
+if WINDOWS:
     try:
         import pywinusb.hid as hid
         HAVE_PYWINUSB = True
@@ -34,14 +34,15 @@ def get_available_devices():
             realInputPath = os.path.realpath("/sys/class/hidraw/" + name)
             path = '/'.join(realInputPath.split('/')[:-4])
             try:
-                with open(path + "/manufacturer", 'r') as f:
-                    manufacturer = f.readline()
-                if "emotiv" in manufacturer.lower():
-                    with open(path + "/serial", 'r') as f:
-                        serial = f.readline().strip()
-                        if serial not in serials:
-                            serials[serial] = []
-                        serials[serial].append(name)
+                if os.path.isfile(path + "/manufacturer"):
+                    with open(path + "/manufacturer", 'r') as f:
+                        manufacturer = f.readline()
+                    if "emotiv" in manufacturer.lower():
+                        with open(path + "/serial", 'r') as f:
+                            serial = f.readline().strip()
+                            if serial not in serials:
+                                serials[serial] = []
+                            serials[serial].append(name)
             except IOError as e:
                 print("Couldn't open file: %s" % e)
 
@@ -57,7 +58,7 @@ def test_eeg_emotiv_direct():
     # Look for emotiv usb device
     all_devices = get_available_devices()
     device_handle = all_devices[0]
-    
+
     # in main App
     app = pg.mkQApp()
     dev = Emotiv(name='Emotiv0')
@@ -69,17 +70,38 @@ def test_eeg_emotiv_direct():
     dev.outputs['gyro'].configure(
         protocol='tcp', interface='127.0.0.1', transfermode='plaindata',)
     dev.initialize()
-    viewer = QOscilloscope()
-    viewer.configure(with_user_dialog=True)
-    viewer.input.connect(dev.outputs['signals'])
-    viewer.initialize()
-    viewer.show()
+    viewer_sigs = QOscilloscope()
+    viewer_sigs.configure(with_user_dialog=True)
+    viewer_sigs.input.connect(dev.outputs['signals'])
+    viewer_sigs.initialize()
+    viewer_sigs.show()
+
+    viewer_imp = QOscilloscope()
+    viewer_imp.configure(with_user_dialog=True)
+    viewer_imp.input.connect(dev.outputs['impedances'])
+    viewer_imp.initialize()
+    viewer_imp.show()
+
+    viewer_gyro = QOscilloscope()
+    viewer_gyro.configure(with_user_dialog=True)
+    viewer_gyro.input.connect(dev.outputs['gyro'])
+    viewer_gyro.initialize()
+    viewer_gyro.show()
 
     dev.start()
-    viewer.start()
+    viewer_sigs.start()
+    viewer_imp.start()
+    viewer_gyro.start()
 
     def terminate():
+        viewer_sigs.stop()
+        viewer_imp.stop()
+        viewer_gyro.stop()
         dev.stop()
+        viewer_sigs.close()
+        viewer_imp.close()
+        viewer_gyro.close()
+        dev.close()
         app.quit()
 
     # start for a while
