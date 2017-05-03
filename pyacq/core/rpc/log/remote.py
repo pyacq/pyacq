@@ -5,6 +5,7 @@ import os
 import zmq
 import logging
 import time
+import atexit
 logger = logging.getLogger(__name__)
 logger.propagate = False
 
@@ -147,13 +148,17 @@ class LogSender(logging.Handler):
             logger = logging.getLogger(logger)
         if logger is not None:
             logger.addHandler(self)
+            
+        atexit.register(self.close)
 
     def handle(self, record):
         global host_name, process_name, thread_names
         if self.socket is None:
             return
         rec = record.__dict__.copy()
-        rec['msg'] = rec['msg'] % rec.pop('args')
+        args = rec.pop('args')
+        if len(args) > 0:
+            rec['msg'] = rec['msg'] % args
         if process_name is not None:
             rec['process_name'] = process_name
         rec['thread_name'] = thread_names.get(rec['thread'], rec['threadName'])
@@ -166,7 +171,13 @@ class LogSender(logging.Handler):
         `get_logger_address()`.
         """
         self.socket = zmq.Context.instance().socket(zmq.PUSH)
+        self.socket.linger = 1000  # don't let socket deadlock when exiting
         self.socket.connect(addr)
+
+    def close(self):
+        # if this socket is left open when the process exits, it can lead to
+        # deadlock.
+        self.socket.close()
 
 
 class LogServer(threading.Thread):
@@ -179,12 +190,13 @@ class LogServer(threading.Thread):
     logger : Logger
         The python logger that should handle incoming messages.
     """
-    def __init__(self, logger, sort=True):
+    def __init__(self, logger, address='tcp://127.0.0.1:*', sort=True):
         threading.Thread.__init__(self, daemon=True)
         self.logger = logger
         self.socket = zmq.Context.instance().socket(zmq.PULL)
-        self.socket.bind('tcp://*:*')
-        self.address = self.socket.getsockopt(zmq.LAST_ENDPOINT)
+        self.socket.linger = 1000  # don't let socket deadlock when exiting
+        self.socket.bind(address)
+        self.address = self.socket.last_endpoint
         self.serializer = JsonSerializer()
         
     def run(self):
