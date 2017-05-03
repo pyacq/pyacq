@@ -40,6 +40,7 @@ def test_nodegroup0():
         ng.remove_node(nodes[i])
     
     ng.close()
+    proc.stop()
 
 
 if __name__ == '__main__':
