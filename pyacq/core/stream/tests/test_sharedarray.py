@@ -3,9 +3,19 @@
 # Distributed under the (new) BSD License. See LICENSE for more info.
 
 
-from pyacq.core.sharedarray import SharedArray
+from pyacq.core.stream.sharedarray import SharedArray, SharedMem
 import numpy as np
 import pyqtgraph.multiprocess as mp
+
+
+def test_sharedmem():
+    shm1 = SharedMem(nbytes=10)
+    arr1 = shm1.to_numpy(offset=2, shape=8, dtype='ubyte')
+    assert arr1.flags['WRITEABLE']
+    
+    shm2 = SharedMem(nbytes=10, shm_id=shm1.shm_id)
+    arr2 = shm2.to_numpy(offset=2, shape=8, dtype='ubyte')
+    assert not arr2.flags['WRITEABLE']
 
 
 def test_sharedarray():    
@@ -27,7 +37,7 @@ def test_sharedarray_multiprocess():
     # Start remote process, read data from shared array, then return to host
     # process.
     proc = mp.Process()
-    sa_mod = proc._import('pyacq.core.sharedarray')
+    sa_mod = proc._import('pyacq.core.stream.sharedarray')
     sa2 = sa_mod.SharedArray(**sa.to_dict())
     np_a2 = sa2.to_numpy(_returnType='value')
     proc.close()
@@ -36,5 +46,6 @@ def test_sharedarray_multiprocess():
     
     
 if __name__ == '__main__':
+    test_sharedmem()
     test_sharedarray()
     test_sharedarray_multiprocess()

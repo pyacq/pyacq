@@ -2,6 +2,7 @@
 # Copyright (c) 2016, French National Center for Scientific Research (CNRS)
 # Distributed under the (new) BSD License. See LICENSE for more info.
 
+import sys
 import os
 import time
 import weakref
@@ -73,6 +74,9 @@ class RPCClient(object):
         # pick a unique name: host.pid.tid:rpc_addr
         self.name = ("%s.%s.%s:%s" % (log.get_host_name(), log.get_process_name(),
                                       log.get_thread_name(), address.decode())).encode()
+
+        if sys.platform == 'win32' and '0.0.0.0' in str(address):
+            logger.warn("RPC server address is likely to cause trouble on windows: %r" % address)
         self.address = address
         
         key = (threading.current_thread().ident, address)
@@ -516,7 +520,7 @@ class RPCClient(object):
         #self.send('release_all', return_type=None) 
         self._socket.close()
 
-    def close_server(self, sync='sync', **kwds):
+    def close_server(self, sync='sync', timeout=1.0, **kwds):
         """Ask the server to close.
         
         The server returns True if it has closed. All clients known to the
@@ -527,7 +531,7 @@ class RPCClient(object):
         """
         if self.disconnected():
             return True
-        return self.send('close', sync=sync, **kwds)
+        return self.send('close', sync=sync, timeout=timeout, **kwds)
 
     def measure_clock_diff(self):
         """Measure the clock offset between this host and the remote host.

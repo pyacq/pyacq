@@ -330,7 +330,7 @@ def test_qt_rpc():
     logger.level = previous_level
 
 def test_disconnect():
-    #logger.level = logging.DEBUG
+    #~ logger.level = logging.DEBUG
     
     # Clients receive notification when server disconnects gracefully
     server_proc = ProcessSpawner()
@@ -338,7 +338,7 @@ def test_disconnect():
     client_proc = ProcessSpawner()
     cli = client_proc.client._import('pyacq.core.rpc').RPCClient(server_proc.client.address)
     cli.close_server()
-
+    
     assert cli.disconnected() is True
     
     assert server_proc.client.disconnected() is True
@@ -348,13 +348,18 @@ def test_disconnect():
     except RuntimeError:
         pass
     
-
+    # add by Sam: force the end of process
+    server_proc.kill()
+    
+    
     # Clients receive closure messages even if the server exits without closing
     server_proc = ProcessSpawner()
     server_proc.client['self']._closed = 'sabotage!'
     time.sleep(0.1)
     assert server_proc.client.disconnected() is True
     
+    # add by Sam: force the end of process
+    server_proc.kill()
     
     # Clients gracefully handle sudden death of server (with timeout)
     server_proc = ProcessSpawner()
@@ -380,9 +385,14 @@ def test_disconnect():
     server_proc.client.close_server()
     assert time.time() - start < 1.0
     assert server_proc.client.disconnected() == True
+    
+    # add by Sam: force the end of process
+    server_proc.kill()
 
 
 
 if __name__ == '__main__':
     test_rpc()
-    test_serializer()
+    test_qt_rpc()
+    test_disconnect()
+    

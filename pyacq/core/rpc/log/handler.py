@@ -136,9 +136,10 @@ class RPCLogHandler(logging.StreamHandler):
 
     def flush_records(self):
         with self.record_lock:
-            while len(self.records) > 0:
-                rec = self.records.pop(0)
-                logging.StreamHandler.emit(self, rec)
+            recs = self.records[:]
+            self.records = []
+        for rec in recs:
+            logging.StreamHandler.emit(self, rec)
 
 
 _sys_excepthook = None

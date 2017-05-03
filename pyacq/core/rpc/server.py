@@ -434,7 +434,7 @@ class RPCServer(object):
 
     def _final_close(self):
         # Called after the server has closed and sent its disconnect messages.
-        pass
+        self._socket.close()
 
     def running(self):
         """Boolean indicating whether the server is still running.
@@ -591,9 +591,11 @@ class QtPollThread(QtCore.QThread):
         return_addr = 'inproc://%x' % id(self)
         context = zmq.Context.instance()
         self.return_socket = context.socket(zmq.PAIR)
+        self.return_socket.linger = 1000  # don't let socket deadlock when exiting
         self.return_socket.bind(return_addr)
         
         server._socket = context.socket(zmq.PAIR)
+        server._socket.linger = 1000  # don't let socket deadlock when exiting
         server._socket.connect(return_addr)
 
         self.new_request.connect(server._process_one)

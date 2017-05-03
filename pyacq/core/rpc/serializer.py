@@ -85,6 +85,12 @@ class Serializer:
                     'data': obj.strftime('%Y-%m-%d')}
         elif obj is None:
             return {encode_key: 'none'}
+        elif isinstance(obj, np.float_):
+            #convert for numpy.float32, numpy.float64, ...
+            return float(obj)
+        elif isinstance(obj, np.int_):
+            #convert for numpy.int32, numpy.int64, ...
+            return int(obj)
         else:
             # All unrecognized types must be converted to proxy.
             if not isinstance(obj, ObjectProxy):

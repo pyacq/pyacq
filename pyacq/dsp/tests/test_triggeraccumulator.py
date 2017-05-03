@@ -14,20 +14,21 @@ from pyacq.dsp.triggeraccumulator import TriggerAccumulator
 from pyqtgraph.Qt import QtCore, QtGui
 
 
+
 nb_channel = 2
 sample_rate =1000.
 chunksize = 100
 
 length = int(sample_rate*20)
 t = np.arange(length)/sample_rate
-buffer = np.random.rand(nb_channel, length)*.3
-buffer[0,:] = 0
+buffer = np.random.rand(length, nb_channel)*.3
+buffer[:, 0] = 0
 for i in range(1,20):
-    buffer[0, (t>i)&(t<i+.4)] = 2.
+    buffer[(t>i)&(t<i+.4), 0] = 2.
     if i%3==0:
         #add  rebounce every 3 triggers
-        buffer[0, (t>i+.01)&(t<i+0.015)] = 0.
-        buffer[0, (t>i+.02)&(t<i+0.025)] = 0.
+        buffer[(t>i+.01)&(t<i+0.015), 0] = 0.
+        buffer[(t>i+.02)&(t<i+0.025), 0] = 0.
 buffer = buffer.astype('float32')
 
 
@@ -36,11 +37,8 @@ def test_TriggerAccumulator():
     app = pg.mkQApp()
     
     dev = NumpyDeviceBuffer()
-    dev.configure(nb_channel=nb_channel, sample_interval=1./sample_rate, chunksize=chunksize,
-                    buffer=buffer, timeaxis=1,)
-    dev.output.configure(protocol='tcp', interface='127.0.0.1', transfermode='sharedarray',
-                            sharedarray_shape=(nb_channel, 2048*50), ring_buffer_method = 'double', timeaxis = 1,
-                            dtype = 'float32')
+    dev.configure(nb_channel=nb_channel, sample_interval=1./sample_rate, chunksize=chunksize, buffer=buffer)
+    dev.output.configure(protocol='tcp', interface='127.0.0.1', transfermode='plaindata', dtype='float32')
     dev.initialize()
 
     trigger = AnalogTrigger()

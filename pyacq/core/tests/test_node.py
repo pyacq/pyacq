@@ -76,13 +76,13 @@ def test_stream_between_remote_nodes():
     # start them for a while
     sender.start()
     receiver.start()
-    print(nodegroup.any_node_running())
+    #~ print(nodegroup.any_node_running())
     
     time.sleep(2.)
     
     sender.stop()
     receiver.stop()
-    print(nodegroup.any_node_running())
+    #~ print(nodegroup.any_node_running())
     
     man.close()
 
@@ -131,7 +131,6 @@ def test_stream_between_local_and_remote_nodes():
     
 
 
-
 def test_visual_node_both_in_main_qapp_and_remote_qapp():
     man = create_manager(auto_close_at_exit=False)
     nodegroup = man.create_nodegroup('nodegroup')
@@ -170,7 +169,6 @@ def test_visual_node_both_in_main_qapp_and_remote_qapp():
     sender.start()
     receiver0.start()
     receiver1.start()
-    print(nodegroup.any_node_running())
 
     def terminate():
         sender.stop()
@@ -179,7 +177,7 @@ def test_visual_node_both_in_main_qapp_and_remote_qapp():
         receiver1.close()
         app.quit()
         
-    timer = QtCore.QTimer(singleShot=True, interval=1000)
+    timer = QtCore.QTimer(singleShot=True, interval=2000)
     timer.timeout.connect(terminate)
     timer.start()
     
@@ -191,9 +189,9 @@ def test_visual_node_both_in_main_qapp_and_remote_qapp():
     
 
 if __name__ == '__main__':
-    test_stream_between_local_nodes()
-    test_stream_between_remote_nodes()
-    test_stream_between_local_and_remote_nodes()
+    #~ test_stream_between_local_nodes()
+    #~ test_stream_between_remote_nodes()
+    #~ test_stream_between_local_and_remote_nodes()
     test_visual_node_both_in_main_qapp_and_remote_qapp()
 
 

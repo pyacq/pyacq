@@ -5,6 +5,7 @@
 from pyacq.core.rpc import ProcessSpawner
 import os
 
+
 def test_spawner():
     proc = ProcessSpawner()
     cli = proc.client

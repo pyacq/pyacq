@@ -45,7 +45,7 @@ class AVThread(QtCore.QThread):
             for frame in packet.decode():
                 arr = frame.to_rgb().to_nd_array()
                 n += 1
-                self.out_stream.send(n, arr)
+                self.out_stream.send(arr, index=n)
 
     def stop(self):
         with self.lock:

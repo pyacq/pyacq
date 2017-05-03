@@ -15,9 +15,11 @@ logger = logging.getLogger()
 
 
 def test_manager():
-    #logger.level = logging.DEBUG
-    mgr = create_manager('rpc')
+    #~ logger.level = logging.DEBUG
+    mgr = create_manager('rpc', auto_close_at_exit=False)
     
+    #~ print(type(mgr))
+    #~ exit()
     # Create a local Host to communicate with
     host_proc, host = Host.spawn('test-host')
     host_addr = host_proc.client.address
@@ -105,4 +107,4 @@ def test_close_manager_explicit():
 if __name__ == '__main__':
     test_manager()
     test_close_manager_explicit()
-    test_close_manager_implicit()
+    #~ test_close_manager_implicit()

@@ -75,14 +75,14 @@ class QTriggeredOscilloscope(BaseOscilloscope):
         #create a trigger
         
         self.trigger.configure()
-        self.trigger.input.connect(self.proxy_input.params)
+        self.trigger.input.connect(self.input.params)
         self.trigger.output.configure(protocol='inproc', transfermode='plaindata')
         self.trigger.initialize()
         
         #create a triggeraccumulator
         
         self.triggeraccumulator.configure(max_stack_size = np.inf)
-        self.triggeraccumulator.inputs['signals'].connect(self.proxy_input.params)
+        self.triggeraccumulator.inputs['signals'].connect(self.input.params)
         self.triggeraccumulator.inputs['events'].connect(self.trigger.output)
         self.triggeraccumulator.initialize()
         

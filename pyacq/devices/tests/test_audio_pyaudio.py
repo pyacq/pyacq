@@ -56,7 +56,7 @@ def test_play_sinus():
     audioout = nodegroup.create_node('PyAudio', name='audioout')
     
     audioin.configure(sample_interval=1./sr, chunksize=chunksize, nb_channel=nb_channel)
-    audioin.output.configure(protocol='inproc', transfermode='plaindata')
+    audioin.output.configure(protocol='inproc', transfermode='plaindata', dtype='float32')
     audioin.initialize()
     
     audioout.configure(nb_channel=nb_channel, sample_rate=sr,
@@ -76,6 +76,6 @@ def test_play_sinus():
     
 if __name__ == '__main__':
     test_local_app_in_out()
-    test_play_sinus()
+    #~ test_play_sinus()
 
  
