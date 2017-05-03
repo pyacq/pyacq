@@ -7,7 +7,7 @@ from .arraytools import make_dtype
 class RingBuffer:
     """Class that collects data as it arrives from an InputStream and writes it
     into a single- or double-ring buffer.
-
+    
     This allows the user to request the concatenated history of data
     received by the stream, up to a predefined length. Double ring buffers
     allow faster, copyless reads at the expense of doubled write time and memory
@@ -16,21 +16,21 @@ class RingBuffer:
     def __init__(self, shape, dtype, double=True, shmem=None, fill=None, axisorder=None):
         self.double = double
         self.shape = shape
-        # order of axes as written in memory. This does not affect the shape of the
+        # order of axes as written in memory. This does not affect the shape of the 
         # buffer as seen by the user, but can be used to make sure a specific axis
         # is contiguous in memory.
         if axisorder is None:
             axisorder = np.arange(len(shape))
         self.axisorder = np.array(axisorder)
-
+        
         shape = (shape[0] * (2 if double else 1),) + shape[1:]
         nativeshape = np.array(shape)[self.axisorder]
-
+        
         # initialize int buffers with 0 and float buffers with nan
         if fill is None:
             fill = 0 if make_dtype(dtype).kind in 'ui' else np.nan
         self._filler = fill
-
+        
         if shmem is None:
             self.buffer = np.empty(nativeshape, dtype=make_dtype(dtype)).transpose(np.argsort(axisorder))
             self.buffer[:] = self._filler
@@ -48,9 +48,9 @@ class RingBuffer:
             self.buffer = buf.transpose(np.argsort(axisorder))
             self._indexes = self._shmem.to_numpy(offset=0, dtype='int64', shape=(2,))
             self.shm_id = self._shmem.shm_id
-
+        
         self.dtype = self.buffer.dtype
-
+        
         if shmem in (None, True):
             # Index of last writable sample + 1. This value is used to determine which
             # buffer indices map to which data indices (where buffer indices wrap
@@ -59,7 +59,7 @@ class RingBuffer:
             # Index of last written sample + 1. This is used to determine how much of
             # the buffer is *valid* for reading.
             self._set_read_index(0)
-
+        
         # Note: read_index and write_index are defined independently to avoid
         # race condifions with processes reading and writing from the same
         # shared memory simultaneously. When new data arrives:
@@ -79,8 +79,8 @@ class RingBuffer:
         #                                    |  [........]           read without copy
         #                        [........]  |                       read without copy
         #                               [....|......]                read with copy
-        #
-
+        # 
+        
     def index(self):
         return self._read_index
 
@@ -112,32 +112,32 @@ class RingBuffer:
         if data.dtype != self.dtype:
             raise TypeError("Data has incorrect dtype %s (buffer requires %s)" %
                             (data.dtype, self.dtype))
-
+        
         # by default, index advances by the size of the chunk
         if index is None:
             index = self._write_index + dsize
-
+        
         assert dsize <= index - self._write_index, ("Data size is %d, but index "
-                                                    "only advanced by %d." %
-                                                    (dsize, index-self._write_index))
+                                                    "only advanced by %d." % 
+                                                    (dsize, index-self._write_index)) 
 
         revert_inds = [self._read_index, self._write_index]
         try:
             # advance write index. This immediately prevents other processes from
             # accessing memory that is about to be overwritten.
             self._set_write_index(index)
-
+            
             # decide if any skipped data needs to be filled in
             fill_start = max(self._read_index, self._write_index - bsize)
             fill_stop = self._write_index - dsize
-
+            
             if fill_stop > fill_start:
                 # data was skipped; fill in missing regions with 0 or nan.
                 self._write(fill_start, fill_stop, self._filler)
                 revert_inds[1] = fill_stop
-
+                
             self._write(self._write_index - dsize, self._write_index, data)
-
+                
             self._set_read_index(index)
         except:
             # If there is a failure writing data, revert read/write pointers
@@ -150,18 +150,18 @@ class RingBuffer:
         bsize = self.shape[0]
         dsize = stop - start
         i = start % bsize
-
+        
         if self.double:
             self.buffer[i:i+dsize] = value
             i += bsize
-
+        
         if i + dsize <= self.buffer.shape[0]:
             self.buffer[i:i+dsize] = value
         else:
             n = self.buffer.shape[0]-i
             self.buffer[i:] = value[:n]
             self.buffer[:dsize-n] = value[n:]
-
+        
     def __getitem__(self, item):
         if isinstance(item, tuple):
             first = item[0]
@@ -169,7 +169,7 @@ class RingBuffer:
         else:
             first = item
             rest = None
-
+        
         if isinstance(first, (int, np.integer)):
             start = self._interpret_index(first)
             stop = start + 1
@@ -183,12 +183,12 @@ class RingBuffer:
                 data = data[rest]
         else:
             raise TypeError("Invalid index type %s" % type(first))
-
+        
         return data
 
     def get_data(self, start, stop, copy=False, join=True):
         """Return a segment of the ring buffer.
-
+        
         Parameters
         ----------
         start : int
@@ -211,20 +211,20 @@ class RingBuffer:
         if start < first or stop > last:
             raise IndexError("Requested segment (%d, %d) is out of bounds for ring buffer. "
                              "Current bounds are (%d, %d)." % (start, stop, first, last))
-
+        
         bsize = self.shape[0]
         copied = False
-
+        
         if self.double:
             # This do not work when get_data(-10, 50) meaning stop=50 length=60 (start=stop-length)
             # this is util at the beging to get larger buffer than already possible
             #start_ind = start % bsize
             #stop_ind = start_ind + (stop - start)
-
+            
             # I prefer this which equivalent but work with start<0:
             stop_ind = stop%bsize + bsize
             start_ind = stop_ind - (stop - start)
-
+            
             data = self.buffer[start_ind:stop_ind]
         else:
             break_index = self._write_index - (self._write_index % bsize)
@@ -247,10 +247,10 @@ class RingBuffer:
                     data[:break_index-start] = a
                     data[break_index-start:] = b
                     copied = True
-
+        
         if copy and not copied:
             data = data.copy()
-
+            
         if join:
             return data
         else:
@@ -260,7 +260,7 @@ class RingBuffer:
     def _interpret_index(self, index):
         """Return normalized index, accounting for negative and None values.
         Also check that the index is readable.
-
+        
         Slices are returned such that start,stop are swapped and shifted -1 if
         the step is negative. This makes it possible to collect the result in
         the forward direction and handle the step later.
@@ -275,13 +275,13 @@ class RingBuffer:
             return index
         elif isinstance(index, slice):
             start, stop, step = index.start, index.stop, index.step
-
+            
             # Handle None and negative steps
             if step is None:
                 step = 1
             if step < 0:
                 start, stop = stop, start
-
+                
             # Interpret None and negative indices
             if start is None:
                 start = start_index
@@ -289,8 +289,8 @@ class RingBuffer:
                 if start < 0:
                     start += self._read_index
                 if step < 0:
-                    start += 1
-
+                    start += 1 
+                
             if stop is None:
                 stop = self._read_index
             else:
@@ -298,7 +298,7 @@ class RingBuffer:
                     stop += self._read_index
                 if step < 0:
                     stop += 1
-
+                
             # Bounds check.
             # Perhaps we could clip the returned data like lists/arrays do,
             # but in this case the feedback is likely to be useful to the user.
