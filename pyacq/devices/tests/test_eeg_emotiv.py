@@ -94,7 +94,14 @@ def test_eeg_emotiv_direct():
     viewer_gyro.start()
 
     def terminate():
+        viewer_sigs.stop()
+        viewer_imp.stop()
+        viewer_gyro.stop()
         dev.stop()
+        viewer_sigs.close()
+        viewer_imp.close()
+        viewer_gyro.close()
+        dev.close()
         app.quit()
 
     # start for a while
