@@ -1,3 +1,4 @@
+import sys
 import os
 import time
 import weakref
@@ -58,6 +59,9 @@ class RPCClient(object):
         # pick a unique name: host.pid.tid:rpc_addr
         self.name = ("%s.%s.%s:%s" % (log.get_host_name(), log.get_process_name(),
                                       log.get_thread_name(), address.decode())).encode()
+
+        if sys.platform == 'win32' and '0.0.0.0' in str(address):
+            logger.warn("RPC server address is likely to cause trouble on windows: %r" % address)
         self.address = address
         
         key = (threading.current_thread().ident, address)

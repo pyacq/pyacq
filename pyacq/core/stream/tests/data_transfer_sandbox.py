@@ -9,7 +9,7 @@ ctx = zmq.Context()
 sock1 = ctx.socket(zmq.PAIR)
 sock2 = ctx.socket(zmq.PAIR)
 
-sock1.bind('tcp://*:*')
+sock1.bind('tcp://127.0.0.1:*')
 sock2.connect(sock1.getsockopt(zmq.LAST_ENDPOINT))
 
 
