@@ -11,6 +11,9 @@ from pyqtgraph.util.mutex import Mutex
 import struct
 import time
 
+import logging
+logger = logging.getLogger(__name__)
+
 try:
     import serial
     HAVE_PYSERIAL = True
@@ -18,7 +21,7 @@ except ImportError:
     HAVE_PYSERIAL = False
 
 _START_BYTE = 0xA0  # start of data packet
-_END_BYTE = 0xC0  # end of data packe
+_END_BYTE = 0xC0  # end of data packet
 
 
 class OpenBCIThread(QtCore.QThread):
@@ -52,7 +55,7 @@ class OpenBCIThread(QtCore.QThread):
 
             if unpacked == _START_BYTE:
                 if self.count_lost_bytes!=0:
-                    print("Lost %i bytes before reading the begining of a packet"%self.count_lost_bytes)
+                    logger.debug("Lost %i bytes before reading the begining of a packet"%self.count_lost_bytes)
                     self.count_lost_bytes=0
                 # self.data[0] = unpacked
                 data = self.serial_port.read(self.packet_bsize-2)
@@ -60,7 +63,7 @@ class OpenBCIThread(QtCore.QThread):
                 if last_byte == _END_BYTE:
                     self.decode(data)
                 else:
-                    print("Wrong packet")
+                    logger.debug("Wrong packet")
                     self.chan_values[0,:] = 0
                     self.aux_values[0,:] = 0
                 self.n += 1
@@ -107,12 +110,14 @@ class OpenBCI(Node):
     This class is a bridge between Pyacq and the 32bit board OpenBCI
     amplifier from the open source project http://openbci.com.
     Daisy board version for now
+
+    #TODO : this is a very basic code to grab data from 8 channel Daisy OpenBCI board.
+    # next version will improve dialog with the board and auto-initialisation
+
+
     """
-    _output_specs = {'chan' : dict(streamtype='analogsignal',dtype='int64',
-                            shape=(-1, 8), sample_rate=250., timeaxis=0, nb_channel = 8),
-                    'aux'   : dict(streamtype='analogsignal', dtype='int64',
-                            shape=(-1, 3), sample_rate=128., time_axis=0, nb_channel = 3)
-                    }
+    _output_specs = {'chan' : dict(streamtype='analogsignal',dtype='int64'),
+                     'aux'   : dict(streamtype='analogsignal', dtype='int64')}
 
 
     def __init__(self, **kargs):
@@ -152,10 +157,14 @@ class OpenBCI(Node):
         self.outputs['chan'].spec['sample_rate'] = sample_rate
         self.outputs['chan'].spec['nb_channel'] = nb_channel
 
+        self.outputs['aux'].spec['shape'] = (-1, nb_aux)
+        self.outputs['aux'].spec['sample_rate'] = sample_rate
+        self.outputs['aux'].spec['nb_channel'] = nb_aux
+
     def _initialize(self):
         self.serial_port = serial.Serial(port=self.device_handle, baudrate=self.device_baud)
-        self.reset()
-        self.print_incoming()
+        self.reset_port()
+        self.check_response()
         self._thread = OpenBCIThread(self.outputs, self.serial_port, self.nb_channel, self.nb_aux)
 
     def _start(self):
@@ -166,28 +175,29 @@ class OpenBCI(Node):
         self._thread.wait()
 
     def _close(self):
+        print('close')
         self.serial_port.close()
         pass
 
-    def reset(self):
+    def reset_port(self):
         self.serial_port.write('v'.encode('utf-8'))
         #wait for device to be ready
         time.sleep(2)
 
-    def print_incoming(self):
+    def check_response(self):
         if self.serial_port.inWaiting():
             message = ''
             #Look for end sequence $$$
             while '$$$' not in message:
                 message += self.serial_port.read().decode("utf-8")
-            print(message)
+            logger.debug("recv message %s", message)
         else:
-            print("No Message")
+            logger.debug("no message recv")
 
-    def print_register_settings(self):
-        self.serial_port.write('?'.encode('utf-8'))
-        time.sleep(0.5)
-        self.print_incoming()
+    # def print_register_settings(self):
+    #     self.serial_port.write('?'.encode('utf-8'))
+    #     time.sleep(0.5)
+    #     self.check_response()
 
     # def set_channel(self, channel, toggle_position):
     #     #Commands switch channel ON or OFF (1/0)
