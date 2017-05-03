@@ -6,6 +6,7 @@ import atexit
 import zmq
 import logging
 import threading
+import time
 from pyqtgraph.Qt import QtCore
 
 from .client import RPCClient
@@ -62,7 +63,7 @@ class ProcessSpawner(object):
         bootstrap_sock = zmq.Context.instance().socket(zmq.PAIR)
         bootstrap_sock.setsockopt(zmq.RCVTIMEO, 10000)
         bootstrap_sock.bind(bootstrap_addr)
-        bootstrap_sock.linger = 1000
+        bootstrap_sock.linger = 1000 # don't let socket deadlock when exiting
         bootstrap_addr = bootstrap_sock.getsockopt(zmq.LAST_ENDPOINT)
         
         # Spawn new process
@@ -131,10 +132,30 @@ class ProcessSpawner(object):
         # Automatically shut down process when we exit. 
         atexit.register(self.stop)
         
-    def wait(self):
+    def wait(self, timeout=10):
         """Wait for the process to exit and return its return code.
         """
-        return self.proc.wait()
+        # Using proc.wait() can deadlock; use communicate() instead.
+        # see: https://docs.python.org/2/library/subprocess.html#subprocess.Popen.wait
+        try:
+            
+            self.proc.communicate()
+        except (AttributeError, ValueError):
+            # Python bug: http://bugs.python.org/issue30203
+            # Calling communicate on process with closed i/o can generate
+            # exceptions.
+            pass
+        
+        start = time.time()
+        sleep = 1e-3
+        while True:
+            rcode = self.proc.poll()
+            if rcode is not None:
+                return rcode
+            if time.time() - start > timeout:
+                raise TimeoutError("Timed out waiting on process exit for %s" % self.name)
+            time.sleep(sleep)
+            sleep = min(sleep*2, 100e-3)
 
     def kill(self):
         """Kill the spawned process immediately.
@@ -143,7 +164,8 @@ class ProcessSpawner(object):
             return
         logger.info("Kill process: %d", self.proc.pid)
         self.proc.kill()
-        self.proc.wait()
+
+        self.wait()
 
     def stop(self):
         """Stop the spawned process by asking its RPC server to close.
@@ -153,7 +175,8 @@ class ProcessSpawner(object):
         logger.info("Close process: %d", self.proc.pid)
         closed = self.client.close_server()
         assert closed is True, "Server refused to close. (reply: %s)" % closed
-        self.proc.wait()
+
+        self.wait()
 
     def poll(self):
         """Return the spawned process's return code, or None if it has not
@@ -176,10 +199,7 @@ class PipePoller(threading.Thread):
         prefix = self.prefix
         pipe = self.pipe
         while True:
-            line = pipe.readline().decode()[:-1]
+            line = pipe.readline().decode()
             if line == '':
                 break
-            callback(prefix + line)
-        
-    
-
+            callback(prefix + line[:-1])
