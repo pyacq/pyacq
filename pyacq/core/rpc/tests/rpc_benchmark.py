@@ -42,7 +42,7 @@ cli.close_server()
 
 # thread, tcp
 print("=========== tcp to thread ============")
-server = rpc.RPCServer('tcp://*:*')
+server = rpc.RPCServer('tcp://127.0.0.1:*')
 thread = threading.Thread(target=server.run_forever, daemon=True)
 thread.start()
 

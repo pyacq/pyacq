@@ -118,7 +118,7 @@ class RPCServer(object):
         srv = RPCServer.get_server()
         return RPCClient.get_client(srv.address)
         
-    def __init__(self, address="tcp://*:*"):
+    def __init__(self, address="tcp://127.0.0.1:*"):
         self._socket = zmq.Context.instance().socket(zmq.ROUTER)
         
         # socket will continue attempting to deliver messages up to 5 sec after
@@ -409,7 +409,7 @@ class RPCServer(object):
 
     def _final_close(self):
         # Called after the server has closed and sent its disconnect messages.
-        pass
+        self._socket.close()
 
     def running(self):
         """Boolean indicating whether the server is still running.
@@ -477,11 +477,11 @@ class QtRPCServer(RPCServer):
     Parameters
     ----------
     address : str
-        ZMQ address to listen on. Default is "tcp://*:*".
+        ZMQ address to listen on. Default is "tcp://127.0.0.1:*".
     quit_on_close : bool
         If True, then call `QApplication.quit()` when the server is closed. 
     """
-    def __init__(self, address="tcp://*:*", quit_on_close=True):
+    def __init__(self, address="tcp://127.0.0.1:*", quit_on_close=True):
         RPCServer.__init__(self, address)
         self.quit_on_close = quit_on_close
         self.poll_thread = QtPollThread(self)
@@ -536,9 +536,11 @@ class QtPollThread(QtCore.QThread):
         return_addr = 'inproc://%x' % id(self)
         context = zmq.Context.instance()
         self.return_socket = context.socket(zmq.PAIR)
+        self.return_socket.linger = 1000  # don't let socket deadlock when exiting
         self.return_socket.bind(return_addr)
         
         server._socket = context.socket(zmq.PAIR)
+        server._socket.linger = 1000  # don't let socket deadlock when exiting
         server._socket.connect(return_addr)
 
         self.new_request.connect(server._process_one)
