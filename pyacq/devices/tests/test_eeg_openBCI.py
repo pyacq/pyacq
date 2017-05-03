@@ -41,7 +41,7 @@ def test_eeg_OpenBCI():
         app.quit()
 
     # start for a while
-    timer = QtCore.QTimer(singleShot=True, interval=10000)
+    timer = QtCore.QTimer(singleShot=True, interval=30000)
     timer.timeout.connect(terminate)
     timer.start()
 

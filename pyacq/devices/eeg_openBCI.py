@@ -20,18 +20,14 @@ except ImportError:
 _START_BYTE = 0xA0  # start of data packet
 _END_BYTE = 0xC0  # end of data packe
 
-# _START_BYTE = b'\xA0'
-# _END_BYTE = b'\xC0'
 
 class OpenBCIThread(QtCore.QThread):
     def __init__(self, outputs, serial_port, nb_channel, nb_aux):
         QtCore.QThread.__init__(self)
         self.outputs = outputs
         self.n = 0
-        #self.n = np.zeros(1, dtype=np.int)
         self.serial_port = serial_port
         self.packet_bsize = 3 +(nb_channel*3)+(nb_aux*2)
-        # self.data = np.zeros( self.packet_bsize, dtype=np.uint8)
         self.chan_values = np.zeros((1, nb_channel), dtype=np.int64)
         self.aux_values = np.zeros((1, nb_aux), dtype=np.int64)
         self.count_lost_bytes = 0
@@ -166,7 +162,6 @@ class OpenBCI(Node):
         self._thread.start()
 
     def _stop(self):
-        print("stop thread")
         self._thread.stop()
         self._thread.wait()
 
