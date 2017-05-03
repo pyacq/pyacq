@@ -123,12 +123,12 @@ class Emotiv(Node, QtCore.QObject):
         - For Windows, it's the hid object associated with the USB key
     This class need pycrypto package. Windows user will need pywinusb.
     """
-    _output_specs = {'signals': dict(streamtype='analogsignal', dtype='int64',
-                                     shape=(-1, 14), sample_rate=128., timeaxis=0, nb_channel = 14),
-                     'impedances': dict(streamtype='analogsignal', dtype='float64',
-                                        shape=(-1, 14), sample_rate=128., time_axis=0, nb_channel = 14),
-                     'gyro': dict(streamtype='analogsignal', dtype='int64',
-                                  shape=(-1, 2), sample_rate=128., time_axis=0, nb_channel = 2)
+    _output_specs = {'signals': dict(streamtype='analogsignal', dtype='int16',
+                                     shape=(-1, 14), sample_rate=128., nb_channel=14),
+                     'impedances': dict(streamtype='analogsignal', dtype='float32',
+                                        shape=(-1, 14), sample_rate=128., nb_channel=14),
+                     'gyro': dict(streamtype='analogsignal', dtype='int16',
+                                  shape=(-1, 2), sample_rate=128., nb_channel=2)
                      }  # TODO Why we don't keep channel names ??
 
     def __init__(self, **kargs):
@@ -163,13 +163,10 @@ class Emotiv(Node, QtCore.QObject):
                 self.serial = f.readline().strip()
 
     def _initialize(self):
-        self.values = np.zeros((1,len(_channel_names)), dtype=np.int64)
-        self.imp = np.zeros((1,len(_channel_names)), dtype=np.float64)
-        self.gyro = np.zeros((1,2), dtype=np.int64)
+        self.values = np.zeros((1,len(_channel_names)), dtype=np.int16)
+        self.imp = np.zeros((1,len(_channel_names)), dtype=np.float32)
+        self.gyro = np.zeros((1,2), dtype=np.int16)
         self.n = 0
-        self.head_signal = 0
-        self.head_imp = 0
-        self.head_gyro = 0
         self.cipher = setupCrypto(self.serial)
         if not WINDOWS:
             self.dev_handle = open(self.device_path, mode='rb')
