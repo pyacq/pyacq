@@ -80,9 +80,10 @@ Overview of node types
 **Acquisition**                               **Processing**                       **Visualization**
 --------------------------------------------- ------------------------------------ --------------------------------------------------
 :ref:`PyAudio <PyAudio_node>`                 :ref:`Triggering <triggering_nodes>` :ref:`Oscilloscope <analog_viewer_nodes>`
-:ref:`Webcam (libav, imageio) <camera_nodes>`                                      :ref:`Wavelet spectrogram <spectral_viewer_nodes>`
+:ref:`Webcam (libav, imageio) <camera_nodes>` :ref:`Filtering <filtering_nodes>`   :ref:`Wavelet spectrogram <spectral_viewer_nodes>`
 :ref:`BrainAmp <BrainAmp_node>`                                                    :ref:`Video display <image_viewer_nodes>`
 :ref:`Emotiv <Emotiv_node>`
+:ref:`OpenBCI <OpenBCI_node>`
 ============================================= ==================================== ==================================================
 
 
@@ -96,7 +97,7 @@ Installation
 
 * One final dependency, PyQt4, cannot be installed with pip. Linux distributions
   typically provide this package. OSX users can get PyQt4 (and most other
-  dependencies using the `Anaconda Python distribution <https://www.continuum.io/downloads>`_. 
+  dependencies) using the `Anaconda Python distribution <https://www.continuum.io/downloads>`_. 
   Windows users can also use Anaconda or download PyQt4 directly from the
   `Riverbank Computing <https://www.riverbankcomputing.com/software/pyqt/download>`_
   website.

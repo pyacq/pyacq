@@ -35,6 +35,11 @@ EEG
 .. autoclass::  pyacq.devices.Emotiv
    :members:
 
+.. _OpenBCI_node:
+
+.. autoclass::  pyacq.devices.OpenBCI
+   :members:
+
 
 Testing
 -------

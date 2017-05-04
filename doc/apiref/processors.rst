@@ -15,3 +15,12 @@ Triggering Nodes
 
 .. autoclass::  pyacq.dsp.TriggerAccumulator
    :members:
+
+
+Filtering nodes
+---------------
+
+.. _filtering_node:
+
+.. autoclass::  pyacq.dsp.OverlapFiltfilt
+   :members:
