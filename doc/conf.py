@@ -18,31 +18,41 @@ import os
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
-sys.path.insert(0, os.path.abspath('./numpydoc-0.5'))
 sys.path.insert(0, os.path.abspath('..'))
 
 
 # Mock-import dependencies so that documentation can be built even without
 # a complete runtime environment (this is needed for readthedocs.org). See:
 # http://read-the-docs.readthedocs.org/en/latest/faq.html#i-get-import-errors-on-libraries-that-depend-on-c-modules
-from unittest.mock import Mock, MagicMock
+from unittest.mock import MagicMock
 
-class Mock(MagicMock):
-    @classmethod
-    def __getattr__(cls, name):
-        return Mock()
+#class Mock(MagicMock):
+    #def __getattr__(self, name):
+        #return Mock(name=name)
         
-    def __iter__(self):
-        for i in []:
-            yield i
+    #def __iter__(self):
+        #for i in []:
+            #yield i
 
-    QWidget = MagicMock
-    QObject = MagicMock
+    #QWidget = MagicMock
+    #QObject = MagicMock
 
 MOCK_MODULES = ['numpy', 'scipy', 'zmq', 'blosc', 'msgpack', 'pyaudio', 'vispy',
                 'vispy.color', 'pyqtgraph', 'pyqtgraph.Qt', 'pyqtgraph.util.mutex', 'PyQt4']
-sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
+sys.modules.update((mod_name, MagicMock(name=mod_name)) for mod_name in MOCK_MODULES)
 
+class QWidget(object):
+    pass
+class QObject(object):
+    pass
+
+sys.modules['PyQt4'].QtGui.QWidget = QWidget
+sys.modules['pyqtgraph'].Qt.QtGui = sys.modules['PyQt4'].QtGui 
+sys.modules['pyqtgraph.Qt'].QtGui = sys.modules['PyQt4'].QtGui 
+
+sys.modules['PyQt4'].QtCore.QObject = QObject
+sys.modules['pyqtgraph'].Qt.QtCore = sys.modules['PyQt4'].QtCore 
+sys.modules['pyqtgraph.Qt'].QtCore = sys.modules['PyQt4'].QtCore
 
 # -- General configuration ------------------------------------------------
 
