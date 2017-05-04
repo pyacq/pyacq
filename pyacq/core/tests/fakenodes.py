@@ -23,7 +23,6 @@ class FakeSender(Node):
         spec = self.outputs['signals'].params
         assert len(spec['shape']) ==2, 'shape error'
         assert spec['shape'][1] ==16, 'shape error'
-        assert spec['timeaxis']==0, 'timeaxis error'
 
     def _start(self):
         self.timer.start()
@@ -36,14 +35,15 @@ class FakeSender(Node):
     
     def send_data(self):
         self.n += 256
-        self.outputs['signals'].send(self.n, np.random.rand(256, 16).astype('float32'))
+        self.outputs['signals'].send(np.random.rand(256, 16).astype('float32'), index=self.n)
 
 
 class FakeReceiver(Node):
     _input_specs = {'signals': {}}
 
     def _configure(self, **kargs):
-        print('I am node ', self.name, 'configured')
+        pass
+        #~ print('I am node ', self.name, 'configured')
 
     def _initialize(self):
         self.timer = QtCore.QTimer(singleShot=False)
@@ -96,7 +96,7 @@ class ReceiverWidget(WidgetNode):
     def poll_socket(self):
         event = self.inputs['signals'].socket.poll(0)
         if event!=0:
-            index, data = self.inputs['signals'].recv()
+            index, data = self.inputs['signals'].recv(return_data=True)
             self.label.setText('{}  {}   Recv: {} {}'.format(self.name,self.tag, index, data.shape))
 
 

@@ -41,7 +41,6 @@ class BaseOscilloscope(WidgetNode):
     The BaseOscilloscope requires its input stream to have the following properties:
     
     * transfermode==sharedarray
-    * timeaxis==1
     
     If the input stream does not meet these requirements, then a StreamConverter
     is created to proxy the input. This can degrade performance when multiple
@@ -49,6 +48,9 @@ class BaseOscilloscope(WidgetNode):
     better to manually create single StreamConverter to provide shared input
     for all Oscilloscopes.
     """
+    
+    #In the code  willingly : self.input is self.inputs['signal'] because some subclass can have several inputs
+    
     def __init__(self, **kargs):
         WidgetNode.__init__(self, **kargs)
         
@@ -78,38 +80,13 @@ class BaseOscilloscope(WidgetNode):
         self.max_xsize = max_xsize
     
     def _initialize(self):
-        assert len(self.input.params['shape']) == 2, 'Are you joking ?'
-        d0, d1 = self.input.params['shape']
-        if self.input.params['timeaxis']==0:
-            self.nb_channel = d1
-        else:
-            self.nb_channel = d0
+        assert len(self.inputs['signals'].params['shape']) == 2, 'Are you joking ?'
+        self.nb_channel = self.inputs['signals'].params['shape'][1]
+        self.sample_rate = self.inputs['signals'].params['sample_rate']
+        buf_size = int(self.sample_rate * self.max_xsize)
+        self.inputs['signals'].set_buffer(size=buf_size, axisorder=[1,0], double=True)
+        #TODO : check that this not lead 
         
-        sr = self.input.params['sample_rate']
-        # create proxy input
-        if self.input.params['transfermode'] == 'sharedarray' and self.input.params['timeaxis'] == 1:
-            self.proxy_input = self.input
-            self.conv = None
-        else:
-            # if input is not transfermode creat a proxy
-            self.conv = StreamConverter()
-            self.conv.configure()
-            self.conv.input.connect(self.input.params)
-            if self.input.params['timeaxis']==0:
-                new_shape = (d1, d0)
-            else:
-                new_shape = (d0, d1)
-            self.conv.output.configure(protocol='inproc', interface='127.0.0.1', port='*', 
-                   transfermode='sharedarray', streamtype='analogsignal',
-                   dtype='float32', shape=new_shape, timeaxis=1, 
-                   compression='', scale=None, offset=None, units='',
-                   sharedarray_shape=(self.nb_channel, int(sr*self.max_xsize)), ring_buffer_method = 'double',
-                   sample_rate = sr,
-                   )
-            self.conv.initialize()
-            self.proxy_input = InputStream()
-            self.proxy_input.connect(self.conv.output)
-            
 
         # Create parameters
         all = []
@@ -120,7 +97,7 @@ class BaseOscilloscope(WidgetNode):
         self.params = pg.parametertree.Parameter.create(name='Global options',
                                                     type='group', children=self._default_params)
         self.all_params = pg.parametertree.Parameter.create(name='all param',
-                                    type='group', children=[self.params,self.by_channel_params])
+                                    type='group', children=[self.params, self.by_channel_params])
         self.all_params.sigTreeStateChanged.connect(self.on_param_change)
         
         
@@ -131,9 +108,8 @@ class BaseOscilloscope(WidgetNode):
         else:
             self.params_controller = None
         
-        
         # poller
-        self.poller = ThreadPollInput(input_stream=self.proxy_input)
+        self.poller = ThreadPollInput(input_stream=self.inputs['signals'], return_data=None)
         self.poller.new_data.connect(self._on_new_data)
         # timer
         self._head = 0
@@ -143,15 +119,12 @@ class BaseOscilloscope(WidgetNode):
     def _start(self):
         self.estimate_decimate()
         self.reset_curves_data()
-        if self.conv is not None:
-            self.conv.start()
         self.poller.start()
         self.timer.start()
     
     def _stop(self):
-        if self.conv is not None:
-            self.conv.stop()
         self.poller.stop()
+        self.poller.wait()
         self.timer.stop()
     
     def _close(self):
@@ -169,20 +142,20 @@ class BaseOscilloscope(WidgetNode):
     def reset_curves_data(self):
         xsize = self.params['xsize']
         decimate = self.params['decimate']
-        sr = self.input.params['sample_rate']
-        self.full_size = int(xsize*sr)
+        #~ sr = self.input.params['sample_rate']
+        self.full_size = int(xsize*self.sample_rate)
         self.small_size = self.full_size//decimate
         if self.small_size%2!=0:  # ensure for min_max decimate
             self.small_size -=1
         self.full_size = self.small_size*decimate
-        self.t_vect = np.arange(0,self.small_size, dtype=float)/(sr/decimate)
+        self.t_vect = np.arange(0,self.small_size, dtype=float)/(self.sample_rate/decimate)
         self.t_vect -= self.t_vect[-1]
         self.curves_data = [np.zeros((self.small_size), dtype=float) for i in range(self.nb_channel)]
 
     def estimate_decimate(self, nb_point=4000):
         xsize = self.params['xsize']
-        sr = self.input.params['sample_rate']
-        self.params['decimate'] = max(int(xsize*sr)//nb_point, 1)
+        #~ sr = self.input.params['sample_rate']
+        self.params['decimate'] = max(int(xsize*self.sample_rate)//nb_point, 1)
 
     def xsize_zoom(self, xmove):
         factor = xmove/100.
@@ -190,6 +163,7 @@ class BaseOscilloscope(WidgetNode):
         limits = self.params.param('xsize').opts['limits']
         if newsize>limits[0] and newsize<limits[1]:
             self.params['xsize'] = newsize
+
 
 class OscilloscopeController(QtGui.QWidget):
     def __init__(self, parent=None, viewer=None):
@@ -223,7 +197,6 @@ class OscilloscopeController(QtGui.QWidget):
         h.addLayout(v)
         
         
-        
         if self.viewer.nb_channel>1:
             v.addWidget(QtGui.QLabel('<b>Select channel...</b>'))
             names = [p.name() for p in self.viewer.by_channel_params]
@@ -235,8 +208,6 @@ class OscilloscopeController(QtGui.QWidget):
             for i in range(len(names)):
                 self.qlist.item(i).setSelected(True)            
             v.addWidget(QtGui.QLabel('<b>and apply...<\b>'))
-             
-            
             
         
         # Gain and offset
@@ -331,7 +302,8 @@ class QOscilloscope(BaseOscilloscope):
 
     def _initialize(self):
         BaseOscilloscope._initialize(self)
-        self.params.param('xsize').setLimits([2./self.input.params['sample_rate'], self.max_xsize*.95])
+        #~ self.params.param('xsize').setLimits([2./self.input.params['sample_rate'], self.max_xsize*.95])
+        self.params.param('xsize').setLimits([2./self.sample_rate, self.max_xsize*.95])
         
         self.curves = []
         self.channel_labels = []
@@ -352,7 +324,7 @@ class QOscilloscope(BaseOscilloscope):
         gains = np.array([p['gain'] for p in self.by_channel_params.children()])
         offsets = np.array([p['offset'] for p in self.by_channel_params.children()])
         visibles = np.array([p['visible'] for p in self.by_channel_params.children()], dtype=bool)
-        sr = self.input.params['sample_rate']
+        #~ sr = self.input.params['sample_rate']
         xsize = self.params['xsize'] 
         
         head = self._head
@@ -361,11 +333,14 @@ class QOscilloscope(BaseOscilloscope):
                 head = head - head%(decimate*2)
             else:
                 head = head - head%decimate
-            
-        full_arr = self.proxy_input.get_array_slice(head,self.full_size)
+        
+        full_arr = self.inputs['signals'].get_data(head-self.full_size, head, copy=False, join=True).T
+        
+        full_arr = full_arr.astype(float)
+        
         if decimate>1:
             if self.params['decimation_method'] == 'pure_decimate':
-                small_arr = full_arr[:,::decimate].copy()
+                small_arr = full_arr[:, ::decimate].copy()
             elif self.params['decimation_method'] == 'min_max':
                 arr = full_arr.reshape(full_arr.shape[0], -1, decimate*2)
                 small_arr = np.empty((full_arr.shape[0], self.small_size), dtype=full_arr.dtype)
@@ -444,17 +419,16 @@ class QOscilloscope(BaseOscilloscope):
                 p['offset'] = p['offset'] + self.all_mean[i]*p['gain'] - self.all_mean[i]*p['gain']*factor
             p['gain'] = p['gain']*factor
     
-    
     def autoestimate_scales(self):
         if self._head is None:
             return None, None
         head = self._head
-        sr = self.input.params['sample_rate']
-        xsize = self.params['xsize'] 
-        np_arr = self.proxy_input.get_array_slice(head,self.full_size)
-        self.all_sd = np.std(np_arr, axis=1)
-        # self.all_mean = np.mean(np_arr, axis = 1)
-        self.all_mean = np.median(np_arr, axis=1)
+        #~ sr = self.input.params['sample_rate']
+        xsize = self.params['xsize']
+        np_arr = self.inputs['signals'].get_data(head-self.full_size, head)
+        self.all_sd = np.nanstd(np_arr, axis=0)
+        # self.all_mean = np.nanmean(np_arr, axis = 1)
+        self.all_mean = np.nanmedian(np_arr, axis=0)
         return self.all_mean, self.all_sd
 
     def auto_gain_and_offset(self, mode=0, visibles=None):

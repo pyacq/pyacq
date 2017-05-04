@@ -40,3 +40,8 @@ def check_serializer(serializer):
             assert np.all(v1 == v2)
         else:
             assert v1 == v2
+
+
+if __name__ == '__main__':
+    test_msgpack()
+    test_json()
