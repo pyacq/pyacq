@@ -1,3 +1,7 @@
+# -*- coding: utf-8 -*-
+# Copyright (c) 2016, French National Center for Scientific Research (CNRS)
+# Distributed under the (new) BSD License. See LICENSE for more info.
+
 import sys
 import time
 import os
@@ -21,16 +25,51 @@ logger = logging.getLogger(__name__)
 
 
 class RPCServer(object):
-    """RPC server for invoking requests on proxied objects.
+    """Remote procedure call server for invoking requests on proxied objects.
     
+    RPCServer instances are automatically created when using :class:`ProcessSpawner`.
+    It is rarely necessary for the user to interact directly with RPCServer.
+    
+    There may be at most one RPCServer per thread. RPCServers can be run in a
+    few different modes:
+    
+    * **Exclusive event loop**: call `run_forever()` to cause the server to listen
+      indefinitely for incoming request messages.
+    * **Lazy event loop**: call `run_lazy()` to register the server with the current
+      thread. The server's socket will be polled whenever an RPCClient is waiting
+      for a response (this allows reentrant function calls). You can also manually
+      listen for requests with `_read_and_process_one()` in this mode.
+    * **Qt event loop**: use :class:`QtRPCServer`. In this mode, messages are polled in 
+      a separate thread, but then sent to the Qt event loop by signal and
+      processed there. The server is registered as running in the Qt thread.
+
+    
+      
     Parameters
     ----------
     name : str
         Name used to identify this server.
     address : URL
         Address for RPC server to bind to. Default is 'tcp://127.0.0.1:*'.
+        
+        **Note:** binding RPCServer to a public IP address is a potential
+        security hazard.
 
-    Basic usage::
+    Notes
+    -----
+    
+    **RPCServer is not a secure server.** It is intended to be used only on trusted
+    networks; anyone with tcp access to the server can execute arbitrary code
+    on the server.
+        
+    RPCServer is not a thread-safe class. Only use :class:`RPCClient` to communicate
+    with RPCServer from other threads.
+    
+
+    Examples
+    --------
+
+    ::
     
         # In host/process/thread 1:
         server = RPCServer()
@@ -56,21 +95,6 @@ class RPCServer(object):
         # See ObjectProxy for more information on interacting with remote
         # objects, including (a)synchronous communication.
 
-    There may be at most one RPCServer per thread. RPCServers can be run in a
-    few different modes:
-    
-    * Exclusive event loop - call `run_forever()` to cause the server to listen
-      indefinitely for incoming request messages.
-    * Lazy event loop - call `run_lazy()` to register the server with the current
-      thread. The server's socket will be polled whenever an RPCClient is waiting
-      for a response (this allows reentrant function calls). You can also manually
-      listen for requests with `_read_and_process_one()` in this mode.
-    * Qt event loop - use QtRPCServer. In this mode, messages are polled in 
-      a separate thread, but then sent to the Qt event loop by signal and
-      processed there. The server is registered as running in the Qt thread.
-        
-    Note: RPCServer is not a thread-safe class. Only use RPCClient to communicate
-    with RPCServer from other threads.
     """
     
     servers_by_thread = {}
@@ -117,7 +141,7 @@ class RPCServer(object):
         from .client import RPCClient
         srv = RPCServer.get_server()
         return RPCClient.get_client(srv.address)
-        
+
     def __init__(self, address="tcp://127.0.0.1:*"):
         self._socket = zmq.Context.instance().socket(zmq.ROUTER)
         
@@ -127,6 +151,7 @@ class RPCServer(object):
         self._socket.linger = 5000
         
         self._socket.bind(address)
+        #: The zmq address where this server is listening (e.g. 'tcp:///127.0.0.1:5678')
         self.address = self._socket.getsockopt(zmq.LAST_ENDPOINT)
         self._closed = False
         
@@ -322,8 +347,8 @@ class RPCServer(object):
         """
         if action == 'call_obj':
             obj = opts['obj']
-            fnargs = opts['args']
-            fnkwds = opts['kwargs']
+            fnargs = opts.get('args', ())
+            fnkwds = opts.get('kwargs', {})
             
             if len(fnkwds) == 0:  ## need to do this because some functions do not allow keyword arguments.
                 try:
@@ -343,9 +368,9 @@ class RPCServer(object):
                 del self._proxy_refs[opts['obj_id']]
                 del self._proxy_id_map[id(proxy_ref[0])]
             result = None
-        elif action =='getitem':
+        elif action =='get_item':
             result = self[opts['name']]
-        elif action =='setitem':
+        elif action =='set_item':
             self[opts['name']] = opts['obj']
             result = None
         elif action == 'import':
@@ -469,17 +494,47 @@ class RPCServer(object):
 
 class QtRPCServer(RPCServer):
     """RPCServer that lives in a Qt GUI thread.
-    
+
     This server may be used to create and manage QObjects, QWidgets, etc. It
     uses a separate thread to poll for RPC requests, which are then sent to the
-    Qt event loop using by signal (see QtPollThread).
+    Qt event loop using by signal. This allows the RPC actions to be executed
+    in a Qt GUI thread without using a timer to poll the RPC socket. Responses
+    are sent back to the poller thread by a secondary socket.
+    
+    QtRPCServer may be started in newly spawned processes using
+    :class:`ProcessSpawner`.
     
     Parameters
     ----------
     address : str
-        ZMQ address to listen on. Default is "tcp://127.0.0.1:*".
+        ZMQ address to listen on. Default is ``'tcp://127.0.0.1:*'``.
+        
+        **Note:** binding RPCServer to a public IP address is a potential
+        security hazard. See :class:`RPCServer`.
     quit_on_close : bool
         If True, then call `QApplication.quit()` when the server is closed. 
+        
+    Examples
+    --------
+    
+    Spawning in a new process::
+        
+        # Create new process.
+        proc = ProcessSpawner(qt=True)
+        
+        # Display a widget from the new process.
+        qtgui = proc._import('PyQt4.QtGui')
+        w = qtgui.QWidget()
+        w.show()
+        
+    Starting in an existing Qt application::
+    
+        # Create server.
+        server = QtRPCServer()
+        
+        # Start listening for requests in a background thread (this call
+        # returns immediately).
+        server.run_forever()
     """
     def __init__(self, address="tcp://127.0.0.1:*", quit_on_close=True):
         RPCServer.__init__(self, address)

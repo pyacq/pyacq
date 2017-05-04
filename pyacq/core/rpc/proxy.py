@@ -1,10 +1,14 @@
+# -*- coding: utf-8 -*-
+# Copyright (c) 2016, French National Center for Scientific Research (CNRS)
+# Distributed under the (new) BSD License. See LICENSE for more info.
+
 import os
 import weakref
 
 
 class ObjectProxy(object):
     """
-    Proxy to an object stored by a remote RPCServer.
+    Proxy to an object stored by a remote :class:`RPCServer`.
     
     A proxy behaves in most ways like the object that it wraps--you can request
     the same attributes, call methods, etc. There are a few important
@@ -20,7 +24,11 @@ class ObjectProxy(object):
       Most basic types can be serialized, including numpy arrays. All other
       objects are automatically proxied, but there are some cases when this will
       not work well.
-    * `__repr__` is overridden on proxies to allow safe debugging.
+    * :func:`__repr__` and :func:`__str__` are overridden on proxies to allow
+      safe debugging.
+    * :func:`__hash__` is overridden to ensure that remote hash values are not
+      used locally.
+
     
     For the most part, object proxies can be used exactly as if they are
     local objects::
@@ -32,21 +40,22 @@ class ObjectProxy(object):
                                      # and returns the result (None)
     
     When calling a proxy to a remote function, the call can be made synchronous
-    (result of call is returned immediately), asynchronous (result is returned later),
-    or return can be disabled entirely::
+    (caller is blocked until result can be returned), asynchronous (Future is
+    returned immediately and result can be accessed later), or return can be
+    disabled entirely::
     
         ros = proc._import('os')
         
-        ## synchronous call; result is returned immediately
+        # synchronous call; caller blocks until result is returned
         pid = ros.getpid()
         
-        ## asynchronous call
+        # asynchronous call
         request = ros.getpid(_sync='async')
         while not request.hasResult():
             time.sleep(0.01)
         pid = request.result()
         
-        ## disable return when we know it isn't needed
+        # disable return when we know it isn't needed.
         rsys.stdout.write('hello', _sync='off')
     
     Additionally, values returned from a remote function call are automatically
@@ -60,6 +69,17 @@ class ObjectProxy(object):
     The default sync and return_type behaviors (as well as others) can be set 
     for each proxy individually using ObjectProxy._set_proxy_options() or globally using 
     proc.set_proxy_options(). 
+    
+    It is also possible to send arguments by proxy if an RPCServer is running
+    in the caller's thread (this can be used, for example, to connect Qt
+    signals across network connections)::
+    
+        def callback():
+            print("called back.")
+            
+        # Remote process can invoke our callback function as long as there is 
+        # a server running here to process the request.
+        remote_object.set_callback(proxy(callback))
     
     """
     
@@ -120,49 +140,57 @@ class ObjectProxy(object):
         will cause the proxy to instead use the default behavior defined
         by its parent Process.
         
-        Options are:
-        
-        =============  =============================================================
-        sync           'sync', 'async', 'off', or None. 
-                       If 'async', then calling methods will return a Request object
-                       which can be used to inquire later about the result of the 
-                       method call.
-                       If 'sync', then calling a method
-                       will block until the remote process has returned its result
-                       or the timeout has elapsed (in this case, a Request object
-                       is returned instead).
-                       If 'off', then the remote process is instructed _not_ to 
-                       reply and the method call will return None immediately.
-        return_type    'auto', 'proxy', 'value', or None. 
-                       If 'proxy', then the value returned when calling a method
-                       will be a proxy to the object on the remote process.
-                       If 'value', then attempt to pickle the returned object and
-                       send it back.
-                       If 'auto', then the decision is made by consulting the
-                       'no_proxy_types' option.
-        auto_proxy     bool or None. If True, arguments to __call__ are 
-                       automatically converted to proxy unless their type is 
-                       listed in no_proxy_types (see below). If False, arguments
-                       are left untouched. Use proxy(obj) to manually convert
-                       arguments before sending. 
-        timeout        float or None. Length of time to wait during synchronous 
-                       requests before returning a Request object instead.
-        defer_getattr  True, False, or None. 
-                       If False, all attribute requests will be sent to the remote 
-                       process immediately and will block until a response is
-                       received (or timeout has elapsed).
-                       If True, requesting an attribute from the proxy returns a
-                       new proxy immediately. The remote process is _not_ contacted
-                       to make this request. This is faster, but it is possible to 
-                       request an attribute that does not exist on the proxied
-                       object. In this case, AttributeError will not be raised
-                       until an attempt is made to look up the attribute on the
-                       remote process.
-        no_proxy_types List of object types that should _not_ be proxied when
-                       sent to the remote process.
-        auto_delete    bool. If True, then the proxy will automatically call
-                       `self._delete()` when it is collected by Python.
-        =============  =============================================================
+        Parameters
+        ----------
+        sync : 'sync', 'async', 'off', or None
+            If 'async', then calling methods will return a :class:`Future` object
+            that can be used to inquire later about the result of the 
+            method call.
+            If 'sync', then calling a method
+            will block until the remote process has returned its result
+            or the timeout has elapsed (in this case, a Request object
+            is returned instead).
+            If 'off', then the remote process is instructed *not* to 
+            reply and the method call will return None immediately.
+            This option can be overridden by supplying a ``_sync`` keyword
+            argument when calling the method (see :func:`__call__`).
+        return_type : 'auto', 'proxy', 'value', or None
+            If 'proxy', then the value returned when calling a method
+            will be a proxy to the object on the remote process.
+            If 'value', then attempt to pickle the returned object and
+            send it back.
+            If 'auto', then the decision is made by consulting the
+            'no_proxy_types' option.
+            This option can be overridden by supplying a ``_return_type`` keyword
+            argument when calling the method (see :func:`__call__`).
+        auto_proxy : bool or None
+            If True, arguments to __call__ are 
+            automatically converted to proxy unless their type is 
+            listed in no_proxy_types (see below). If False, arguments
+            are left untouched. Use proxy(obj) to manually convert
+            arguments before sending. 
+        timeout : float or None
+            Length of time to wait during synchronous 
+            requests before returning a Request object instead.
+            This option can be overridden by supplying a ``_timeout`` keyword
+            argument when calling a method (see :func:`__call__`).
+        defer_getattr : True, False, or None
+            If False, all attribute requests will be sent to the remote 
+            process immediately and will block until a response is
+            received (or timeout has elapsed).
+            If True, requesting an attribute from the proxy returns a
+            new proxy immediately. The remote process is *not* contacted
+            to make this request. This is faster, but it is possible to 
+            request an attribute that does not exist on the proxied
+            object. In this case, AttributeError will not be raised
+            until an attempt is made to look up the attribute on the
+            remote process.
+        no_proxy_types : list
+            List of object types that should *not* be proxied when
+            sent to the remote process.
+        auto_delete : bool
+            If True, then the proxy will automatically call
+            `self._delete()` when it is collected by Python.
         """
         for k in kwds:
             if k not in self._proxy_options:
@@ -254,16 +282,41 @@ class ObjectProxy(object):
         return proxy
     
     def __call__(self, *args, **kwargs):
-        """
-        Attempts to call the proxied object from the remote process.
-        Accepts extra keyword arguments:
+        """Call the proxied object from the remote process.
         
-            _sync    'off', 'sync', or 'async'
-            _return_type  'value', 'proxy', or 'auto'
-            _timeout      float 
+        All positional and keyword arguments (except those listed below) are
+        sent to the remote procedure call. 
         
-        If the remote call raises an exception on the remote process,
-        it will be re-raised on the local process.
+        In synchronous mode (see parameters below), this method blocks until
+        the remote return value has been received, and then returns that value.
+        In asynchronous mode, this method returns a :class:`Future` instance
+        immediately, which may be used to retrieve the return value later. If
+        return is disabled, then the method immediately returns None.
+        
+        If the remote call raises an exception on the remote process, then this
+        method will raise RemoteCallException if in synchronous mode, or calling
+        :func:`Future.result()` will raise RemoteCallException if in
+        asynchronous mode. If return is disabled, then remote exceptions will
+        be ignored.
+        
+        
+        Parameters
+        ----------
+        _sync:    'off', 'sync', or 'async'
+            Set the sync mode for this call. The default value is determined by
+            the 'sync' argument to :func:`_set_proxy_options()`.
+        _return_type:  'value', 'proxy', or 'auto'
+            Set the return type for this call. The default value is determined by
+            the 'return_type' argument to :func:`_set_proxy_options()`.
+        _timeout: float 
+            Set the timeout for this call. The default value is determined by
+            the 'timeout' argument to :func:`_set_proxy_options()`.
+        
+        See also
+        --------
+        
+        RPCClient.call_obj()
+        Future
         
         """
         opts = {

@@ -1,13 +1,13 @@
+# -*- coding: utf-8 -*-
+# Copyright (c) 2016, French National Center for Scientific Research (CNRS)
+# Distributed under the (new) BSD License. See LICENSE for more info.
+
 import numpy as np
 import pytest
 from pyacq.core.stream import OutputStream, InputStream, RingBuffer
 
 
 def test_ringbuffer():
-    # Add tests:
-    #  ensure copy / no-copy
-    #  extra indices, steps, negative steps...
-    
     def assert_is_fill(data):
         if np.isnan(fill):
             assert np.all(np.isnan(data))

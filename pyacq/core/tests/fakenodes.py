@@ -1,3 +1,7 @@
+# -*- coding: utf-8 -*-
+# Copyright (c) 2016, French National Center for Scientific Research (CNRS)
+# Distributed under the (new) BSD License. See LICENSE for more info.
+
 from pyacq import Node,WidgetNode
 from pyacq.core.node import _MyTest
 from pyqtgraph.Qt import QtCore, QtGui

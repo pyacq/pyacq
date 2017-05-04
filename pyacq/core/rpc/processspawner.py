@@ -1,3 +1,7 @@
+# -*- coding: utf-8 -*-
+# Copyright (c) 2016, French National Center for Scientific Research (CNRS)
+# Distributed under the (new) BSD License. See LICENSE for more info.
+
 import sys
 import os
 import json
@@ -17,10 +21,10 @@ logger = logging.getLogger(__name__)
 
 
 class ProcessSpawner(object):
-    """Utility for spawning and bootstrapping a new process with an RPC server.
+    """Utility for spawning and bootstrapping a new process with an :class:`RPCServer`.
     
-    `ProcessSpawner.client` is an RPCClient that is connected to the remote
-    server.
+    Automatically creates an :class:`RPCClient` that is connected to the remote 
+    process (``spawner.client``).
     
     Parameters
     ----------
@@ -28,10 +32,13 @@ class ProcessSpawner(object):
         Optional process name that will be assigned to all remote log records.
     address : str
         ZMQ socket address that the new process's RPCServer will bind to.
-        Default is 'tcp://127.0.0.1:*'.
+        Default is ``'tcp://127.0.0.1:*'``.
+        
+        **Note:** binding RPCServer to a public IP address is a potential
+        security hazard (see :class:`RPCServer`).
     qt : bool
         If True, then start a Qt application in the remote process, and use
-        a QtRPCServer.
+        a :class:`QtRPCServer`.
     log_addr : str
         Optional log server address to which the new process will send its log
         records. This will also cause the new process's stdout and stderr to be
@@ -41,6 +48,22 @@ class ProcessSpawner(object):
         process.
     executable : str | None
         Optional python executable to invoke. The default value is `sys.executable`.
+        
+    Examples
+    --------
+    
+    ::
+    
+        # start a new process
+        proc = ProcessSpawner()
+        
+        # ask the child process to do some work
+        mod = proc._import('my.module')
+        mod.do_work()
+        
+        # close the child process
+        proc.close()
+        proc.wait()
     """
     def __init__(self, name=None, address="tcp://127.0.0.1:*", qt=False, log_addr=None, 
                  log_level=None, executable=None):
@@ -123,6 +146,7 @@ class ProcessSpawner(object):
         
         if 'address' in status:
             self.address = status['address']
+            #: An RPCClient instance that is connected to the RPCServer in the remote process
             self.client = RPCClient(self.address.encode())
         else:
             err = ''.join(status['error'])

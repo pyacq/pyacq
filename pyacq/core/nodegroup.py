@@ -1,3 +1,7 @@
+# -*- coding: utf-8 -*-
+# Copyright (c) 2016, French National Center for Scientific Research (CNRS)
+# Distributed under the (new) BSD License. See LICENSE for more info.
+
 from .rpc import ProcessSpawner, RPCServer, RPCClient
 from . import nodelist
 
@@ -32,6 +36,11 @@ class NodeGroup(object):
         return list(nodelist.all_nodes.keys())
 
     def register_node_type_from_module(self, modname, classname):
+        """Register a Node subclass with this NodeGroup.
+        
+        This allows custom Node subclasses to be instantiated in this NodeGroup
+        using :func:`NodeGroup.create_node`.
+        """
         nodelist.register_node_type_from_module(modname, classname)
 
     def add_node(self, node):

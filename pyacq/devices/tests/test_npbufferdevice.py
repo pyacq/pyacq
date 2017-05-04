@@ -1,3 +1,7 @@
+# -*- coding: utf-8 -*-
+# Copyright (c) 2016, French National Center for Scientific Research (CNRS)
+# Distributed under the (new) BSD License. See LICENSE for more info.
+
 import time
 
 from pyacq import create_manager
@@ -16,7 +20,7 @@ def test_npbufferdevice():
     
     dev = nodegroup.create_node('NumpyDeviceBuffer', name='dev')
     dev.configure(nb_channel=7, sample_interval=0.0001, chunksize=256, buffer=sigs)
-    dev.output.configure(protocol='tcp', interface='127.0.0.1', transfertmode='plaindata')
+    dev.output.configure(protocol='tcp', interface='127.0.0.1', transfermode='plaindata')
     dev.initialize()
     
     # create stream
