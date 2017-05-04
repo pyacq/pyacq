@@ -1,3 +1,7 @@
+# -*- coding: utf-8 -*-
+# Copyright (c) 2016, French National Center for Scientific Research (CNRS)
+# Distributed under the (new) BSD License. See LICENSE for more info.
+
 import numpy as np
 
 from ..core import Node, register_node_type
@@ -18,8 +22,8 @@ class NumpyDeviceBuffer(Node):
 
     def configure(self, *args, **kwargs):
         """
-        Parameters for configure
-        ---
+        Parameters
+        ----------
         nb_channel: int
             Number of output channels.
         sample_interval: float

@@ -1,3 +1,7 @@
+# -*- coding: utf-8 -*-
+# Copyright (c) 2016, French National Center for Scientific Research (CNRS)
+# Distributed under the (new) BSD License. See LICENSE for more info.
+
 import random
 import string
 import zmq
@@ -268,8 +272,8 @@ class InputStream(object):
         """
         Receive a chunk of data.
         
-        Returns:
-        ----
+        Returns
+        -------
         index: int
             The absolute sample index. This is the index of the last sample + 1.
         data: np.ndarray or bytes

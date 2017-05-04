@@ -1,3 +1,7 @@
+# -*- coding: utf-8 -*-
+# Copyright (c) 2016, French National Center for Scientific Research (CNRS)
+# Distributed under the (new) BSD License. See LICENSE for more info.
+
 import time
 import numpy as np
 import cProfile
@@ -7,10 +11,10 @@ from test_stream import protocols, compressions
 from pyacq.core.stream  import OutputStream, InputStream
 
 
-def benchmark_stream(protocol, transfertmode, compression, chunksize, nb_channels=16, nloop=10, profile=False):
+def benchmark_stream(protocol, transfermode, compression, chunksize, nb_channels=16, nloop=10, profile=False):
     ring_size = chunksize*20
     stream_spec = dict(protocol=protocol, interface='127.0.0.1', port='*',
-                       transfertmode=transfertmode, streamtype = 'analogsignal',
+                       transfermode=transfermode, streamtype = 'analogsignal',
                        dtype='float32', shape=(-1, nb_channels), compression=compression,
                        scale=None, offset=None, units='',
                        # for sharedarray
@@ -43,14 +47,14 @@ def benchmark_stream(protocol, transfertmode, compression, chunksize, nb_channel
     instream.close()
     
     dt = np.min(perf)
-    print(chunksize, nloop, transfertmode, protocol.ljust(6), compression.ljust(13), 'time = %0.02f ms' % (dt*1000), 'speed = ', chunksize*nb_channels*4*1e-6/dt, 'MB/s')
+    print(chunksize, nloop, transfermode, protocol.ljust(6), compression.ljust(13), 'time = %0.02f ms' % (dt*1000), 'speed = ', chunksize*nb_channels*4*1e-6/dt, 'MB/s')
     
     return dt
 
 
 
 if len(sys.argv) > 1 and sys.argv[1] == 'profile':
-    benchmark_stream(protocol='inproc', transfertmode='plaindata', 
+    benchmark_stream(protocol='inproc', transfermode='plaindata', 
                     compression='', chunksize=100000, nb_channels=16,
                     profile=True, nloop=100)
     
@@ -61,9 +65,9 @@ else:
         print('#'*5)
         for compression in compressions:
             for protocol in protocols:
-                benchmark_stream(protocol=protocol, transfertmode='plaindata', 
+                benchmark_stream(protocol=protocol, transfermode='plaindata', 
                                 compression=compression,
                                 chunksize=chunksize, nb_channels=nb_channels)
 
-        benchmark_stream(protocol='tcp', transfertmode='sharedarray', compression='',
+        benchmark_stream(protocol='tcp', transfermode='sharedarray', compression='',
                         chunksize=chunksize, nb_channels=nb_channels)

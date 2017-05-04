@@ -1,3 +1,7 @@
+# -*- coding: utf-8 -*-
+# Copyright (c) 2016, French National Center for Scientific Research (CNRS)
+# Distributed under the (new) BSD License. See LICENSE for more info.
+
 from ..core import WidgetNode, register_node_type
 from pyqtgraph.Qt import QtCore, QtGui
 
@@ -28,8 +32,7 @@ class ImageViewer(WidgetNode):
         self.plot.hideButtons()
         self.plot.showAxis('left', False)
         self.plot.showAxis('bottom', False)
-        
-        
+                
         self.image = pg.ImageItem()
         self.plot.addItem(self.image)
     
@@ -50,7 +53,6 @@ class ImageViewer(WidgetNode):
     
     def _close(self):
         pass
-
     
     def poll_socket(self):
         event = self.input.socket.poll(0)
@@ -59,6 +61,7 @@ class ImageViewer(WidgetNode):
             data = data[::-1,:,:]
             data = data.swapaxes(0,1)
             self.image.setImage(data)
+
 
 register_node_type(ImageViewer)
 

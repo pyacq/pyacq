@@ -1,3 +1,7 @@
+# -*- coding: utf-8 -*-
+# Copyright (c) 2016, French National Center for Scientific Research (CNRS)
+# Distributed under the (new) BSD License. See LICENSE for more info.
+
 import numpy as np
 import datetime
 import base64
@@ -23,6 +27,8 @@ encode_key = '___type_name___'
 class Serializer:
     """Base serializer class on which msgpack and json serializers 
     (and potentially others) are built.
+    
+    Subclasses must be registered by adding to the ``all_serializers`` global.
     
     Supports ndarray, date, datetime, and bytes for transfer in addition to the
     standard types supported by json and msgpack. All other types are converted
@@ -216,6 +222,7 @@ class JsonSerializer(Serializer):
         return dct
 
 
+#: dict containing {name : SerializerSubclass} for all supported serializers
 all_serializers[JsonSerializer.type] = JsonSerializer
 if HAVE_MSGPACK:
     all_serializers[MsgpackSerializer.type] = MsgpackSerializer
