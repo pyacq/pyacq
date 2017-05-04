@@ -75,7 +75,7 @@ class OutputStream(object):
             then use -1 for the unknown dimension.
             * For ``streamtype=image``, the shape should be (-1, H, W), (n_frames, H, W), or (H, W).
             * For ``streamtype=analogsignal`` the shape should be (n_samples, n_channels) or (-1, n_channels)
-        compression: '', 'blosclz', 'blosc-lz4', 'mp4', 'h264'
+        compression: '', 'blosclz', 'blosc-lz4'
             The compression for the data stream. The default uses no compression.
         scale: float
             An optional scale factor + offset to apply to the data before it is sent over the stream.
