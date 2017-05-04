@@ -44,9 +44,6 @@ class ProcessSpawner(object):
     """
     def __init__(self, name=None, address="tcp://127.0.0.1:*", qt=False, log_addr=None, 
                  log_level=None, executable=None):
-
-
-
         #logger.warn("Spawning process: %s %s %s", name, log_addr, log_level)
         assert qt in (True, False)
         assert isinstance(address, (str, bytes))
