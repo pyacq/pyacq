@@ -374,9 +374,9 @@ class SosFilter(Node,  QtCore.QObject):
     
         f1, f2 = 40., 60.
         coefficients = scipy.signal.iirfilter(7, [f1/sample_rate*2, f2/sample_rate*2],
-                    btype = 'bandpass', ftype = 'butter', output = 'sos')
+                    btype='bandpass', ftype='butter', output='sos')
         filter = SosFilter()
-        filter.configure(coefficients = coefficients)
+        filter.configure(coefficients=coefficients)
         filter.input.connect(dev.output)
         filter.output.configure(...)
         filter.initialize()

@@ -409,8 +409,8 @@ class OverlapFiltfilt(Node,  QtCore.QObject):
        part of the chunk has no overlap.
     2. overlapsize>chunksize/2: chunks are fully overlapping; there is no central part.
     
-    In the 2 cases, for each arrival of a new chunk at [-chunksize:], 
-    the computed chunk at [-(chunksize+overlapsize):-overlapsize] is released.
+    In the 2 cases, for each arrival of a new chunk at ``[-chunksize:]``, 
+    the computed chunk at ``[-(chunksize+overlapsize):-overlapsize]`` is released.
 
     The ``coefficients.shape`` must be (nb_section, 6).
     

@@ -11,7 +11,7 @@ has one or more input and/or output streams that may be connected together, and
 each stream can be configured to transmit different types and shapes of data::
     
     device.output.configure(protocol='tcp', interface='127.0.0.1', 
-                            transfertmode='plaindata')
+                            transfermode='plaindata')
     viewer.input.connect(device.output)
     recorder.input.connect(device.output)    
 
@@ -60,7 +60,7 @@ Data Transmission
 
 Data transmission through a stream occurs in several stages:
     
-1. **Pre-filtering:** As data is passed to an output stream, it is passed through an arbitrary
+1. **Pre-filtering:** As data is passed to an output stream, it is passed through a user-defined
    sequence of filtering functions. These are used, for example, to scale, cast,
    or reshape data as needed to meet the stream requirements.
 2. **Chunking:** The output stream collects data until a minimum chunk size is reached. The 
@@ -70,7 +70,7 @@ Data transmission through a stream occurs in several stages:
    video feed might be transmitted one frame at a time.
 3. **Transmission:** The chunk is transmitted to all input streams that are connected to the
    output. The mechanism used to transmit data depends on the ``protocol`` and
-   ``transfertmode`` arguments used during 
+   ``transfermode`` arguments used during 
    :func:`output stream configuration <OutputStream.configure>`:
    
    * Plain data stream over TCP: data is sent by TCP using a ZeroMQ socket.
@@ -81,7 +81,7 @@ Data transmission through a stream occurs in several stages:
      
 4. **Reassembly:** Each connected input stream independently receives data chunks and
    reassembles the stream.
-5. **Post-filtering:** The reconstructed stream data is passed through another arbitrary sequence
+5. **Post-filtering:** The reconstructed stream data is passed through another user-defined sequence
    of filtering functions before being made available to the stream user.
 
 When transmitting plain data streams, Pyacq tries to maximize throughput by
@@ -89,6 +89,64 @@ avoiding any unnecessary data copies. In most cases, a copy is required only if
 the input array does not occupy a contiguous block of memory.
 
 .. seealso:: :func:`OutputStream.configure()` 
+
+A Simple Example
+----------------
+
+In this example, we pass an array from one thread to another::
+    
+    import numpy as np
+    import pyacq
+    import threading
+
+    data = np.array([[1,2], [3,4], [5,6]])
+
+    out = pyacq.OutputStream()
+    out.configure(dtype=data.dtype)
+
+    inp = pyacq.InputStream()
+    inp.connect(out)
+    
+    stop = False
+
+    def receiver():
+        global inp
+        while not stop:
+            d = inp.recv()
+            print("Received: %s" % repr(d))
+
+    thread = threading.Thread(target=receiver)
+    thread.start()
+
+    out.send(data)
+
+
+If we run this code from an interactive shell, the last few lines might look
+like::
+    
+    >>> out.send(data)
+    >>> Received: (6, array([[1, 2],
+           [3, 4],
+           [5, 6]]))
+
+At this point, we may continue calling ``out.send()`` indefinitely. 
+
+Notes:
+    
+    * Once the input thread is started, we should not attempt to access the
+      InputStream's attributes or methods from the main thread.
+    * In this example, data is sent over the stream using the default method:
+      each chunk is serialized and transmitted over a tcp socket. This default
+      works well when sending data between processes; for threads,
+      however, we can achieve much better performance with other methods.
+
+In the example above, we used ``inp.connect(out)`` to establish the connection
+between the ends of the stream. How does this work when we have the input and
+output in different processes, or on different machines?
+
+
+Example: streams with RPC
+
 
 
 Using Streams in Custom Node Types
@@ -117,7 +175,32 @@ poisition within the shared memory array of the next data chunk. In this case,
 it may be more useful to call :func:`InputStream.get_array_slice()` to return
 part of the shared memory buffer.
 
-[examples]
+
+Example output: a random noise generator
+''''''''''''''''''''''''''''''''''''''''
+
+
+Example input: print stream information
+'''''''''''''''''''''''''''''''''''''''
+
+
+
+Using streams in GUI nodes
+--------------------------
+
+User interface nodes pose a unique challenge because they must somehow work
+with the Qt event loop. 
+
+
+
+
+Stream management tools
+-----------------------
+
+
+
+
+
 
 .. seealso:: :class:`pyacq.core.ThreadPollInput`, :class:`pyacq.core.StreamConverter`,
    :class:`pyacq.core.ChannelSplitter`
