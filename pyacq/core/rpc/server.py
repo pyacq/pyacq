@@ -50,7 +50,7 @@ class RPCServer(object):
     name : str
         Name used to identify this server.
     address : URL
-        Address for RPC server to bind to. Default is ``'tcp://127.0.0.1:*'``.
+        Address for RPC server to bind to. Default is 'tcp://127.0.0.1:*'.
         
         **Note:** binding RPCServer to a public IP address is a potential
         security hazard.

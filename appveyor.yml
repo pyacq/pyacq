@@ -10,7 +10,7 @@ environment:
 
 install:
   # Install miniconda Python
-  - "powershell ./make/install_python.ps1"
+  - "powershell ./tools/install_python.ps1"
 
   # Prepend newly installed Python to the PATH of this build (this cannot be
   # done from inside the powershell script as it would require to restart
@@ -24,11 +24,12 @@ install:
   - "SET VISPY_GL_LIB=%CD%\\opengl32.dll"
 
   # Install the dependencies of the project.
-  - "conda install --yes --quiet numpy scipy pyqt pyzmq colorama msgpack-python pyaudio setuptools pytest coverage "
-  - "pip install -q pytest-cov pyqtgraph"
+  - "conda install --yes --quiet numpy scipy pyqt pyzmq colorama msgpack-python setuptools pytest coverage "
+  - "pip install -q pytest-cov pyqtgraph vispy"
   - "python setup.py develop"
 
 build: false  # Not a C# project, build stuff at the test step instead.
 
 test_script:
+  - 'netsh advfirewall firewall add rule name="pyacq" dir=in action=allow program="C:\Python34-conda64\python.exe" enable=yes'
   - "py.test -sv pyacq"

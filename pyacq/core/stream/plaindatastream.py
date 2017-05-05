@@ -4,14 +4,10 @@
 
 import struct
 import numpy as np
-try:
-    import blosc
-    HAVE_BLOSC = True
-except ImportError:
-    HAVE_BLOSC = False
 
 from .streamhelpers import DataSender, DataReceiver, register_transfermode
 from .arraytools import is_contiguous, decompose_array, make_dtype
+from .compression import compress, decompress
 
 
 class PlainDataSender(DataSender):
@@ -35,11 +31,7 @@ class PlainDataSender(DataSender):
         
         # compress
         comp = self.params['compression']
-        if comp.startswith('blosc-'):
-            assert HAVE_BLOSC, "Cannot use blosclz4 compression; blosc package is not importable."
-            buf = blosc.compress(buf, data.itemsize, cname=comp[6:])
-        elif comp != '':
-            raise ValueError("Unknown compression method '%s'" % comp)
+        buf = compress(buf, comp, data.itemsize)
         
         # Pack and send
         stat = struct.pack('!' + 'Q' * (3+len(shape)) + 'q' * len(strides), len(shape), index, offset, *(shape + strides))
@@ -71,11 +63,7 @@ class PlainDataReceiver(DataReceiver):
         
         # uncompress
         comp = self.params['compression']
-        if comp.startswith('blosc-'):
-            assert HAVE_BLOSC, "Cannot use blosc decompression; blosc package is not importable."
-            data = blosc.decompress(data)
-        elif comp != '':
-            raise ValueError("Unknown compression method '%s'" % comp)
+        data = decompress(data, comp)
         
         # convert to array
         dtype = make_dtype(self.params['dtype']) # this avoid some bugs but is not efficient because this is call every sends...
