@@ -1,3 +1,7 @@
+# -*- coding: utf-8 -*-
+# Copyright (c) 2016, French National Center for Scientific Research (CNRS)
+# Distributed under the (new) BSD License. See LICENSE for more info.
+
 import time
 
 from pyacq import create_manager
@@ -16,7 +20,7 @@ def test_webcam_opencv():
     
     dev = WebCamAV(name='cam')
     dev.configure(camera_num=0)
-    dev.output.configure(protocol='tcp', interface='127.0.0.1',transfertmode='plaindata',)
+    dev.output.configure(protocol='tcp', interface='127.0.0.1',transfermode='plaindata',)
     dev.initialize()
     print(dev.output.params)
     

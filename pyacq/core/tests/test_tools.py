@@ -1,5 +1,8 @@
-from pyacq.core import OutputStream, InputStream
+# -*- coding: utf-8 -*-
+# Copyright (c) 2016, French National Center for Scientific Research (CNRS)
+# Distributed under the (new) BSD License. See LICENSE for more info.
 
+from pyacq.core import OutputStream, InputStream
 from pyacq.core.tools import ThreadPollInput, StreamConverter, ChannelSplitter
 from pyqtgraph.Qt import QtCore, QtGui
 import pyqtgraph as pg
