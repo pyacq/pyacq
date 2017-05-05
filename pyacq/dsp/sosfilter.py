@@ -88,6 +88,7 @@ class SosFilter_OpenCl_Base:
         prg = pyopencl.Program(self.ctx, kernel)
         self.opencl_prg = prg.build(options='-cl-mad-enable')
 
+
 class SosFilter_OpenCL_V1(SosFilter_OpenCl_Base):
     """
     Implementation with OpenCL : this version scale nb_channel.
@@ -361,35 +362,34 @@ class SosFilterThread(ThreadPollInput):
 class SosFilter(Node,  QtCore.QObject):
     """
     Node for filtering multi channel signals.
-    This uses Second Order filter, it is a casde of IIR filter of order 2.
-    It internally use scipy.signal.sosfilt which is available only on scipy >0.16
+    This uses a second order filter, it is a casde of IIR filter of order 2.
+    It internally uses scipy.signal.sosfilt which is available only on scipy >0.16
     
-    Example:
+    Example::
 
-    dev = NumpyDeviceBuffer()
-    dev.configure(...)
-    dev.output.configure(...)
-    dev.initialize(...)
+        dev = NumpyDeviceBuffer()
+        dev.configure(...)
+        dev.output.configure(...)
+        dev.initialize(...)
     
-    f1, f2 = 40., 60.
-    coefficients = scipy.signal.iirfilter(7, [f1/sample_rate*2, f2/sample_rate*2],
-                btype = 'bandpass', ftype = 'butter', output = 'sos')
-    filter = SosFilter()
-    filter.configure(coefficients = coefficients)
-    filter.input.connect(dev.output)
-    filter.output.configure(...)
-    filter.initialize()
+        f1, f2 = 40., 60.
+        coefficients = scipy.signal.iirfilter(7, [f1/sample_rate*2, f2/sample_rate*2],
+                    btype = 'bandpass', ftype = 'butter', output = 'sos')
+        filter = SosFilter()
+        filter.configure(coefficients = coefficients)
+        filter.input.connect(dev.output)
+        filter.output.configure(...)
+        filter.initialize()
     
-    The coefficients.shape must be (nb_section, 6).
+    The ``coefficients.shape`` must be (nb_section, 6).
     
-    If pyopencl is avaible you can do SosFilter.configure(engine='opencl')
-    In that cases the coefficients.shape can also be (n_channel, nb_section, 6)
-    this help for having different filter on each channels.
+    If pyopencl is avaible you can use ``SosFilter.configure(engine='opencl')``.
+    In that case the coefficients.shape can also be (nb_channel, nb_section, 6)
+    this helps for having different filters on each channel.
     
-    The opencl engine prefer inernally (channel, sample) ordered.
-    In case not a copy is done. So the input ordering do impact performences.
-    
-    
+    The opencl engine inernally requires data to be in (channel, sample) order.
+    If the input data does not have this order, then it must be copied and
+    performance will be affected.
     """
     
     _input_specs = {'signals' : dict(streamtype = 'signals')}
@@ -433,5 +433,5 @@ class SosFilter(Node,  QtCore.QObject):
             self.thread.set_params(self.engine, self.coefficients, self.nb_channel,
                                 self.output.params['dtype'], self.chunksize)
 
-register_node_type(SosFilter)
 
+register_node_type(SosFilter)
