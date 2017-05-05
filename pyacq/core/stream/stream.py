@@ -125,6 +125,7 @@ class OutputStream(object):
             self.url = '{protocol}://{interface}:{port}'.format(**self.params)
         context = zmq.Context.instance()
         self.socket = context.socket(zmq.PUB)
+        self.socket.linger = 1000  # don't let socket deadlock when exiting
         self.socket.bind(self.url)
         self.addr = self.socket.getsockopt(zmq.LAST_ENDPOINT).decode()
         self.port = self.addr.rpartition(':')[2]
@@ -249,6 +250,7 @@ class InputStream(object):
         
         context = zmq.Context.instance()
         self.socket = context.socket(zmq.SUB)
+        self.socket.linger = 1000  # don't let socket deadlock when exiting
         self.socket.setsockopt(zmq.SUBSCRIBE, b'')
         #~ self.socket.setsockopt(zmq.DELAY_ATTACH_ON_CONNECT,1)
         self.socket.connect(self.url)
