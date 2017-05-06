@@ -155,19 +155,33 @@ Streaming between processes
 
 In the example above, we used ``inp.connect(out)`` to establish the connection
 between the ends of the stream. How does this work when we have the input and
-output in different processes, or on different machines?
+output in different processes, or on different machines? We use pyacq's RPC
+system to allow the streams to negotiate a connection, exactly as if they
+had been created in the same process::
 
     import pyacq
+    
+    # Start a local RPC server so that a remote InputStream will be able
+    # to make configuration requests from a local OutputStream:
     s = pyacq.RPCServer()
     s.run_lazy()
 
+    # Create the output stream in the local process
     o = pyacq.OutputStream()
     o.configure(dtype=float)
 
-    p = pyacq.ProcessSpawner()  # works
+    # Spawn a new process and create an InputStream there
+    p = pyacq.ProcessSpawner()
     rpyacq = p.client._import('pyacq')
     i = rpyacq.InputStream()
+    
+    # Connect the streams exactly as if they were local
     i.connect(o)
+
+Although this example is somewhat contrived, it demonstrates the general
+approach: assuming both processes are running an RPC server, one will be
+able to initiate a stream connection as long as it has an RPC proxy to the
+stream from the other process.
 
 
 Using Streams in Custom Node Types
