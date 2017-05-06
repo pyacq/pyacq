@@ -101,23 +101,27 @@ In this example, we pass an array from one thread to another::
 
     data = np.array([[1,2], [3,4], [5,6]])
 
+    # Create and configure the output stream (sender)
     out = pyacq.OutputStream()
     out.configure(dtype=data.dtype)
 
+    # Create the input stream (receiver) and connect it to
+    # the output stream
     inp = pyacq.InputStream()
     inp.connect(out)
-    
-    stop = False
 
+    # Start a background thread that just receives and prints
+    # data from the input stream
     def receiver():
         global inp
-        while not stop:
+        while True:
             d = inp.recv()
             print("Received: %s" % repr(d))
 
-    thread = threading.Thread(target=receiver)
+    thread = threading.Thread(target=receiver, daemon=True)
     thread.start()
 
+    # Send data through the stream
     out.send(data)
 
 
@@ -133,20 +137,37 @@ At this point, we may continue calling ``out.send()`` indefinitely.
 
 Notes:
     
-    * Once the input thread is started, we should not attempt to access the
-      InputStream's attributes or methods from the main thread.
     * In this example, data is sent over the stream using the default method:
       each chunk is serialized and transmitted over a tcp socket. This default
       works well when sending data between processes; for threads,
       however, we can achieve much better performance with other methods.
+      (see :func:`OutputStream.configure()`)
+    * Once the input thread is started, we should not attempt to access the
+      InputStream's attributes or methods from the main thread.
+    * In this example we have not provided any way to ask the stream thread to
+      exit. Setting ``daemon=True`` when creating the thread ensures that, once
+      the main thread exits, the stream thread will not prevent the process
+      from exiting as well.
+
+
+Streaming between processes
+---------------------------
 
 In the example above, we used ``inp.connect(out)`` to establish the connection
 between the ends of the stream. How does this work when we have the input and
 output in different processes, or on different machines?
 
+    import pyacq
+    s = pyacq.RPCServer()
+    s.run_lazy()
 
-Example: streams with RPC
+    o = pyacq.OutputStream()
+    o.configure(dtype=float)
 
+    p = pyacq.ProcessSpawner()  # works
+    rpyacq = p.client._import('pyacq')
+    i = rpyacq.InputStream()
+    i.connect(o)
 
 
 Using Streams in Custom Node Types
