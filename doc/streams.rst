@@ -142,8 +142,10 @@ Notes:
       works well when sending data between processes; for threads,
       however, we can achieve much better performance with other methods.
       (see :func:`OutputStream.configure()`)
-    * Once the input thread is started, we should not attempt to access the
-      InputStream's attributes or methods from the main thread.
+    * InputStream and OutputStream are not thread-safe. Once the input thread 
+      is started, we should not attempt to access the InputStream's attributes
+      or methods from the main thread. Likewise, we should not attempt to call
+      ip.connect(out) from within the input thread.
     * In this example we have not provided any way to ask the stream thread to
       exit. Setting ``daemon=True`` when creating the thread ensures that, once
       the main thread exits, the stream thread will not prevent the process
@@ -187,7 +189,7 @@ stream from the other process.
 Using Streams in Custom Node Types
 ----------------------------------
 
-Node classes are responsible for handling most of the configuration for their
+:class:`Node` classes are responsible for handling most of the configuration for their
 input/output streams as well as for sending, receiving, and reconstructing data
 through the streams. This functionality is mostly hidden from Node users;
 however, if you plan to write custom Node classes, then it is
@@ -196,10 +198,28 @@ necessary to understand this process in more detail.
 Node subclasses may declare any required properties for their input and output
 streams through the ``_input_specs`` and ``_output_specs`` class attributes.
 Each attribute is a dict whose keys are the names of the streams and whose
-values provide the default configuration arguments for the stream (for example,
-see ``pyacq/devices/audio_pyaudio.py``). When the user calls 
-:func:`Node.configure() <pyacq.core.Node.configure()>`, the Node will have its
-last opportunity to create extra streams (if any) and apply
+values provide the default configuration arguments for the stream. For example::
+    
+    class MyFilterNode(Node):
+        _input_specs = {
+            'analog_in': dict(streamtype='analogsignal', dtype='int16', shape=(-1, 2),
+                              compression='', timeaxis=0, sample_rate=50000.),
+            'trigger_in': dict(streamtype='digitalsignal', dtype='uint32', shape=(-1),
+                               compression='', timeaxis=0, sample_rate=200000.),
+        }
+
+        _output_specs = {
+            'filtered_out': dict(streamtype='analogsignal', dtype='float32', shape=(-1, 2),
+                                 compression='', timeaxis=0, sample_rate=50000)}
+
+This :class:`Node` subclass declares two input streams and one output stream:
+an analog input called "analog_in", a digital input called "trigger_in", and
+an analog output called "filtered_out". The configuration parameters specified
+for each stream are passed to the ``spec`` argument of 
+:func:`InputStream.__init__` or :func:`OutputStream.__init__`.
+
+When the user calls :func:`Node.configure() <pyacq.core.Node.configure()>`,
+the Node will have its last opportunity to create extra streams (if any) and apply
 all configuration options to its streams.
 
 Nodes call :func:`OutputStream.send()` to send new data via their output streams,
@@ -211,11 +231,11 @@ it may be more useful to call :func:`InputStream.get_array_slice()` to return
 part of the shared memory buffer.
 
 
-Example output: a random noise generator
+Example output node: a random noise generator
 ''''''''''''''''''''''''''''''''''''''''
 
 
-Example input: print stream information
+Example input node: print stream information
 '''''''''''''''''''''''''''''''''''''''
 
 
@@ -224,18 +244,69 @@ Using streams in GUI nodes
 --------------------------
 
 User interface nodes pose a unique challenge because they must somehow work
-with the Qt event loop. 
+with the Qt event loop. Using a ``QTimer`` to poll an input node is a valid
+option, but this requires a tradeoff between latency and CPU usage--a node that
+responds quickly to stream input would have to poll with a short timer interval,
+which can be computationally expensive.
 
+A better alternative is to have a background thread block while receiving data
+on the input stream, and then send a signal to the GUI event loop whenever it
+receives a packet. This is the purpose of :class:`pyacq.core.ThreadPollInput`.
 
+For example::
+    
+    instream = InputStream()
+    instream.connect(outstream)
+    
+    poller = ThreadPollInput(input_stream=instream, return_data=True)
+    
+    def callback(position, data):
+        print("Received new data packet at position %d" % position)
+        
+    poller.new_data.connect(callback)
+    
+In this example, we assume a Qt event loop is already running.
+The :class:`pyacq.core.ThreadPollInput` instance starts a
+background thread to receive data from ``instream``. When data is received,
+a signal is emitted and the callback is invoked by the Qt event loop. Because
+this stream is being accessed by another thread, it must **not** be accessed
+from the main GUI thread until ``poller.stop()`` and ``poller.wait()`` have
+been called.
+
+The default behavior for :class:`pyacq.core.ThreadPollInput` is to emit a signal
+whenever it receives a data packet. However, this behavior can be customized by
+overriding the :func:pyacq.core.ThreadPollInput.processData` method in a subclass.
 
 
 Stream management tools
 -----------------------
 
+Pyacq provides two simple tools for managing data as it moves between streams:
+    
+:class:`pyacq.core.StreamConverter` receives data from an output stream and
+immediately sends it through another output stream, which could have a
+different configuration. As an example, one could receive data from a sharedmem
+stream and then use a :class:`pyacq.core.StreamConverter` to forward the data
+over a tcp socket::
+    
+    conv = StreamConverter()
+    conv.configure()
+    
+    # data arrives via outstream
+    conv.input.connect(outstream)
+    
+    # ..and is forwarded via conv.output
+    conv.output.configure(protocol='tcp')
+    conv.initialize()
+    
+    # now we may connect another InputStream to conv.output
+
+:class:`pyacq.core.ChannelSplitter` takes a multi-channel stream as input and
+forwards data from individual channels (or groups of channels) via multiple
+outputs. This is used primarily when streaming multichannel data to a cluster
+of nodes that will preform a parallel computation. Although it would be possible
+to simply send all channel data to all nodes, this could incur a performance
+penalty depending on the stream protocol. By splitting the stream before sending
+it to the compute nodes, we can avoid this extra overhead.
 
 
-
-
-
-.. seealso:: :class:`pyacq.core.ThreadPollInput`, :class:`pyacq.core.StreamConverter`,
-   :class:`pyacq.core.ChannelSplitter`

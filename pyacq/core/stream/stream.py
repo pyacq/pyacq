@@ -40,6 +40,14 @@ class OutputStream(object):
     Streams allow data to be sent between objects that may exist on different
     threads, processes, or machines. They offer a variety of transfer methods
     including TCP for remote connections and IPC for local connections.
+
+    Parameters
+    ----------
+    spec : dict
+        Required parameters for this stream. These may not be overridden when
+        calling :func:`configure` later on.
+    node : Node or None
+    name : str or None
     """
     def __init__(self, spec=None, node=None, name=None):
         spec = {} if spec is None else spec
