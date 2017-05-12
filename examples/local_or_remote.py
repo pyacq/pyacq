@@ -21,7 +21,7 @@ def dev_remote_viewer_local():
     
     dev = nodegroup.create_node('WebCamAV', name = 'cam0')
     dev.configure(camera_num = 0)
-    dev.output.configure(protocol = 'tcp', interface = '127.0.0.1', transfertmode = 'plaindata')
+    dev.output.configure(protocol = 'tcp', interface = '127.0.0.1', transfermode = 'plaindata')
     dev.initialize()
 
     #view is a Node in local QApp
@@ -48,7 +48,7 @@ def dev_local_viewer_local():
     
     dev = WebCamAV()
     dev.configure(camera_num = 0)
-    dev.output.configure(protocol = 'tcp', interface = '127.0.0.1', transfertmode = 'plaindata')
+    dev.output.configure(protocol = 'tcp', interface = '127.0.0.1', transfermode = 'plaindata')
     dev.initialize()
 
 
@@ -74,7 +74,7 @@ def dev_remote_viewer_remote():
     
     dev = nodegroup.create_node('WebCamAV', name = 'cam0')
     dev.configure(camera_num = 0)
-    dev.output.configure(protocol = 'tcp', interface = '127.0.0.1', transfertmode = 'plaindata')
+    dev.output.configure(protocol = 'tcp', interface = '127.0.0.1', transfermode = 'plaindata')
     dev.initialize()
     
     viewer = nodegroup.create_node('ImageViewer', name = 'viewer0')
