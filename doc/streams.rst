@@ -230,14 +230,11 @@ poisition within the shared memory array of the next data chunk. In this case,
 it may be more useful to call :func:`InputStream.get_array_slice()` to return
 part of the shared memory buffer.
 
-
-Example output node: a random noise generator
-'''''''''''''''''''''''''''''''''''''''''''''
-
-
-Example input node: print stream information
-''''''''''''''''''''''''''''''''''''''''''''
-
+.. seealso::
+    * The :ref:`Noise generator <noise_generator_example>` example demonstrates
+      a simple node with an output stream. 
+    * The :ref:`Stream monitor <simple_input_node_example>` example demonstrates
+      a simple node with an input stream.
 
 
 Using streams in GUI nodes

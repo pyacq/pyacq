@@ -26,6 +26,9 @@ class StreamMonitor(Node):
         pass
 
     def _initialize(self):
+        # There are many ways to poll for data from the input stream. In this
+        # case, we will use a background thread to monitor the stream and emit
+        # a Qt signal whenever data is available.
         self.poller = ThreadPollInput(self.input, return_data=True)
         self.poller.new_data.connect(self.data_received)
         
