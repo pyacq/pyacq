@@ -1,8 +1,8 @@
 """
-Simple demonstration of streaming data from a PyAudio device to a QOscilloscope
-viewer.
+PyAudio triggered oscilloscope
 
-Both device and viewer nodes are created locally without a manager.
+Streams audio data to a QTriggeredOscilloscope Node, which displays the
+incoming waveform time-aligned to the rising phase of the sound wave.
 """
 
 from pyacq.devices.audio_pyaudio import PyAudio

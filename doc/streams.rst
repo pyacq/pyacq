@@ -232,11 +232,11 @@ part of the shared memory buffer.
 
 
 Example output node: a random noise generator
-''''''''''''''''''''''''''''''''''''''''
+'''''''''''''''''''''''''''''''''''''''''''''
 
 
 Example input node: print stream information
-'''''''''''''''''''''''''''''''''''''''
+''''''''''''''''''''''''''''''''''''''''''''
 
 
 

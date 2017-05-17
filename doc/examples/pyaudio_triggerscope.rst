@@ -1,4 +1,5 @@
-PyAudio Triggered Oscilloscope
+
+PyAudio triggered oscilloscope
 ==============================
 
 .. literalinclude:: ../../examples/pyaudio_triggerscope.py

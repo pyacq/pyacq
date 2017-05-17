@@ -1,5 +1,6 @@
-PyAudio Time-Frequency Analyzer
-===============================
+
+PyAudio wavelet spectrogram
+===========================
 
 .. literalinclude:: ../../examples/pyaudio_tfr.py
    :language: python

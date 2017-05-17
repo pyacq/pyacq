@@ -1,4 +1,6 @@
 """
+PyAudio oscilloscope (local)
+
 Simple demonstration of streaming data from a PyAudio device to a QOscilloscope
 viewer.
 

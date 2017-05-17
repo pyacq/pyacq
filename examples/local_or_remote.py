@@ -1,7 +1,9 @@
 """
-This demonstrate that any Node/NodeWidget can dealed in local QApp
-the same way when the are remoted.
+Local and remote Nodes
 
+This example demonstrates the use of Node instances both in the local process
+and in a remote process. In either case, the way we interact with the Node is
+essentially the same.
 """
 
 from pyacq import create_manager, ImageViewer, WebCamAV

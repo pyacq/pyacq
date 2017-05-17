@@ -1,4 +1,5 @@
-Simple Webcam Viewer
+
+Simple webcam viewer
 ====================
 
 .. literalinclude:: ../../examples/simple_webcam.py

@@ -1,3 +1,8 @@
+"""
+Simple webcam viewer
+
+Streams video frames from a WebCamAV Node to an ImageViewer Node.
+"""
 from pyacq import create_manager, ImageViewer
 from pyqtgraph.Qt import QtCore, QtGui
 
