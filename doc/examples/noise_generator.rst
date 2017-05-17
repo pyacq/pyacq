@@ -1,4 +1,6 @@
 
+.. _noise_generator_example:
+
 Noise generator node
 ====================
 

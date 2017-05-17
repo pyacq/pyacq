@@ -1,4 +1,6 @@
 
+.. _logger_example:
+
 logger
 ======
 

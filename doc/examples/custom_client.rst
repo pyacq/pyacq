@@ -1,4 +1,6 @@
 
+.. _custom_client_example:
+
 Custom RPC client
 =================
 

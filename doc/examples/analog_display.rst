@@ -1,4 +1,6 @@
 
+.. _analog_display_example:
+
 Analog signal display
 =====================
 

@@ -17,6 +17,8 @@ Contents:
 """
 
 template = """
+.. _{exname}_example:
+
 {title}
 {line}
 
@@ -37,7 +39,7 @@ for example in examples:
             title = excode[i+1].strip()
             break
     print("%s%s  --  %s" % (example, " "*(30-len(example)), title))
-    rst = template.format(title=title, line="="*len(title), file=expath)
+    rst = template.format(title=title, line="="*len(title), file=expath, exname=exname)
     open(exname+'.rst', 'wb').write(rst.encode())
 
 

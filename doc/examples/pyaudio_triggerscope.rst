@@ -1,4 +1,6 @@
 
+.. _pyaudio_triggerscope_example:
+
 PyAudio triggered oscilloscope
 ==============================
 

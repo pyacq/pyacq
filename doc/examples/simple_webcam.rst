@@ -1,4 +1,6 @@
 
+.. _simple_webcam_example:
+
 Simple webcam viewer
 ====================
 

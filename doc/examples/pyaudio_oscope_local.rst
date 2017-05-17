@@ -1,4 +1,6 @@
 
+.. _pyaudio_oscope_local_example:
+
 PyAudio oscilloscope (local)
 ============================
 

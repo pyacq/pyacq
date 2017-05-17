@@ -20,4 +20,5 @@ Contents:
    pyaudio_oscope_local
    analog_display
    simple_client
+   simple_input_node
    custom_client

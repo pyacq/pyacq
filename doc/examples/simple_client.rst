@@ -1,4 +1,6 @@
 
+.. _simple_client_example:
+
 simple_client
 =============
 

@@ -1,4 +1,6 @@
 
+.. _local_or_remote_example:
+
 Local and remote Nodes
 ======================
 

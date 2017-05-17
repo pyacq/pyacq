@@ -1,4 +1,6 @@
 
+.. _pyaudio_tfr_example:
+
 PyAudio wavelet spectrogram
 ===========================
 
