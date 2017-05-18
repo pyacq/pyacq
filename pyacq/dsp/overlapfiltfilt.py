@@ -394,12 +394,13 @@ class OverlapFiltfilt(Node,  QtCore.QObject):
     
     It internally uses scipy.signal.sosfilt which is available only on scipy >0.16
     
-    The chunksize and the overlapsize are important for the accuracy of filtering.
-    These parameters must be chosen carefully, otherwise the result should be the same as a
-    real filtfilt on a long term signal. You must check the residual between real offline filtfilt
-    and this online OverlapFiltfilt.
-    
-    Note that the chunksize has a strong effect on low frequencies.
+    Because the signal is filtered piecewise, the result will differ slightly
+    from the ideal case, in which the entire signal would be filtered over all
+    time at once. To ensure accurate results, the chunksize and overlapsize
+    parameters must be chosen carefully: a small chunksize will affect low
+    frequencies, and a small overlapsize may result in transients at the border
+    between chunks. We recommend comparing the output of this node to an ideal
+    offline filter to ensure that the residuals are acceptably small.
     
     The chunksize need to be fixed.
     For overlapsize there are 2 cases:
