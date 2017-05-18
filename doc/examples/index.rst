@@ -13,12 +13,10 @@ Contents:
    local_or_remote
    noise_generator
    simple_webcam
-   logger
    pyaudio_oscope_remote
    pyaudio_tfr
    pyaudio_triggerscope
    pyaudio_oscope_local
-   analog_display
    simple_client
    simple_input_node
    custom_client
