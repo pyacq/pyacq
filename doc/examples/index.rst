@@ -17,6 +17,5 @@ Contents:
    pyaudio_tfr
    pyaudio_triggerscope
    pyaudio_oscope_local
-   simple_client
    simple_input_node
    custom_client
