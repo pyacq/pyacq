@@ -15,7 +15,7 @@ try:
     import scipy.signal
     HAVE_SCIPY = True
     # scpy.signal.sosfilt was introduced in scipy 0.16
-    assert distutils.version.LooseVersion(scipy.__version__)>'0.16'
+    assert distutils.version.LooseVersion(scipy.__version__) > '0.16'
 except ImportError:
     HAVE_SCIPY = False
 
@@ -391,8 +391,6 @@ class OverlapFiltfilt(Node,  QtCore.QObject):
     """
     Node for filtering with forward-backward method (filtfilt) using second order
     (sos) coefficient and a sliding, overlapping window.
-    
-    It internally uses scipy.signal.sosfilt which is available only on scipy >0.16
     
     Because the signal is filtered piecewise, the result will differ slightly
     from the ideal case, in which the entire signal would be filtered over all

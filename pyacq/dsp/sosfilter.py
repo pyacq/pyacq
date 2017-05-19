@@ -363,7 +363,6 @@ class SosFilter(Node,  QtCore.QObject):
     """
     Node for filtering multi channel signals.
     This uses a second order filter, it is a casde of IIR filter of order 2.
-    It internally uses scipy.signal.sosfilt which is available only on scipy >0.16
     
     Example::
 
