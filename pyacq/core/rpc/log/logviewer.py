@@ -4,6 +4,7 @@
 
 import logging
 import weakref
+import time
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtGui
 from .remote import get_host_name, get_process_name, get_thread_name
@@ -56,8 +57,9 @@ class LogViewer(QtGui.QWidget):
         self.tree = QtGui.QTreeWidget()
         self.tree.setWordWrap(True)
         self.tree.setUniformRowHeights(False)
-        self.tree.setColumnWidth(0, 250)
-        self.tree.setColumnCount(2)
+        self.tree.setColumnCount(3)
+        self.tree.setColumnWidth(0, 200)
+        self.tree.setColumnWidth(1, 250)
         self.tree.setHeaderHidden(True)
         self.layout.addWidget(self.tree, 0, 0)
         
@@ -76,13 +78,19 @@ class LogViewer(QtGui.QWidget):
         self.col_per_thread_check.toggled.connect(self.col_per_thread_toggled)
         self.multiline_check.toggled.connect(self.multiline_toggled)
         
-        self.resize(800, 600)
+        self.resize(1200, 800)
         
     def new_record(self, rec):
         self.last_rec = rec
         self.log_records.append(rec)
         item = LogRecordItem(self, rec)
-        self.tree.addTopLevelItem(item)
+        i = self.tree.topLevelItemCount() - 1
+        if i < 0 or rec.created >= self.tree.topLevelItem(i).rec.created:
+            self.tree.addTopLevelItem(item)
+        else:
+            while i > 0 and rec.created < self.tree.topLevelItem(i-1).rec.created:
+                i -= 1
+            self.tree.insertTopLevelItem(i, item)
         #header = self.get_thread_header(rec)
         #self.text.append("%s %s\n" % (header, rec.getMessage()))
         
@@ -108,9 +116,13 @@ class LogRecordItem(QtGui.QTreeWidgetItem):
         self._color = logview.get_thread_color(key)
         self._msg = rec.getMessage()
         self._thread_name = "%s : %s : %s" % key
-        QtGui.QTreeWidgetItem.__init__(self, [self._thread_name, self._msg])
-        self.setTextAlignment(0, QtCore.Qt.AlignLeft | QtCore.Qt.AlignTop)
-        self.setForeground(0, pg.mkBrush(self._color))
+        tfrac = '%f'%(rec.created - int(rec.created))
+        tfrac = tfrac[tfrac.index('.'):]
+        self._date_str = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(rec.created)) + tfrac
+        QtGui.QTreeWidgetItem.__init__(self, [self._date_str, self._thread_name, self._msg])
+        for i in range(logview.tree.columnCount()):
+            self.setTextAlignment(i, QtCore.Qt.AlignLeft | QtCore.Qt.AlignTop)
+        self.setForeground(1, pg.mkBrush(self._color))
 
     def source_key(self):
         record = self.rec
