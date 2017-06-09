@@ -6,6 +6,7 @@ import logging
 import weakref
 import time
 import pyqtgraph as pg
+from collections import OrderedDict
 from pyqtgraph.Qt import QtCore, QtGui
 from .remote import get_host_name, get_process_name, get_thread_name
 
@@ -48,6 +49,8 @@ class LogViewer(QtGui.QWidget):
         logger.addHandler(self.handler)
 
         self.log_records = []
+        self.threads = OrderedDict()
+        self.thread_order = {}
         
         # Set up GUI
         self.layout = QtGui.QGridLayout()
@@ -57,10 +60,6 @@ class LogViewer(QtGui.QWidget):
         self.tree = QtGui.QTreeWidget()
         self.tree.setWordWrap(True)
         self.tree.setUniformRowHeights(False)
-        self.tree.setColumnCount(3)
-        self.tree.setColumnWidth(0, 200)
-        self.tree.setColumnWidth(1, 250)
-        self.tree.setHeaderHidden(True)
         self.layout.addWidget(self.tree, 0, 0)
         
         self.ctrl = QtGui.QWidget()
@@ -80,6 +79,8 @@ class LogViewer(QtGui.QWidget):
         
         self.resize(1200, 800)
         
+        self.col_per_thread_toggled(False)
+        
     def new_record(self, rec):
         self.last_rec = rec
         self.log_records.append(rec)
@@ -91,8 +92,13 @@ class LogViewer(QtGui.QWidget):
             while i > 0 and rec.created < self.tree.topLevelItem(i-1).rec.created:
                 i -= 1
             self.tree.insertTopLevelItem(i, item)
-        #header = self.get_thread_header(rec)
-        #self.text.append("%s %s\n" % (header, rec.getMessage()))
+            
+        key = item.source_key()
+        if key not in self.threads:
+            self.threads[key] = item.thread_name()
+            self.thread_order[key] = len(self.thread_order)
+        
+        item.set_col_per_thread(self.col_per_thread_check.isChecked(), self.thread_order)
         
     def get_thread_color(self, key):
         color = self.thread_colors.get(key, None)
@@ -102,7 +108,22 @@ class LogViewer(QtGui.QWidget):
         return color
 
     def col_per_thread_toggled(self, cpt):
-        pass
+        if cpt:
+            self.tree.setColumnCount(len(self.threads) + 1)
+            self.tree.setHeaderHidden(False)
+            width = max(100, self.tree.width() // self.tree.columnCount())
+            for i in range(self.tree.columnCount()):
+                self.tree.setColumnWidth(i, width)
+            self.tree.setHeaderLabels(['time'] + list(self.threads.values()))
+        else:
+            self.tree.setColumnCount(3)
+            self.tree.setColumnWidth(0, 200)
+            self.tree.setColumnWidth(1, 250)
+            self.tree.setHeaderHidden(True)
+            
+        for i in range(self.tree.topLevelItemCount()):
+            item = self.tree.topLevelItem(i)
+            item.set_col_per_thread(cpt, self.thread_order)
 
     def multiline_toggled(self, ml):
         pass
@@ -119,10 +140,10 @@ class LogRecordItem(QtGui.QTreeWidgetItem):
         tfrac = '%f'%(rec.created - int(rec.created))
         tfrac = tfrac[tfrac.index('.'):]
         self._date_str = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(rec.created)) + tfrac
-        QtGui.QTreeWidgetItem.__init__(self, [self._date_str, self._thread_name, self._msg])
-        for i in range(logview.tree.columnCount()):
-            self.setTextAlignment(i, QtCore.Qt.AlignLeft | QtCore.Qt.AlignTop)
-        self.setForeground(1, pg.mkBrush(self._color))
+        QtGui.QTreeWidgetItem.__init__(self)
+
+    def thread_name(self):
+        return self._thread_name
 
     def source_key(self):
         record = self.rec
@@ -130,7 +151,26 @@ class LogRecordItem(QtGui.QTreeWidgetItem):
         pid = getattr(record, 'process_name', get_process_name())
         tid = getattr(record, 'thread_name', get_thread_name(record.thread))
         return (hid, pid, tid)
-        
+    
+    def set_col_per_thread(self, cpt, order):
+        blk = pg.mkBrush('k')
+        if cpt is False:
+            text = [self._date_str, self._thread_name, self._msg]
+            self.setForeground(0, blk)
+            self.setForeground(1, pg.mkBrush(self._color))
+            self.setForeground(2, blk)
+        else:
+            col = order[self.source_key()]
+            text = [self._date_str] + ([''] * len(order))
+            text[col+1] = self._msg
+            for i in range(self._logview().tree.columnCount()):
+                self.setForeground(i, blk)
+            self.setForeground(col+1, pg.mkBrush(self._color))
+            
+        for i in range(self._logview().tree.columnCount()):
+            self.setTextAlignment(i, QtCore.Qt.AlignLeft | QtCore.Qt.AlignTop)
+            self.setText(i, text[i])
+
 
 class QtLogHandler(logging.Handler, QtCore.QObject):
     """Log handler that emits a Qt signal for each record.
