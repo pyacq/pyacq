@@ -155,6 +155,7 @@ class ThreadDescriptor(object):
     
     def __init__(self, key):
         self.key = key
+        self.server_addr = None
         if key in ThreadDescriptor.all_threads:
             raise ValueError("Already created thread descriptor for %s; use "
                 "get() instead." % key)
@@ -163,18 +164,11 @@ class ThreadDescriptor(object):
         self.name = "%s : %s : %s" % key
         self.color = self._thread_color_list[self.index % len(self._thread_color_list)]
         
-    @property
-    def has_server(self):
-        pass
-
-    @property
-    def server_address(self):
-        pass
-
 
 class ThreadTree(QtGui.QTreeWidget):
     def __init__(self):
         QtGui.QTreeWidget.__init__(self)
+        
 
 
 class QtLogHandler(logging.Handler, QtCore.QObject):
