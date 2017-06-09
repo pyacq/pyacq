@@ -2,9 +2,15 @@
 
 from setuptools import setup
 import os
-
-long_description = open("README.rst").read()
 import pyacq
+
+long_description = """
+Pyacq is a simple, pure-Python framework for distributed data acquisition and
+stream processing. Its primary use cases are for analog signals, digital
+signals, video, and events. Pyacq uses ZeroMQ to stream data between
+distributed threads, processes, and machines to build more complex and
+scalable acquisition systems.
+"""
 
 setup(
     name = "pyacq",
