@@ -11,28 +11,6 @@ from pyqtgraph.Qt import QtCore, QtGui
 from .remote import get_host_name, get_process_name, get_thread_name
 
 
-Stylesheet = """
-    body {color: #000; font-family: sans;}
-    .entry {}
-    .error .message {color: #900}
-    .warning .message {color: #740}
-    .user .message {color: #009}
-    .status .message {color: #090}
-    .logExtra {margin-left: 40px;}
-    .traceback {color: #555; height: 0px;}
-    .timestamp {color: #000;}
-"""
-
-_thread_color_list = [
-    "#AA0000",
-    "#00AA00",
-    "#0000AA",
-    "#888800",
-    "#880088",
-    "#008888",
-]
-
-
 class LogViewer(QtGui.QWidget):
     """QWidget for displaying and filtering log messages.
     """
@@ -49,8 +27,6 @@ class LogViewer(QtGui.QWidget):
         logger.addHandler(self.handler)
 
         self.log_records = []
-        self.threads = OrderedDict()
-        self.thread_order = {}
         
         # Set up GUI
         self.layout = QtGui.QGridLayout()
@@ -85,6 +61,8 @@ class LogViewer(QtGui.QWidget):
         self.last_rec = rec
         self.log_records.append(rec)
         item = LogRecordItem(self, rec)
+        
+        # insert item into time-sorted position
         i = self.tree.topLevelItemCount() - 1
         if i < 0 or rec.created >= self.tree.topLevelItem(i).rec.created:
             self.tree.addTopLevelItem(item)
@@ -92,29 +70,18 @@ class LogViewer(QtGui.QWidget):
             while i > 0 and rec.created < self.tree.topLevelItem(i-1).rec.created:
                 i -= 1
             self.tree.insertTopLevelItem(i, item)
-            
-        key = item.source_key()
-        if key not in self.threads:
-            self.threads[key] = item.thread_name()
-            self.thread_order[key] = len(self.thread_order)
         
-        item.set_col_per_thread(self.col_per_thread_check.isChecked(), self.thread_order)
+        item.set_col_per_thread(self.col_per_thread_check.isChecked())
         
-    def get_thread_color(self, key):
-        color = self.thread_colors.get(key, None)
-        if color is None:
-            color = _thread_color_list[len(self.thread_colors) % len(_thread_color_list)]
-            self.thread_colors[key] = color
-        return color
-
     def col_per_thread_toggled(self, cpt):
+        n_threads = len(ThreadDescriptor.all_threads)
         if cpt:
-            self.tree.setColumnCount(len(self.threads) + 1)
+            self.tree.setColumnCount(n_threads + 1)
             self.tree.setHeaderHidden(False)
             width = max(100, self.tree.width() // self.tree.columnCount())
             for i in range(self.tree.columnCount()):
                 self.tree.setColumnWidth(i, width)
-            self.tree.setHeaderLabels(['time'] + list(self.threads.values()))
+            self.tree.setHeaderLabels(['time'] + [t.name for t in ThreadDescriptor.all_threads.values()])
         else:
             self.tree.setColumnCount(3)
             self.tree.setColumnWidth(0, 200)
@@ -123,7 +90,7 @@ class LogViewer(QtGui.QWidget):
             
         for i in range(self.tree.topLevelItemCount()):
             item = self.tree.topLevelItem(i)
-            item.set_col_per_thread(cpt, self.thread_order)
+            item.set_col_per_thread(cpt)
 
     def multiline_toggled(self, ml):
         pass
@@ -133,43 +100,81 @@ class LogRecordItem(QtGui.QTreeWidgetItem):
     def __init__(self, logview, rec):
         self.rec = rec
         self._logview = weakref.ref(logview)
-        key = self.source_key()
-        self._color = logview.get_thread_color(key)
+        self.thread = ThreadDescriptor.from_log_record(rec)
         self._msg = rec.getMessage()
-        self._thread_name = "%s : %s : %s" % key
         tfrac = '%f'%(rec.created - int(rec.created))
         tfrac = tfrac[tfrac.index('.'):]
         self._date_str = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(rec.created)) + tfrac
         QtGui.QTreeWidgetItem.__init__(self)
 
-    def thread_name(self):
-        return self._thread_name
-
-    def source_key(self):
-        record = self.rec
-        hid = getattr(record, 'hostname', get_host_name())
-        pid = getattr(record, 'process_name', get_process_name())
-        tid = getattr(record, 'thread_name', get_thread_name(record.thread))
-        return (hid, pid, tid)
-    
-    def set_col_per_thread(self, cpt, order):
+    def set_col_per_thread(self, cpt):
         blk = pg.mkBrush('k')
+        n_threads = len(ThreadDescriptor.all_threads)
         if cpt is False:
-            text = [self._date_str, self._thread_name, self._msg]
+            text = [self._date_str, self.thread.name, self._msg]
             self.setForeground(0, blk)
-            self.setForeground(1, pg.mkBrush(self._color))
+            self.setForeground(1, pg.mkBrush(self.thread.color))
             self.setForeground(2, blk)
         else:
-            col = order[self.source_key()]
-            text = [self._date_str] + ([''] * len(order))
+            col = self.thread.index
+            text = [self._date_str] + ([''] * n_threads)
             text[col+1] = self._msg
             for i in range(self._logview().tree.columnCount()):
                 self.setForeground(i, blk)
-            self.setForeground(col+1, pg.mkBrush(self._color))
+            self.setForeground(col+1, pg.mkBrush(self.thread.color))
             
         for i in range(self._logview().tree.columnCount()):
             self.setTextAlignment(i, QtCore.Qt.AlignLeft | QtCore.Qt.AlignTop)
             self.setText(i, text[i])
+
+
+class ThreadDescriptor(object):
+    
+    all_threads = OrderedDict()
+    _thread_color_list = [
+        "#AA0000",
+        "#00AA00",
+        "#0000AA",
+        "#888800",
+        "#880088",
+        "#008888",
+    ]
+
+    @classmethod
+    def get(cls, key):
+        if key not in cls.all_threads:
+            cls.all_threads[key] = cls(key)
+        return cls.all_threads[key]
+
+    @classmethod
+    def from_log_record(cls, rec):
+        hid = getattr(rec, 'hostname', get_host_name())
+        pid = getattr(rec, 'process_name', get_process_name())
+        tid = getattr(rec, 'thread_name', get_thread_name(rec.thread))
+        return cls.get((hid, pid, tid))
+    
+    def __init__(self, key):
+        self.key = key
+        if key in ThreadDescriptor.all_threads:
+            raise ValueError("Already created thread descriptor for %s; use "
+                "get() instead." % key)
+        self.index = len(ThreadDescriptor.all_threads)
+        ThreadDescriptor.all_threads[key] = self
+        self.name = "%s : %s : %s" % key
+        self.color = self._thread_color_list[self.index % len(self._thread_color_list)]
+        
+    @property
+    def has_server(self):
+        pass
+
+    @property
+    def server_address(self):
+        pass
+
+
+class ThreadTree(QtGui.QTreeWidget):
+    def __init__(self):
+        QtGui.QTreeWidget.__init__(self)
 
 
 class QtLogHandler(logging.Handler, QtCore.QObject):
