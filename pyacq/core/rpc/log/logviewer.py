@@ -14,7 +14,6 @@ from .remote import get_host_name, get_process_name, get_thread_name
 class LogViewer(QtGui.QWidget):
     """QWidget for displaying and filtering log messages.
     """
-    thread_colors = {}
 
     def __init__(self, logger='', parent=None):
         QtGui.QWidget.__init__(self, parent=parent)
@@ -29,6 +28,7 @@ class LogViewer(QtGui.QWidget):
         self.log_records = []
         self.selected_threads = []
         self.col_per_thread = False
+        self.auto_scroll = True
         
         # Set up GUI
         self.layout = QtGui.QGridLayout()
@@ -66,7 +66,10 @@ class LogViewer(QtGui.QWidget):
         self.multiline_check = QtGui.QCheckBox("multiline")
         self.ctrl_layout.addWidget(self.multiline_check, 3, 0)
         self.multiline_check.toggled.connect(self.multiline_toggled)
-        
+
+        self.tree.verticalScrollBar().rangeChanged.connect(self.scrollbar_range_changed)
+        self.tree.verticalScrollBar().sliderMoved.connect(self.scrollbar_moved)
+                
         self.resize(1200, 800)
         
         self.col_per_thread_toggled(False)
@@ -85,9 +88,12 @@ class LogViewer(QtGui.QWidget):
             while i > 0 and rec.created < self.tree.topLevelItem(i-1).rec.created:
                 i -= 1
             self.tree.insertTopLevelItem(i, item)
-        
+
+        # update thread tree if necessary
         self.thread_tree.add_thread(item.thread)
         self.thread_tree_changed()
+        
+        # configure the new tree item
         item.set_col_per_thread(self.col_per_thread_check.isChecked(), self.selected_threads)
         self.update_item_visibility([item])
         
@@ -135,6 +141,18 @@ class LogViewer(QtGui.QWidget):
 
     def multiline_toggled(self, ml):
         pass
+
+    def scrollbar_range_changed(self, min, max):
+        if self.auto_scroll:
+            self.scroll_to_bottom()
+        
+    def scrollbar_moved(self, val):
+        sb = self.tree.verticalScrollBar()
+        self.auto_scroll = val == sb.maximum()
+
+    def scroll_to_bottom(self):
+        sb = self.tree.verticalScrollBar()
+        sb.setValue(sb.maximum())
 
 
 class LogRecordItem(QtGui.QTreeWidgetItem):
