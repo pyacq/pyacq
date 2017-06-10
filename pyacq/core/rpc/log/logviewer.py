@@ -39,23 +39,33 @@ class LogViewer(QtGui.QWidget):
         self.layout.addWidget(self.tree, 0, 0)
         
         self.ctrl = QtGui.QWidget()
+        self.ctrl.setMaximumWidth(150)
         self.layout.addWidget(self.ctrl, 0, 1)
         
         self.ctrl_layout = QtGui.QGridLayout()
         self.ctrl.setLayout(self.ctrl_layout)
         
+        self.level_slider = QtGui.QSlider(QtCore.Qt.Horizontal)
+        self.level_slider.setMaximum(50)
+        self.level_slider.setTickInterval(10)
+        self.level_slider.setTickPosition(self.level_slider.TicksAbove)
+        self.level_slider.setValue(35)
+        self.ctrl_layout.addWidget(self.level_slider, 0, 0)
+        self.level_slider.valueChanged.connect(self.level_slider_changed)
+        
         self.col_per_thread_check = QtGui.QCheckBox("col per thread")
-        self.ctrl_layout.addWidget(self.col_per_thread_check, 0, 0)
+        self.ctrl_layout.addWidget(self.col_per_thread_check, 1, 0)
+        self.col_per_thread_check.toggled.connect(self.col_per_thread_toggled)
         
         self.multiline_check = QtGui.QCheckBox("multiline")
-        self.ctrl_layout.addWidget(self.multiline_check, 1, 0)
-        
-        self.col_per_thread_check.toggled.connect(self.col_per_thread_toggled)
+        self.ctrl_layout.addWidget(self.multiline_check, 2, 0)
         self.multiline_check.toggled.connect(self.multiline_toggled)
+        
         
         self.resize(1200, 800)
         
         self.col_per_thread_toggled(False)
+        self.level_slider_changed()
         
     def new_record(self, rec):
         self.last_rec = rec
@@ -72,6 +82,7 @@ class LogViewer(QtGui.QWidget):
             self.tree.insertTopLevelItem(i, item)
         
         item.set_col_per_thread(self.col_per_thread_check.isChecked())
+        item.setHidden(rec.levelno < 50-self.level_slider.value())
         
     def col_per_thread_toggled(self, cpt):
         n_threads = len(ThreadDescriptor.all_threads)
@@ -91,6 +102,12 @@ class LogViewer(QtGui.QWidget):
         for i in range(self.tree.topLevelItemCount()):
             item = self.tree.topLevelItem(i)
             item.set_col_per_thread(cpt)
+
+    def level_slider_changed(self):
+        v = 50 - self.level_slider.value()
+        for i in range(self.tree.topLevelItemCount()):
+            item = self.tree.topLevelItem(i)
+            item.setHidden(item.rec.levelno < v)
 
     def multiline_toggled(self, ml):
         pass
