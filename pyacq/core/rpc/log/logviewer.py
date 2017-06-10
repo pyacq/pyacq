@@ -27,6 +27,8 @@ class LogViewer(QtGui.QWidget):
         logger.addHandler(self.handler)
 
         self.log_records = []
+        self.selected_threads = []
+        self.col_per_thread = False
         
         # Set up GUI
         self.layout = QtGui.QGridLayout()
@@ -47,6 +49,7 @@ class LogViewer(QtGui.QWidget):
 
         self.thread_tree = ThreadTree()
         self.ctrl_layout.addWidget(self.thread_tree, 0, 0)
+        self.thread_tree.itemChanged.connect(self.thread_tree_changed)
         
         self.level_slider = QtGui.QSlider(QtCore.Qt.Horizontal)
         self.level_slider.setMaximum(50)
@@ -67,7 +70,7 @@ class LogViewer(QtGui.QWidget):
         self.resize(1200, 800)
         
         self.col_per_thread_toggled(False)
-        self.level_slider_changed()
+        self.update_item_visibility()
         
     def new_record(self, rec):
         self.last_rec = rec
@@ -83,20 +86,22 @@ class LogViewer(QtGui.QWidget):
                 i -= 1
             self.tree.insertTopLevelItem(i, item)
         
-        item.set_col_per_thread(self.col_per_thread_check.isChecked())
-        item.setHidden(rec.levelno < 50-self.level_slider.value())
-        
         self.thread_tree.add_thread(item.thread)
+        self.thread_tree_changed()
+        item.set_col_per_thread(self.col_per_thread_check.isChecked(), self.selected_threads)
+        self.update_item_visibility([item])
         
-    def col_per_thread_toggled(self, cpt):
-        n_threads = len(ThreadDescriptor.all_threads)
+    def update_columns(self):
+        cpt = self.col_per_thread
+        threads = self.selected_threads
+        n_threads = len(threads)
         if cpt:
             self.tree.setColumnCount(n_threads + 1)
             self.tree.setHeaderHidden(False)
             width = max(100, self.tree.width() // self.tree.columnCount())
             for i in range(self.tree.columnCount()):
                 self.tree.setColumnWidth(i, width)
-            self.tree.setHeaderLabels(['time'] + [t.name for t in ThreadDescriptor.all_threads.values()])
+            self.tree.setHeaderLabels(['time'] + [t.name for t in threads])
         else:
             self.tree.setColumnCount(3)
             self.tree.setColumnWidth(0, 200)
@@ -105,13 +110,28 @@ class LogViewer(QtGui.QWidget):
             
         for i in range(self.tree.topLevelItemCount()):
             item = self.tree.topLevelItem(i)
-            item.set_col_per_thread(cpt)
+            item.set_col_per_thread(cpt, threads)
 
-    def level_slider_changed(self):
+    def update_item_visibility(self, items=None):
+        if items is None:
+            items = [self.tree.topLevelItem(i) for i in range(self.tree.topLevelItemCount())]
         v = 50 - self.level_slider.value()
-        for i in range(self.tree.topLevelItemCount()):
-            item = self.tree.topLevelItem(i)
-            item.setHidden(item.rec.levelno < v)
+        threads = self.selected_threads
+        for item in items:
+            item.setHidden(item.rec.levelno < v or item.thread not in threads)
+
+    def col_per_thread_toggled(self, cpt):
+        self.col_per_thread = cpt
+        self.update_columns()
+        
+    def level_slider_changed(self):
+        self.update_item_visibility()
+
+    def thread_tree_changed(self):
+        self.selected_threads = self.thread_tree.selected_threads()
+        self.update_item_visibility()
+        if self.col_per_thread:
+            self.update_columns()
 
     def multiline_toggled(self, ml):
         pass
@@ -128,16 +148,19 @@ class LogRecordItem(QtGui.QTreeWidgetItem):
         self._date_str = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(rec.created)) + tfrac
         QtGui.QTreeWidgetItem.__init__(self)
 
-    def set_col_per_thread(self, cpt):
+    def set_col_per_thread(self, cpt, threads):
         blk = pg.mkBrush('k')
-        n_threads = len(ThreadDescriptor.all_threads)
+        n_threads = len(threads)
         if cpt is False:
             text = [self._date_str, self.thread.name, self._msg]
             self.setForeground(0, blk)
             self.setForeground(1, pg.mkBrush(self.thread.color))
             self.setForeground(2, blk)
         else:
-            col = self.thread.index
+            try:
+                col = threads.index(self.thread)
+            except ValueError:
+                return  # not currently visible
             text = [self._date_str] + ([''] * n_threads)
             text[col+1] = self._msg
             for i in range(self._logview().tree.columnCount()):
@@ -193,7 +216,7 @@ class ThreadTree(QtGui.QTreeWidget):
 
         self.hosts = {}
         self.procs = {}
-        self.threads = {}
+        self.threads = OrderedDict()
         
     def add_thread(self, thread):
         key = thread.key
@@ -215,9 +238,18 @@ class ThreadTree(QtGui.QTreeWidget):
             self.expandItem(proc_item)
             
         thread_item = QtGui.QTreeWidgetItem([key[2]])
+        thread_item.setCheckState(0, QtCore.Qt.Checked)
         thread_item.thread = thread
+        thread_item.setForeground(0, pg.mkBrush(thread.color))
         self.threads[thread.key] = thread_item
         proc_item.addChild(thread_item)
+
+    def selected_threads(self):
+        threads = []
+        for k,item in self.threads.items():
+            if item.checkState(0) == QtCore.Qt.Checked:
+                threads.append(item.thread)
+        return threads
 
 
 class QtLogHandler(logging.Handler, QtCore.QObject):
