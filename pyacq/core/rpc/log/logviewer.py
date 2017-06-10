@@ -39,6 +39,7 @@ class LogViewer(QtGui.QWidget):
         self.tree.setWordWrap(True)
         self.tree.setUniformRowHeights(False)
         self.layout.addWidget(self.tree, 0, 0)
+        self._wrap_delegate = WrappingItemDelegate(self.tree)
         
         self.ctrl = QtGui.QWidget()
         self.ctrl.setMaximumWidth(200)
@@ -59,13 +60,14 @@ class LogViewer(QtGui.QWidget):
         self.ctrl_layout.addWidget(self.level_slider, 1, 0)
         self.level_slider.valueChanged.connect(self.level_slider_changed)
         
-        self.col_per_thread_check = QtGui.QCheckBox("col per thread")
+        self.col_per_thread_check = QtGui.QCheckBox("column per thread")
         self.ctrl_layout.addWidget(self.col_per_thread_check, 2, 0)
         self.col_per_thread_check.toggled.connect(self.col_per_thread_toggled)
         
-        self.multiline_check = QtGui.QCheckBox("multiline")
-        self.ctrl_layout.addWidget(self.multiline_check, 3, 0)
-        self.multiline_check.toggled.connect(self.multiline_toggled)
+        # not working
+        #self.multiline_check = QtGui.QCheckBox("multiline")
+        #self.ctrl_layout.addWidget(self.multiline_check, 3, 0)
+        #self.multiline_check.toggled.connect(self.multiline_toggled)
 
         self.tree.verticalScrollBar().rangeChanged.connect(self.scrollbar_range_changed)
         self.tree.verticalScrollBar().sliderMoved.connect(self.scrollbar_moved)
@@ -140,7 +142,10 @@ class LogViewer(QtGui.QWidget):
             self.update_columns()
 
     def multiline_toggled(self, ml):
-        pass
+        delegate = self._wrap_delegate if ml else None
+        for i in range(self.tree.topLevelItemCount()):
+            item = self.tree.topLevelItem(i)
+            self.tree.setItemDelegateForColumn(2, delegate)
 
     def scrollbar_range_changed(self, min, max):
         if self.auto_scroll:
@@ -188,6 +193,33 @@ class LogRecordItem(QtGui.QTreeWidgetItem):
         for i in range(self._logview().tree.columnCount()):
             self.setTextAlignment(i, QtCore.Qt.AlignLeft | QtCore.Qt.AlignTop)
             self.setText(i, text[i])
+        
+
+class WrappingItemDelegate(QtGui.QStyledItemDelegate):
+    def __init__(self, tree):
+        QtGui.QStyledItemDelegate.__init__(self)
+        self.tree = tree
+    
+    def sizeHint(self, option, index):
+        #item = self.tree.itemAt(index.row(), 0)
+        #size = QtGui.QStyledItemDelegate.sizeHint(self, option, index)
+        w = self.tree.columnWidth(index.column())
+        size = QtCore.QSize(w, 10000)
+        fm = QtGui.QFontMetrics(option.font)
+        rect = fm.boundingRect(QtCore.QRect(QtCore.QPoint(0, 0), size), QtCore.Qt.AlignLeft, option.text)
+        size.setHeight(rect.height())
+        return size
+    
+        
+#QSize MyItemDelegate::sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const override {
+    #QSize baseSize = this->QStyledItemDelegate::sizeHint(option, index);
+    #baseSize.setHeight(10000);//something very high, or the maximum height of your text block
+
+    #QFontMetrics metrics(option.font);
+    #QRect outRect = metrics.boundingRect(QRect(QPoint(0, 0), baseSize), Qt::AlignLeft, option.text);
+    #baseSize.setHeight(outRect.height());
+    #return baseSize;
+#}
 
 
 class ThreadDescriptor(object):
