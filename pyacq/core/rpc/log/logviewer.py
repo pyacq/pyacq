@@ -39,28 +39,30 @@ class LogViewer(QtGui.QWidget):
         self.layout.addWidget(self.tree, 0, 0)
         
         self.ctrl = QtGui.QWidget()
-        self.ctrl.setMaximumWidth(150)
+        self.ctrl.setMaximumWidth(200)
         self.layout.addWidget(self.ctrl, 0, 1)
         
         self.ctrl_layout = QtGui.QGridLayout()
         self.ctrl.setLayout(self.ctrl_layout)
+
+        self.thread_tree = ThreadTree()
+        self.ctrl_layout.addWidget(self.thread_tree, 0, 0)
         
         self.level_slider = QtGui.QSlider(QtCore.Qt.Horizontal)
         self.level_slider.setMaximum(50)
         self.level_slider.setTickInterval(10)
         self.level_slider.setTickPosition(self.level_slider.TicksAbove)
         self.level_slider.setValue(35)
-        self.ctrl_layout.addWidget(self.level_slider, 0, 0)
+        self.ctrl_layout.addWidget(self.level_slider, 1, 0)
         self.level_slider.valueChanged.connect(self.level_slider_changed)
         
         self.col_per_thread_check = QtGui.QCheckBox("col per thread")
-        self.ctrl_layout.addWidget(self.col_per_thread_check, 1, 0)
+        self.ctrl_layout.addWidget(self.col_per_thread_check, 2, 0)
         self.col_per_thread_check.toggled.connect(self.col_per_thread_toggled)
         
         self.multiline_check = QtGui.QCheckBox("multiline")
-        self.ctrl_layout.addWidget(self.multiline_check, 2, 0)
+        self.ctrl_layout.addWidget(self.multiline_check, 3, 0)
         self.multiline_check.toggled.connect(self.multiline_toggled)
-        
         
         self.resize(1200, 800)
         
@@ -83,6 +85,8 @@ class LogViewer(QtGui.QWidget):
         
         item.set_col_per_thread(self.col_per_thread_check.isChecked())
         item.setHidden(rec.levelno < 50-self.level_slider.value())
+        
+        self.thread_tree.add_thread(item.thread)
         
     def col_per_thread_toggled(self, cpt):
         n_threads = len(ThreadDescriptor.all_threads)
@@ -185,7 +189,35 @@ class ThreadDescriptor(object):
 class ThreadTree(QtGui.QTreeWidget):
     def __init__(self):
         QtGui.QTreeWidget.__init__(self)
+        self.setHeaderHidden(True)
+
+        self.hosts = {}
+        self.procs = {}
+        self.threads = {}
         
+    def add_thread(self, thread):
+        key = thread.key
+        if key in self.threads:
+            return
+        
+        host_item = self.hosts.get(key[0], None)
+        if host_item is None:
+            host_item = QtGui.QTreeWidgetItem([key[0]])
+            self.addTopLevelItem(host_item)
+            self.hosts[key[0]] = host_item
+            self.expandItem(host_item)
+        
+        proc_item = self.procs.get(key[:2], None)
+        if proc_item is None:
+            proc_item = QtGui.QTreeWidgetItem([key[1]])
+            host_item.addChild(proc_item)
+            self.procs[key[:2]] = proc_item
+            self.expandItem(proc_item)
+            
+        thread_item = QtGui.QTreeWidgetItem([key[2]])
+        thread_item.thread = thread
+        self.threads[thread.key] = thread_item
+        proc_item.addChild(thread_item)
 
 
 class QtLogHandler(logging.Handler, QtCore.QObject):
