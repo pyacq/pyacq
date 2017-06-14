@@ -48,6 +48,9 @@ class ProcessSpawner(object):
         process.
     executable : str | None
         Optional python executable to invoke. The default value is `sys.executable`.
+    log_output : bool
+        If True, then the child process stdout and stderr are captured and 
+        forwarded to the log server.
         
     Examples
     --------
@@ -66,7 +69,7 @@ class ProcessSpawner(object):
         proc.wait()
     """
     def __init__(self, name=None, address="tcp://127.0.0.1:*", qt=False, log_addr=None, 
-                 log_level=None, executable=None):
+                 log_level=None, executable=None, log_output=True):
         #logger.warn("Spawning process: %s %s %s", name, log_addr, log_level)
         assert qt in (True, False)
         assert isinstance(address, (str, bytes))
@@ -108,7 +111,7 @@ class ProcessSpawner(object):
         if name is not None:
             cmd = cmd + (name,)
 
-        if log_addr is not None:
+        if log_output is True and log_addr is not None:
             # start process with stdout/stderr piped
             self.proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=subprocess.PIPE,
                                          stdout=subprocess.PIPE)
