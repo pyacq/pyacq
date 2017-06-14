@@ -142,24 +142,36 @@ class RPCLogHandler(logging.StreamHandler):
             logging.StreamHandler.emit(self, rec)
 
 
-_sys_excepthook = None
+_exception_logger = None
+
+class ExceptionLogger(object):
+    def __init__(self, logger=None, call_orig_hook=False):
+        self.call_orig_hook = call_orig_hook
+
+        if logger is None:
+            logger = logging.getLogger()
+        self.logger = logger
+
+    def install_hook(self):
+        if sys.excepthook is self.log_exception:
+            return
+        self.orig_hook = sys.excepthook
+        sys.excepthook = self.log_exception
+        
+    def log_exception(self, exc, val, tb):
+        #exc_str = traceback.format_stack()
+        #exc_str += [" < exception caught here >\n"]
+        #exc_str += traceback.format_exception(exc, val, tb)[1:]
+        #exc_str = ''.join(['    ' + line for line in exc_str])
+        self.logger.warn("Unhandled exception:", exc_info=(exc, val, tb), stack_info=True)
+        if self.call_orig_hook:
+            self.orig_hook(exc, val, tb)
 
 
-def _log_unhandled_exception(exc, val, tb):
-    global _sys_excepthook
-    exc_str = traceback.format_stack()
-    exc_str += [" < exception caught here >\n"]
-    exc_str += traceback.format_exception(exc, val, tb)[1:]
-    exc_str = ''.join(['    ' + line for line in exc_str])
-    logging.getLogger().warn("Unhandled exception:\n%s", exc_str)
-    #_sys_excepthook(exc, val, tb)
-
-
-def log_exceptions():
+def log_exceptions(logger=None, call_orig_hook=False):
     """Install a hook that creates log messages from unhandled exceptions.
     """
-    global _sys_excepthook
-    if sys.excepthook is _log_unhandled_exception:
-        return
-    _sys_excepthook = sys.excepthook
-    sys.excepthook = _log_unhandled_exception
+    global _exception_logger
+    if _exception_logger is None:
+        _exception_logger = ExceptionLogger(logger, call_orig_hook)
+    _exception_logger.install_hook()
