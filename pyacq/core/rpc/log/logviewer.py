@@ -78,17 +78,17 @@ class LogViewer(QtGui.QWidget):
         self.update_item_visibility()
         
     def new_record(self, rec):
-        self.last_rec = rec
-        self.log_records.append(rec)
         item = LogRecordItem(self, rec)
         
         # insert item into time-sorted position
-        i = self.tree.topLevelItemCount() - 1
-        if i < 0 or rec.created >= self.tree.topLevelItem(i).rec.created:
+        i = len(self.log_records) - 1
+        if i < 0 or rec.created >= self.log_records[i].created:
+            self.log_records.append(rec)
             self.tree.addTopLevelItem(item)
         else:
-            while i > 0 and rec.created < self.tree.topLevelItem(i-1).rec.created:
+            while i > 0 and rec.created < self.log_records[i-1].created:
                 i -= 1
+            self.log_records.insert(i, rec)
             self.tree.insertTopLevelItem(i, item)
 
         # update thread tree if necessary
