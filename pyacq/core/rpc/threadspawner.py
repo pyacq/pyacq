@@ -95,8 +95,12 @@ class ThreadSpawner(object):
         self.join()
 
     def thread_run(self, address, event):
-        self.server = RPCServer(address)
-        self.address = self.server.address
-        set_thread_name(self.name)
-        event.set()
-        self.server.run_forever()
+        try:
+            self.server = RPCServer(address)
+            self.address = self.server.address
+            set_thread_name(self.name)
+            event.set()
+            self.server.run_forever()
+        except Exception:
+            # workaround for Python bug: https://bugs.python.org/issue1230540
+            sys.excepthook(*sys.exc_info())
