@@ -1,4 +1,5 @@
 import sys
+import logging
 
 _exception_logger = None
 
@@ -40,4 +41,4 @@ def log_exceptions(logger=None, log_level=logging.WARN, call_orig_hook=False):
     global _exception_logger
     if _exception_logger is None:
         _exception_logger = ExceptionLogger(logger, call_orig_hook)
-    _exception_logger.install_handler()
+    _exception_logger.install()
