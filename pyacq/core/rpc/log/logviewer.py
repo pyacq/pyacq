@@ -49,7 +49,7 @@ class LogViewer(QtGui.QWidget):
         self.ctrl.setLayout(self.ctrl_layout)
 
         self.thread_tree = ThreadTree()
-        self.ctrl_layout.addWidget(self.thread_tree, 0, 0)
+        self.ctrl_layout.addWidget(self.thread_tree, self.ctrl_layout.rowCount(), 0)
         self.thread_tree.itemChanged.connect(self.thread_tree_changed)
         
         self.level_slider = QtGui.QSlider(QtCore.Qt.Horizontal)
@@ -57,12 +57,17 @@ class LogViewer(QtGui.QWidget):
         self.level_slider.setTickInterval(10)
         self.level_slider.setTickPosition(self.level_slider.TicksAbove)
         self.level_slider.setValue(35)
-        self.ctrl_layout.addWidget(self.level_slider, 1, 0)
+        self.ctrl_layout.addWidget(self.level_slider, self.ctrl_layout.rowCount(), 0)
         self.level_slider.valueChanged.connect(self.level_slider_changed)
         
         self.col_per_thread_check = QtGui.QCheckBox("column per thread")
-        self.ctrl_layout.addWidget(self.col_per_thread_check, 2, 0)
+        self.ctrl_layout.addWidget(self.col_per_thread_check, self.ctrl_layout.rowCount(), 0)
         self.col_per_thread_check.toggled.connect(self.col_per_thread_toggled)
+
+        self.show_date_check = QtGui.QCheckBox("show date")
+        self.ctrl_layout.addWidget(self.show_date_check, self.ctrl_layout.rowCount(), 0)
+        self.show_date_check.setChecked(True)
+        self.show_date_check.toggled.connect(self.show_date_toggled)
         
         # not working
         #self.multiline_check = QtGui.QCheckBox("multiline")
@@ -131,6 +136,12 @@ class LogViewer(QtGui.QWidget):
     def col_per_thread_toggled(self, cpt):
         self.col_per_thread = cpt
         self.update_columns()
+
+    def show_date_toggled(self, show):
+        if show:
+            self.tree.showColumn(0)
+        else:
+            self.tree.hideColumn(0)
         
     def level_slider_changed(self):
         self.update_item_visibility()
