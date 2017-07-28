@@ -297,9 +297,12 @@ class InputStream(object):
         This closes the socket.
         
         """
-        self.receiver.close()
-        self.socket.close()
-        del self.socket
+        try:
+            self.receiver.close()
+            self.socket.close()
+            del self.socket
+        except AttributeError:
+            pass
     
     def __getitem__(self, *args):
         """Return a data slice from the RingBuffer attached to this InputStream.

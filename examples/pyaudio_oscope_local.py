@@ -54,3 +54,7 @@ if __name__ == '__main__':
     import sys
     if sys.flags.interactive == 0:
         app.exec_()
+
+# stop and close pyaudio node to properly close pyaudio
+dev.stop()
+dev.close()
