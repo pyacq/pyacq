@@ -15,7 +15,8 @@ scalable acquisition systems.
 setup(
     name = "pyacq",
     version = pyacq.__version__,
-    packages = ['pyacq', 'pyacq.core', 'pyacq.core.rpc', 'pyacq.core.rpc.log', 'pyacq.viewers', 'pyacq.devices', 'pyacq.dsp'],
+    packages = ['pyacq', 'pyacq.core', 'pyacq.core.rpc', 'pyacq.core.stream',
+                'pyacq.core.rpc.log', 'pyacq.viewers', 'pyacq.devices', 'pyacq.dsp'],
     install_requires=[
                     'numpy',
                     'pyzmq',
