@@ -64,14 +64,14 @@ class OutputStream(object):
             The bind adress for the zmq.PUB socket
         port : str
             The port for the zmq.PUB socket
-        transfermode: 'plain_data', 'sharedarray', (not done 'shared_cuda_buffer' or 'share_opencl_buffer')
+        transfermode: 'plaindata', 'sharedmem', (not done 'shared_cuda_buffer' or 'share_opencl_buffer')
             The method used for data transfer:
-            * 'plain_data': data are sent over a plain socket in two parts: (frame index, data).
-            * 'sharedarray': data are stored in shared memory in a ring buffer and the current frame index is sent over the socket.
-            * 'shared_cuda_buffer': data are stored in shared Cuda buffer and the current frame index is sent over the socket.
-            * 'share_opencl_buffer': data are stored in shared OpenCL buffer and the current frame index is sent over the socket.
+            * 'plaindata': data are sent over a plain socket in two parts: (frame index, data).
+            * 'sharedmem': data are stored in shared memory in a ring buffer and the current frame index is sent over the socket.
+            * 'shared_cuda_buffer': NOT DONE data are stored in shared Cuda buffer and the current frame index is sent over the socket.
+            * 'share_opencl_buffer': NOT DONE data are stored in shared OpenCL buffer and the current frame index is sent over the socket.
         streamtype: 'analogsignal', 'digitalsignal', 'event' or 'image/video'
-            The type of data to be transferred.
+            The nature of data to be transferred.
         dtype: str ('float32','float64', [('r', 'uint16'), ('g', 'uint16'), , ('b', 'uint16')], ...)
             The numpy.dtype of the data buffer. It can be a composed dtype for event or images.
         shape: list
