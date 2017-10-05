@@ -64,12 +64,13 @@ class OutputStream(object):
             The bind adress for the zmq.PUB socket
         port : str
             The port for the zmq.PUB socket
-        transfermode: 'plain_data', 'sharedarray', (not done 'shared_cuda_buffer' or 'share_opencl_buffer')
+        transfermode: 'plain_data', 'sharedmem', (not done 'shared_cuda_buffer' or 'share_opencl_buffer')
             The method used for data transfer:
             * 'plain_data': data are sent over a plain socket in two parts: (frame index, data).
-            * 'sharedarray': data are stored in shared memory in a ring buffer and the current frame index is sent over the socket.
-            * 'shared_cuda_buffer': data are stored in shared Cuda buffer and the current frame index is sent over the socket.
-            * 'share_opencl_buffer': data are stored in shared OpenCL buffer and the current frame index is sent over the socket.
+            * 'sharedmem': data are stored in shared memory in a ring buffer and the current frame index is sent over the socket.
+            * 'shared_cuda_buffer': (planned) data are stored in shared Cuda buffer and the current frame index is sent over the socket.
+            * 'share_opencl_buffer': (planned) data are stored in shared OpenCL buffer and the current frame index is sent over the socket.
+            All registered transfer modes can be found in `pyacq.core.stream.all_transfermodes`.
         streamtype: 'analogsignal', 'digitalsignal', 'event' or 'image/video'
             The type of data to be transferred.
         dtype: str ('float32','float64', [('r', 'uint16'), ('g', 'uint16'), , ('b', 'uint16')], ...)
@@ -85,20 +86,22 @@ class OutputStream(object):
             An optional scale factor + offset to apply to the data before it is sent over the stream.
             ``output = offset + scale * input``
         offset:
-            See scale.
+            See *scale*.
         units: str
             Units of the stream data. Mainly used for 'analogsignal'.
         sample_rate: float or None
             Sample rate of the stream in Hz.
         sample_interval: float or None
-        sharedarray_shape: tuple
-            Shape of the SharedArray when using `transfermode = 'sharedarray'`.
-        ring_buffer_method: 'double' or 'single'
-            Method for the ring buffer when using `transfermode = 'sharedarray'`:
-            * 'single': a standard ring buffer.
-            * 'double': 2 ring buffers concatenated together. This ensures that
+        buffer_size: tuple
+            Length of the shared memory ring buffer when using `transfermode = 'sharedarray'`.
+            
+        double: bool
+            If True, the stream uses 2 ring buffers concatenated together, ensuring that
             a continuous chunk exists in memory regardless of the sample position.
-            Note that, The ring buffer is along `timeaxis` for each case. And in case, of 'double', concatenated axis is also `timeaxis`.
+            This allows for zero-copy reads, but doubles the memory use. 
+        fill : scalar
+            Optional value used to fill regions of the ring buffer that have no
+            data.
         shm_id : str or int (depending on platform)
             id of the SharedArray when using `transfermode = 'sharedarray'`.
 
