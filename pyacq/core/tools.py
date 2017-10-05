@@ -7,6 +7,7 @@ import weakref
 import logging
 import atexit
 import numpy as np
+import zmq
 from collections import OrderedDict
 from pyqtgraph.Qt import QtCore, QtGui
 from pyqtgraph.util.mutex import Mutex
@@ -118,6 +119,8 @@ class ThreadStreamConverter(ThreadPollInput):
             #~ data = self.input_stream().get_array_slice(self, pos, None)
         #~ if 'timeaxis' in self.conversions:
             #~ data = data.swapaxes(*self.conversions['timeaxis'])
+        if data.dtype!=self.output_stream().params['dtype']:
+            data = data.astype(self.output_stream().params['dtype'])
         self.output_stream().send(data, index=pos)
 
 

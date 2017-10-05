@@ -13,7 +13,7 @@ class NumpyDeviceBuffer(Node):
     
     This node streams data from a predefined buffer in an endless loop.
     """
-    _output_specs = {'signals': dict(streamtype='analogsignal',dtype='float32',
+    _output_specs = {'signals': dict(streamtype='analogsignal', 
                                                 shape=(-1, 16), compression ='', sample_rate =30.
                                                 )}
 
@@ -56,6 +56,8 @@ class NumpyDeviceBuffer(Node):
             assert buffer.shape[0]%chunksize == 0, 'Wrong buffer.shape[0] not multiple chunksize'
             self.buffer = buffer
             self.length = buffer.shape[0]
+        
+        self.output.spec['dtype'] = buffer.dtype.name
     
     def _initialize(self):
         self.head = 0
