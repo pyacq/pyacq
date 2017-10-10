@@ -64,12 +64,14 @@ class OutputStream(object):
             The bind adress for the zmq.PUB socket
         port : str
             The port for the zmq.PUB socket
-        transfermode: 'plain_data', 'sharedmem', (not done 'shared_cuda_buffer' or 'share_opencl_buffer')
+        transfermode: 'plaindata', 'sharedmem', (not done 'shared_cuda_buffer' or 'share_opencl_buffer')
             The method used for data transfer:
-            * 'plain_data': data are sent over a plain socket in two parts: (frame index, data).
+            
+            * 'plaindata': data are sent over a plain socket in two parts: (frame index, data).
             * 'sharedmem': data are stored in shared memory in a ring buffer and the current frame index is sent over the socket.
             * 'shared_cuda_buffer': (planned) data are stored in shared Cuda buffer and the current frame index is sent over the socket.
             * 'share_opencl_buffer': (planned) data are stored in shared OpenCL buffer and the current frame index is sent over the socket.
+            
             All registered transfer modes can be found in `pyacq.core.stream.all_transfermodes`.
         streamtype: 'analogsignal', 'digitalsignal', 'event' or 'image/video'
             The type of data to be transferred.
@@ -91,20 +93,10 @@ class OutputStream(object):
             Units of the stream data. Mainly used for 'analogsignal'.
         sample_rate: float or None
             Sample rate of the stream in Hz.
-        sample_interval: float or None
-        buffer_size: tuple
-            Length of the shared memory ring buffer when using `transfermode = 'sharedarray'`.
-            
-        double: bool
-            If True, the stream uses 2 ring buffers concatenated together, ensuring that
-            a continuous chunk exists in memory regardless of the sample position.
-            This allows for zero-copy reads, but doubles the memory use. 
-        fill : scalar
-            Optional value used to fill regions of the ring buffer that have no
-            data.
-        shm_id : str or int (depending on platform)
-            id of the SharedArray when using `transfermode = 'sharedarray'`.
-
+        kwargs :
+            All extra keyword arguments are passed to the DataSender constructor
+            for the chosen transfermode (for example, see 
+            :class:`SharedMemSender <stream.sharedmemstream.SharedMemSender>`).
         """
         
         self.params = dict(default_stream)
@@ -174,7 +166,7 @@ def _shape_equal(shape1, shape2):
     """
     Check if shape of stream are compatible.
     More or less shape1==shape2 but deal with:
-      * shape can be list or tupple
+      * shape can be list or tuple
       * shape can have one dim with -1
     """
     shape1 = list(shape1)
@@ -189,11 +181,6 @@ def _shape_equal(shape1, shape2):
             return False
     
     return True
-
-
-
-    
-
     
 
 class InputStream(object):
@@ -202,6 +189,17 @@ class InputStream(object):
     Streams allow data to be sent between objects that may exist on different
     threads, processes, or machines. They offer a variety of transfer methods
     including TCP for remote connections and IPC for local connections.
+    
+    Typical InputStream usage:    
+    
+    1. Use :func:`InputStream.connect()` to connect to an :class:`OutputStream`
+       defined elsewhere. Usually, the argument will actually be a proxy to a
+       remote :class:`OutputStream`.
+    2. Poll for incoming data packets with :func:`InputStream.poll()`.
+    3. Receive the next packet with :func:`InputStream.recv()`.
+    
+    Optionally, use :func:`InputStream.set_buffer()` to attach a
+    :class:`RingBuffer` for easier data handling.
     """
     def __init__(self, spec=None, node=None, name=None):
         self.spec = {} if spec is None else spec
@@ -217,8 +215,13 @@ class InputStream(object):
     def connect(self, output):
         """Connect an output to this input.
         
-        Any data send over the stream using `output.send()` can be retrieved
-        using `input.recv()`.
+        Any data send over the stream using :func:`output.send() <OutputStream.send>`
+        can be retrieved using :func:`input.recv() <InputStream.recv>`.
+        
+        Parameters
+        ----------
+        output : OutputStream (or proxy to a remote OutputStream)
+            The OutputStream to connect.
         """
         if isinstance(output, dict):
             self.params = output
@@ -270,6 +273,8 @@ class InputStream(object):
     
     def poll(self, timeout=None):
         """Poll the socket of input stream.
+        
+        Return True if a new packet is available.
         """
         return self.socket.poll(timeout=timeout)
     
@@ -283,11 +288,10 @@ class InputStream(object):
             The absolute sample index. This is the index of the last sample + 1.
         data: np.ndarray or bytes
             The received chunk of data.
-            If the stream uses `transfermode='sharedarray'`, then the data is 
-            returned as None and you must use `InputStream.get_array_slice(index, length)`
-            to read from the shared array or InputStream.recv(with_data=True) to get the last
-            chunk.
-
+            If the stream uses ``transfermode='sharedarray'``, then the data is 
+            returned as None and you must use ``input_stream[start:stop]``
+            to read from the shared array or ``input_stream.recv(with_data=True)``
+            to return the received data chunk.
         """
         index, data = self.receiver.recv(**kargs)
         if self._own_buffer and data is not None and self.buffer is not None:
@@ -295,10 +299,9 @@ class InputStream(object):
         return index, data
 
     def close(self):
-        """Close the Input.
+        """Close the stream.
         
-        This closes the socket.
-        
+        This closes the socket. No data can be received after this point.
         """
         self.receiver.close()
         self.socket.close()
@@ -317,13 +320,16 @@ class InputStream(object):
         """
         Return a segment of the RingBuffer attached to this InputStream.
         
-        If no RingBuffer is attached, raise an exception. See ``set_buffer()``.
+        If no RingBuffer is attached, raise an exception.
+        
+        For parameters, see :func:`RingBuffer.get_data()`.
+        
+        See also: :func:`InputStream.set_buffer()`.
         """
         if self.buffer is None:
             raise TypeError("No ring buffer configured for this InputStream.")
         return self.buffer.get_data(*args, **kargs)
     
-    #~ def set_buffer(self, size=None, double=True, axisorder=None):
     def set_buffer(self, size=None, double=True, axisorder=None, shmem=None, fill=None):
         """Ensure that this InputStream has a RingBuffer at least as large as 
         *size* and with the specified double-mode and axis order.
@@ -346,6 +352,5 @@ class InputStream(object):
         # attach a new buffer
         shape = (size,) + tuple(self.params['shape'][1:])
         dtype = make_dtype(self.params['dtype'])
-        #~ self.buffer = RingBuffer(shape=shape, dtype=dtype, double=double, axisorder=axisorder)
         self.buffer = RingBuffer(shape=shape, dtype=dtype, double=double, axisorder=axisorder, shmem=shmem, fill=fill)
         self._own_buffer = True

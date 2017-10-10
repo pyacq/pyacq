@@ -14,6 +14,9 @@ class SharedMem:
     
     This class uses mmap so that unrelated processes (not forked) can share it.
     
+    It is usually not necessary to instantiate this class directly; use
+    :func:`OutputStream.configure(transfermode='sharedmem') <OutputStream.configure>`.
+    
     Parameters
     ----------
     size : int

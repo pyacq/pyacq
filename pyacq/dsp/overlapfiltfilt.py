@@ -400,29 +400,27 @@ class OverlapFiltfilt(Node,  QtCore.QObject):
     Note that the chunksize have a strong effect on low frequency.
     
     This uses Second Order (sos) coeeficient.
-    It internally use scipy.signal.sosfilt which is available only on scipy >0.16
-    
+    It internally use scipy.signal.sosfilt which is available only on scipy >0.16    
     
     The chunksize need to be fixed.
     For overlapsize there are 2 cases:
-      1-  overlapsize<chunksize/2 : natural case. each chunk partailly overlap. 
-            The overlap are on sides, the central part come from one chunk.
-      2 - overlapsize>chunksize/2: chunk are fully averlapping. There is no central part.
-    In the 2 cases, for each arrival of new chunk at [-chunksize:], 
-    the computed chunk at [-(chunksize+overlapsize):-overlapsize] is released.
-
-
-    The coefficients.shape must be (nb_section, 6).
+      
+    1. ``overlapsize < chunksize/2`` : natural case. each chunk partailly overlap. 
+       The overlap are on sides, the central part come from one chunk.
+    2. ``overlapsize>chunksize/2`` : chunk are fully overlapping. There is no
+       central part.
     
-    If pyopencl is avaible you can do SosFilter.configure(engine='opencl')
-    In that cases the coefficients.shape can also be (nb_channel, nb_section, 6)
+    In the 2 cases, for each arrival of new chunk at ``[-chunksize:]``, 
+    the computed chunk at ``[-(chunksize+overlapsize):-overlapsize]`` is released.
+
+    The coefficients.shape must be ``(nb_section, 6)``.
+    
+    If pyopencl is avaible you can do ``SosFilter.configure(engine='opencl')``
+    In that cases the coefficients.shape can also be ``(nb_channel, nb_section, 6)``
     this help for having different filter on each channels.
     
     The opencl engine prefer inernally (channel, sample) ordered.
     In case not a copy is done. So the input ordering do impact performences.
-    
-    
-    
     """
     
     _input_specs = {'signals' : dict(streamtype = 'signals')}
