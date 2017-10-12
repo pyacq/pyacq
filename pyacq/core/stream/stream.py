@@ -64,7 +64,7 @@ class OutputStream(object):
             The bind adress for the zmq.PUB socket
         port : str
             The port for the zmq.PUB socket
-        transfermode: 'plaindata', 'sharedmem', (not done 'shared_cuda_buffer' or 'share_opencl_buffer')
+        transfermode: str
             The method used for data transfer:
             
             * 'plaindata': data are sent over a plain socket in two parts: (frame index, data).
@@ -80,6 +80,7 @@ class OutputStream(object):
         shape: list
             The shape of each data frame. If the stream will send chunks of variable length,
             then use -1 for the unknown dimension.
+            
             * For ``streamtype=image``, the shape should be (-1, H, W), (n_frames, H, W), or (H, W).
             * For ``streamtype=analogsignal`` the shape should be (n_samples, n_channels) or (-1, n_channels)
         compression: '', 'blosclz', 'blosc-lz4'
