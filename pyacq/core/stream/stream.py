@@ -74,7 +74,7 @@ class OutputStream(object):
             
             All registered transfer modes can be found in `pyacq.core.stream.all_transfermodes`.
         streamtype: 'analogsignal', 'digitalsignal', 'event' or 'image/video'
-            The type of data to be transferred.
+            The nature of data to be transferred.
         dtype: str ('float32','float64', [('r', 'uint16'), ('g', 'uint16'), , ('b', 'uint16')], ...)
             The numpy.dtype of the data buffer. It can be a composed dtype for event or images.
         shape: list
