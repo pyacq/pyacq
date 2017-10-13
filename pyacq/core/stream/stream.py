@@ -79,10 +79,10 @@ class OutputStream(object):
             The numpy.dtype of the data buffer. It can be a composed dtype for event or images.
         shape: list
             The shape of each data frame. If the stream will send chunks of variable length,
-            then use -1 for the unknown dimension.
+            then use -1 for the first (time) dimension.
             
-            * For ``streamtype=image``, the shape should be (-1, H, W), (n_frames, H, W), or (H, W).
-            * For ``streamtype=analogsignal`` the shape should be (n_samples, n_channels) or (-1, n_channels)
+            * For ``streamtype=image``, the shape should be ``(-1, H, W)`` or ``(n_frames, H, W)``.
+            * For ``streamtype=analogsignal`` the shape should be ``(n_samples, n_channels)`` or ``(-1, n_channels)``.
         compression: '', 'blosclz', 'blosc-lz4'
             The compression for the data stream. The default uses no compression.
         scale: float

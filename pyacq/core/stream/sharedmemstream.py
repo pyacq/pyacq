@@ -17,7 +17,6 @@ class SharedMemSender(DataSender):
     
     Extra parameters accepted when configuring the output stream:
     
-    * shape (tuple) The shape of one frame (a sample at one time point).
     * buffer_size (int) the size of the shared memory buffer in *frames*.
       The total shape of the allocated buffer is ``(buffer_size,) + shape``.
     * double (bool) if True, then the buffer size is doubled and all frames are
