@@ -17,7 +17,7 @@ scalable acquisition systems.
 setup(
     name = "pyacq",
     version = pyacq.__version__,
-    packages = ['pyacq.' + pkg for pkg in find_packages('pyacq')],
+    packages = [pkg for pkg in find_packages() if pkg.startswith('pyacq')],
     install_requires=[
                     'numpy',
                     'pyzmq',
