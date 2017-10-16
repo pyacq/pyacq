@@ -97,20 +97,9 @@ class RPCClient(object):
         
         # If this thread is running a server, then we need to allow the 
         # server to process requests when the client is blocking.
-        assert reentrant in (None, True, False)
-        server = RPCServer.get_server()
-        if reentrant is True and server is not None:
-            if isinstance(server, QtRPCServer):
-                self._poller = 'qt'
-                self._reentrant = True
-            else:
-                self._poller = zmq.Poller()
-                self._poller.register(self._socket, zmq.POLLIN)
-                self._poller.register(server._socket, zmq.POLLIN)
-                self._reentrant = True
-        else:
-            self._poller = None
-            self._reentrant = False
+        assert reentrant in (True, False)
+        self._reentrant = reentrant
+        self._poller = None
         
         logger.info("RPC connect to %s", address.decode())
         self._socket.connect(address)
@@ -136,6 +125,26 @@ class RPCClient(object):
             raise ValueError("Unsupported serializer type '%s'" % serializer)
         
         self.ensure_connection()
+
+    def _get_poller(self):
+        # Return the poller that should be used to listen for incoming messages
+        # This poller is responsible for ensuring that the RPC server in this
+        # thread is able to process requests while we are blocked waiting
+        # for responses from other servers.
+        if not self._reentrant:
+            return None
+        
+        if self._poller is None:
+            server = RPCServer.get_server()
+            if server is None:
+                return None
+            if isinstance(server, QtRPCServer):
+                self._poller = 'qt'
+            else:
+                self._poller = zmq.Poller()
+                self._poller.register(self._socket, zmq.POLLIN)
+                self._poller.register(server._socket, zmq.POLLIN)
+        return self._poller
 
     def disconnected(self):
         """Boolean indicating whether the server has disconnected from the client.
@@ -397,9 +406,10 @@ class RPCClient(object):
                 if itimeout < 0:
                     raise TimeoutError("Timeout waiting for Future result.")
                 
-            if self._poller is None:
+            poller = self._get_poller()
+            if poller is None:
                 self._read_and_process_one(itimeout)
-            elif self._poller == 'qt':
+            elif poller == 'qt':
                 # Server runs in Qt thread; we need to time-share with Qt event
                 # loop.
                 QtGui.QApplication.processEvents()
@@ -410,7 +420,7 @@ class RPCClient(object):
             else:
                 # Poll for input on both the client's socket and the server's
                 # socket. This is necessary to avoid deadlocks.
-                socks = [x[0] for x in self._poller.poll(itimeout)]
+                socks = [x[0] for x in poller.poll(itimeout)]
                 if self._socket in socks:
                     self._read_and_process_one(timeout=0)
                 elif len(socks) > 0: 

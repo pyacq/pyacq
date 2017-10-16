@@ -8,19 +8,18 @@ import pytest
 import sys
 import os
 
-from pyacq.core.stream import OutputStream, InputStream, RingBuffer
+from pyacq.core.stream import OutputStream, InputStream, RingBuffer, compression_methods
 import numpy as np
 
 
 protocols = ['tcp', 'inproc', 'ipc']  # 'udp' is not working
 if sys.platform.startswith('win'):
     protocols.remove('ipc')
-compressions = ['', 'blosc-blosclz', 'blosc-lz4']
 
 
 def test_stream_plaindata():
     for protocol in protocols:
-        for compression in compressions:
+        for compression in compression_methods:
             check_stream(transfermode='plaindata', protocol=protocol, compression=compression)
             
 def test_stream_sharedmem():

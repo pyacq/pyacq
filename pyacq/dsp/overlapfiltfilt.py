@@ -399,14 +399,15 @@ class OverlapFiltfilt(Node,  QtCore.QObject):
     frequencies, and a small overlapsize may result in transients at the border
     between chunks. We recommend comparing the output of this node to an ideal
     offline filter to ensure that the residuals are acceptably small.
+
     
     The chunksize need to be fixed.
     For overlapsize there are 2 cases:
-    
-    1. overlapsize < chunksize/2 : natural case; each chunk partially overlaps. 
+      
+    1. ``overlapsize < chunksize/2`` : natural case; each chunk partially overlaps. 
        The overlapping regions are on the ends of each chunk, whereas the central
        part of the chunk has no overlap.
-    2. overlapsize>chunksize/2: chunks are fully overlapping; there is no central part.
+    2. ``overlapsize>chunksize/2`` : chunks are fully overlapping; there is no central part.
     
     In the 2 cases, for each arrival of a new chunk at ``[-chunksize:]``, 
     the computed chunk at ``[-(chunksize+overlapsize):-overlapsize]`` is released.

@@ -2,17 +2,18 @@
 # Copyright (c) 2016, French National Center for Scientific Research (CNRS)
 # Distributed under the (new) BSD License. See LICENSE for more info.
 
+import time
+import weakref
+import logging
+import atexit
+import numpy as np
+import zmq
+from collections import OrderedDict
 from pyqtgraph.Qt import QtCore, QtGui
 from pyqtgraph.util.mutex import Mutex
-import weakref
-import numpy as np
-from collections import OrderedDict
-import logging
 
 from .node import Node, register_node_type
 from .stream import OutputStream, InputStream
-
-import time
 
 
 class ThreadPollInput(QtCore.QThread):
@@ -55,6 +56,7 @@ class ThreadPollInput(QtCore.QThread):
         self.running_lock = Mutex()
         self.lock = Mutex()
         self._pos = None
+        atexit.register(self.stop)
     
     def run(self):
         with self.running_lock:
@@ -64,12 +66,16 @@ class ThreadPollInput(QtCore.QThread):
             with self.running_lock:
                 if not self.running:
                     break
-                if self.input_stream() is None:
-                    logging.info("ThreadPollInput has lost InputStream")
-                    break
+            if self.input_stream() is None:
+                logging.info("ThreadPollInput has lost InputStream")
+                break
             ev = self.input_stream().poll(timeout=self.timeout)
             if ev>0:
-                pos, data = self.input_stream().recv(return_data=self.return_data)
+                try:
+                    pos, data = self.input_stream().recv(return_data=self.return_data)
+                except zmq.error.ContextTerminated:
+                    self.stop()
+                    return
                 with self.lock:
                     self._pos = pos
                 self.process_data(self._pos, data)
@@ -84,10 +90,14 @@ class ThreadPollInput(QtCore.QThread):
         self.new_data.emit(pos, data)
     
     def stop(self):
+        """Request the polling thread to stop.
+        """
         with self.running_lock:
             self.running = False
     
     def pos(self):
+        """Return the current stream position.
+        """
         with self.lock:
             return self._pos
 
@@ -126,6 +136,8 @@ class ThreadStreamConverter(ThreadPollInput):
             #~ data = self.input_stream().get_array_slice(self, pos, None)
         #~ if 'timeaxis' in self.conversions:
             #~ data = data.swapaxes(*self.conversions['timeaxis'])
+        if data.dtype!=self.output_stream().params['dtype']:
+            data = data.astype(self.output_stream().params['dtype'])
         self.output_stream().send(data, index=pos)
 
 
