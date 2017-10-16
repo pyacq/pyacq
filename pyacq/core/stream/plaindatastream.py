@@ -13,6 +13,9 @@ from .compression import compress, decompress
 class PlainDataSender(DataSender):
     """Helper class to send data serialized over socket.
     
+    Note: this class is usually not instantiated directly; use
+    ``OutputStream.configure(transfermode='plaindata')``.
+    
     To avoid unnecessary copies (and thus optimize transmission speed), data is
     sent exactly as it appears in memory including array strides.
     

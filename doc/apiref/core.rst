@@ -1,5 +1,11 @@
+.. currentmodule:: pyacq.core
+
 Pyacq Core
 ==========
+
+
+Process Management Classes
+--------------------------
 
 .. autofunction:: pyacq.core.create_manager
 
@@ -27,4 +33,19 @@ Stream Classes
 .. autoclass:: pyacq.core.OutputStream
    :members:
 
+.. autoclass:: pyacq.core.stream.plaindatastream.PlainDataSender
+   :members:
+
+.. autoclass:: pyacq.core.stream.sharedmemstream.SharedMemSender
+   :members:
+
+
+Data Handling Classes
+---------------------
+
+.. autoclass:: pyacq.core.RingBuffer
+   :members:
+
+.. autoclass:: pyacq.core.stream.sharedarray.SharedMem
+   :members:
 
