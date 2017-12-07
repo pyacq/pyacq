@@ -19,10 +19,10 @@ def test_ni_daqmx():
     app = QtGui.QApplication([])
 
     dev = NIDAQmx()
-    dev.configure(aisamplerate=50e3, aichannels={
-        'Dev1/ai0': 'NRSE',
-        'Dev1/ai1': 'NRSE'
-    })
+    dev.configure(aisamplerate=50e3, aichannels=['Dev1/ai0', 'Dev1/ai1'], 
+            aimodes = {'Dev1/ai0':'nrse', 'Dev1/ai1': 'nrse'},
+            airanges= (-5., 5.)#for all channels
+    )
     dev.outputs['aichannels'].configure(protocol='tcp', interface='127.0.0.1', transfertmode='plaindata')
     dev.initialize()
     dev.start()

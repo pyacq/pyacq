@@ -18,9 +18,12 @@ dev = NIDAQmx()
 
 
 # Configure DAQ device with two analog input channels.
-dev.configure(aisamplerate=50e3, aichannels=['Dev1/ai0', 'Dev1/ai1'], 
-    airanges = {'Dev1/ai0':'NRSE', 'Dev1/ai1': 'NRSE'},
-    aimodes = (-5., 5.)#for all channels
+sr = 40e3
+dev.configure(aisamplerate=sr, aichannels=['Dev1/ai0', 'Dev1/ai1', 'Dev1/ai3', 'Dev1/ai4',], 
+    aimodes = {'Dev1/ai0':'rse', 'Dev1/ai1': 'rse'},
+    airanges= (-5., 5.),#for all channels
+    chunksize=100,
+    magnitude_mode='float32_volt',
     )
 
 
@@ -38,6 +41,10 @@ viewer.input.connect(dev.output)
 viewer.initialize()
 viewer.show()
 viewer.params['decimation_method'] = 'min_max'
+viewer.params['ylim_max'] = 5.
+viewer.params['ylim_min'] = -5.
+viewer.params['mode'] = 'scan'
+
 #viewer.by_channel_params['Signal0', 'gain'] = 0.001
 
 # Start both nodes
@@ -48,4 +55,4 @@ viewer.start()
 if __name__ == '__main__':
     import sys
     if sys.flags.interactive == 0:
-        app.exec_() 
+        app.exec_()
