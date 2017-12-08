@@ -22,7 +22,7 @@ aochannels =  ['Dev1/ao0', 'Dev1/ao1']
 
 #create 2 output short signals than will be played every seconds
 times =np.arange(0,0.5, 1./sr)
-freq, ampl = 1.5, 2.5
+freq, ampl = 5., 2.5
 sig0 = np.sin(2*np.pi*freq*times).astype('float64')*ampl
 sig1 = np.random.randn(sig0.size).astype('float64')
 sigs = np.concatenate((sig0[None, :], sig1[None, :]), axis=0)

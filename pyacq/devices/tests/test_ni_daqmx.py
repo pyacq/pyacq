@@ -27,13 +27,24 @@ def test_ni_daqmx():
     dev.initialize()
     dev.start()
     
-    def terminate():
-        dev.stop()
-        dev.stop()
-        app.quit()
+    global n
+    n = 0
     
-    # start for a while
-    timer = QtCore.QTimer(singleShot=True, interval=3000)
+    def terminate():
+        global n
+        
+        print('stop', n)
+        dev.stop()
+        if n<3:
+            n += 1
+            print('start', n)
+            dev.start()
+        else:
+            print('terminate')
+            app.quit()
+    
+    # start  and stop 3 times
+    timer = QtCore.QTimer(singleShot=False, interval=1000)
     timer.timeout.connect(terminate)
     timer.start()
 
