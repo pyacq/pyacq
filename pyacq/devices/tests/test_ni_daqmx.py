@@ -19,7 +19,7 @@ def test_ni_daqmx():
     app = QtGui.QApplication([])
 
     dev = NIDAQmx()
-    dev.configure(aisamplerate=50e3, aichannels=['Dev1/ai0', 'Dev1/ai1'], 
+    dev.configure(sample_rate=50e3, aichannels=['Dev1/ai0', 'Dev1/ai1'], 
             aimodes = {'Dev1/ai0':'nrse', 'Dev1/ai1': 'nrse'},
             airanges= (-5., 5.)#for all channels
     )
