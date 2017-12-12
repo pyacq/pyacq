@@ -33,7 +33,7 @@ sigs[:, -1] = 0 #last sample is back 0
 dev = NIDAQmx()
 
 dev.configure(sample_rate=sr,
-    chunksize=100,
+    chunksize=1000,
     aichannels=aichannels, 
     aimodes = {'Dev1/ai0':'rse', 'Dev1/ai1': 'rse'},
     airanges= (-5., 5.),#for all channels

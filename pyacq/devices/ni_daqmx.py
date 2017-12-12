@@ -143,7 +143,7 @@ class NIDAQmx(Node):
                             sample_mode= const.AcquisitionType.CONTINUOUS,
                             samps_per_chan=self._chunksize)
             
-            aitask.register_every_n_samples_acquired_into_buffer_event(self._chunksize*self._nb_ai_channel, self._ai_callback)
+            self.thread = DAQmxPollThread(self, parent=None)
         else:
             aitask = None
         
@@ -154,29 +154,16 @@ class NIDAQmx(Node):
         self._n = 0
         if self.aitask is not None:
             self.aitask.start()
+            self.thread.start()
 
     def _stop(self):
         if self.aitask is not None:
+            self.thread.stop()
             self.aitask.stop()
 
     def _close(self):
         if self.aitask is not None:
             self.aitask.close()
-    
-    def _ai_callback(self, in_task_handle, every_n_samples_event_type,
-                                    number_of_samples, callback_data):
-        raw_data = self.aitask.in_stream.read()
-        raw_data = raw_data.reshape(-1, self._nb_ai_channel)
-        self._n += raw_data.shape[0]
-        
-        if self.magnitude_mode=='raw':
-            self.outputs['aichannels'].send(raw_data, index=self._n)
-        else:
-            scaled_data = raw_data.astype(self._ai_dt)
-            scaled_data *= self._ai_gains
-            self.outputs['aichannels'].send(scaled_data, index=self._n)
-        
-        return 0
     
     def play_ao(self, aochannels, sigs):
         if self.aotask is not None:
@@ -213,5 +200,52 @@ class NIDAQmx(Node):
         self.aotask.close()
         self.aotask = None
         return 0
+
+class DAQmxPollThread(QtCore.QThread):
+    def __init__(self, node, parent=None):
+        QtCore.QThread.__init__(self, parent=parent)
+        self.node = node
+
+        self.lock = Mutex()
+        self.running = False
+        
+    def run(self):
+        with self.lock:
+            self.running = True
+        
+        aitask = self.node.aitask
+        buffer_time = self.node._chunksize / self.node._conf['sample_rate']
+        aitask.in_stream.timeout = buffer_time*10.
+        
+        raw_data = np.zeros((self.node._chunksize, self.node._nb_ai_channel), dtype='int16')
+        raw_data_flat = raw_data
+        raw_data_flat.reshape(-1)
+        
+        stream = self.node.outputs['aichannels']
+        
+        n = 0
+        while True:
+            with self.lock:
+                if not self.running:
+                    break
+            
+            nb_sample = aitask.in_stream.readinto(raw_data_flat)
+            if nb_sample==0:
+                continue
+            
+            n += raw_data.shape[0]
+
+            if self.node.magnitude_mode=='raw':
+                stream.send(raw_data, index=n)
+            else:
+                scaled_data = raw_data.astype(self.node._ai_dt)
+                scaled_data *= self.node._ai_gains
+                stream.send(scaled_data, index=n)
+
+    def stop(self):
+        with self.lock:
+            self.running = False
+
+
 
 register_node_type(NIDAQmx)
