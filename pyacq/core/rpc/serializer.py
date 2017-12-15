@@ -109,7 +109,13 @@ class Serializer:
             if type_name is None:
                 return dct
             if type_name == 'ndarray':
-                return np.fromstring(dct['data'], dtype=dct['dtype']).reshape(dct['shape'])
+                dt = dct['dtype']
+                if dt.startswith('['):
+                    #small hack to have a list
+                    d = {}
+                    exec('dtype='+dt, None, d)
+                    dt = d['dtype']
+                return np.fromstring(dct['data'], dtype=dt).reshape(dct['shape'])
             elif type_name == 'datetime':
                 return datetime.datetime.strptime(dct['data'], '%Y-%m-%dT%H:%M:%S.%f')
             elif type_name == 'date':
