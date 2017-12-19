@@ -15,6 +15,7 @@ import pyqtgraph as pg
 
 import os
 import shutil
+import datetime
 
 
 
@@ -46,7 +47,7 @@ def test_RawRecorder():
         buffer += np.sin(2*np.pi*1.2*t)[:,None]*.5
         buffer = buffer.astype(dtype)
 
-        dev = ng0.create_node('NumpyDeviceBuffer', name = 'dev{}'.format(i))
+        dev = ng0.create_node('NumpyDeviceBuffer', name='dev{}'.format(i))
         #~ dev = NumpyDeviceBuffer()
         dev.configure(nb_channel=nb_channel, sample_interval=1./sample_rate, chunksize=chunksize, buffer=buffer)
         dev.output.configure(protocol='tcp', interface='127.0.0.1', transfermode='plaindata')
@@ -58,12 +59,12 @@ def test_RawRecorder():
     if os.path.exists(dirname):
         shutil.rmtree(dirname)
     
-    #~ rec = RawRecorder()
-    rec = ng1.create_node('RawRecorder')
+    rec = RawRecorder()
+    #~ rec = ng1.create_node('RawRecorder')
     rec.configure(streams=[dev.output for dev in devices], autoconnect=True, dirname=dirname)
     rec.initialize()
     
-    
+    rec.add_annotations(yep='abc', yop=12.5, yip=1)
 
     def terminate():
         

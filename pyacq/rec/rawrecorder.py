@@ -5,11 +5,14 @@
 import numpy as np
 import collections
 import logging
+import os
+import json
 
 from ..core import Node, register_node_type, ThreadPollInput, InputStream
 from pyqtgraph.Qt import QtCore, QtGui
 from pyqtgraph.util.mutex import Mutex
-import os
+
+from ..version import version as pyacq_version
 
 
 class RawRecorder(Node):
@@ -22,7 +25,7 @@ class RawRecorder(Node):
     Usage:
     list_of_stream_to_record = [...]
     rec = RawRecorder()
-    rec.configure(streams=list_of_stream_to_record, attocinnect=True, dirname=path_of_record)
+    rec.configure(streams=list_of_stream_to_record, autoconnect=True, dirname=path_of_record)
     
     """
 
@@ -51,13 +54,28 @@ class RawRecorder(Node):
         os.mkdir(self.dirname)
         self.files = []
         self.threads = []
+        
+        self._stream_properties = collections.OrderedDict()
+        
         for name, input in self.inputs.items():
             filename = os.path.join(self.dirname, name+'.raw')
             fid = open(filename, mode='wb')
             self.files.append(fid)
             
-            thread = ThreadRec(input, fid)
+            thread = ThreadRec(name, input, fid)
             self.threads.append(thread)
+            thread.recv_start_index.connect(self.on_start_index)
+            
+            prop = {}
+            for k in ('streamtype', 'dtype', 'shape', 'sample_rate'):
+                prop[k] = input.params[k]
+            self._stream_properties[name] = prop
+        
+        self._stream_properties['pyacq_version'] = pyacq_version
+        
+        self._flush_stream_properties()
+        
+        self._annotations = {}
     
     def _start(self):
         for thread in self.threads:
@@ -80,17 +98,42 @@ class RawRecorder(Node):
 
     def _close(self):
         pass
+    
+    def on_start_index(self, name, start_index):
+        self._stream_properties[name]['start_index'] = start_index
+        self._flush_stream_properties()
+    
+    def _flush_stream_properties(self):
+        filename = os.path.join(self.dirname, 'stream_properties.json')
+        _flush_dict(filename, self._stream_properties)
+    
+    def add_annotations(self, **kargs):
+        self._annotations.update(kargs)
+        filename = os.path.join(self.dirname, 'annotations.json')
+        _flush_dict(filename, self._annotations)
+    
+
+def _flush_dict(filename, d):
+        with open(filename, mode = 'w', encoding = 'utf8') as f:
+            f.write(json.dumps(d, sort_keys=True,
+                            indent=4, separators=(',', ': '), ensure_ascii=False))
 
 
 
 class ThreadRec(ThreadPollInput):
-    def __init__(self, input_stream,fid, timeout = 200, parent = None):
+    recv_start_index = QtCore.Signal(str, int)
+    def __init__(self, name, input_stream,fid, timeout = 200, parent = None):
         ThreadPollInput.__init__(self, input_stream, timeout=timeout, return_data=True, parent=parent)
+        self.name = name
         self.fid = fid
+        self._start_index = None
         
     def process_data(self, pos, data):
+        if self._start_index is None:
+            self._start_index = int(pos - data.shape[0])
+            self.recv_start_index.emit(self.name, self._start_index)
         
-        print(self.input_stream().name, 'pos', pos, 'data.shape', data.shape)
+        #~ print(self.input_stream().name, 'pos', pos, 'data.shape', data.shape)
         self.fid.write(data.tobytes())
     
         
