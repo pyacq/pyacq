@@ -55,6 +55,8 @@ class RawRecorder(Node):
         self.files = []
         self.threads = []
         
+        self.mutex = Mutex()
+        
         self._stream_properties = collections.OrderedDict()
         
         for name, input in self.inputs.items():
@@ -105,12 +107,14 @@ class RawRecorder(Node):
     
     def _flush_stream_properties(self):
         filename = os.path.join(self.dirname, 'stream_properties.json')
-        _flush_dict(filename, self._stream_properties)
+        with self.mutex:
+            _flush_dict(filename, self._stream_properties)
     
     def add_annotations(self, **kargs):
         self._annotations.update(kargs)
         filename = os.path.join(self.dirname, 'annotations.json')
-        _flush_dict(filename, self._annotations)
+        with self.mutex:
+            _flush_dict(filename, self._annotations)
     
 
 def _flush_dict(filename, d):
