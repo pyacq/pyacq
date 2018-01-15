@@ -158,7 +158,6 @@ class BaseOscilloscope(WidgetNode):
 
     def estimate_decimate(self, nb_point=4000):
         xsize = self.params['xsize']
-        #~ sr = self.input.params['sample_rate']
         self.params['decimate'] = max(int(xsize*self.sample_rate)//nb_point, 1)
 
     def apply_xsize_zoom(self, xmove):
@@ -202,7 +201,6 @@ class OscilloscopeController(QtGui.QWidget):
         v = QtGui.QVBoxLayout()
         h.addLayout(v)
         
-        
         self.channel_visibility_changed.connect(self.on_channel_visibility_changed)
         
         if self.viewer.nb_channel>1:
@@ -217,30 +215,11 @@ class OscilloscopeController(QtGui.QWidget):
                 self.qlist.item(i).setSelected(True)            
             v.addWidget(QtGui.QLabel('<b>and apply...<\b>'))
             
-        
         # Gain and offset
         but = QtGui.QPushButton('set visble')
         v.addWidget(but)
         but.clicked.connect(self.on_set_visible)
         
-        #~ for i,text in enumerate(['Real scale (gain = 1, offset = 0)',
-                            #~ 'Fake scale (same gain for all)',
-                            #~ 'Fake scale (gain per channel)',]):
-            #~ but = QtGui.QPushButton(text)
-            #~ v.addWidget(but)
-            #~ but.mode = i
-            #~ but.clicked.connect(self.on_auto_gain_and_offset)
-        
-        
-        #~ v.addWidget(QtGui.QLabel(self.tr('<b>Gain zoom (mouse wheel on graph):</b>'),self))
-        #~ h = QtGui.QHBoxLayout()
-        #~ v.addLayout(h)
-        #~ for label, factor in [('--', 1./10.), ('-', 1./1.3), ('+', 1.3), ('++', 10.),]:
-            #~ but = QtGui.QPushButton(label)
-            #~ but.factor = factor
-            #~ but.clicked.connect(self.on_gain_zoom)
-            #~ h.addWidget(but)
-    
     @property
     def viewer(self):
         return self._viewer()
@@ -280,9 +259,16 @@ class OscilloscopeController(QtGui.QWidget):
     
     def on_set_visible(self):
         # apply
+        self.viewer.by_channel_params.blockSignals(True)
         visibles = self.selected
         for i,param in enumerate(self.viewer.by_channel_params.children()):
             param['visible'] = visibles[i]
+            if visibles[i]:
+                self.viewer.curves[i].show()
+            else:
+                self.viewer.curves[i].hide()
+        self.viewer.by_channel_params.blockSignals(False)
+        self.channel_visibility_changed.emit()
 
     def on_channel_visibility_changed(self):
         print('on_channel_visibility_changed')
@@ -293,31 +279,30 @@ class OscilloscopeController(QtGui.QWidget):
         sigs = self.viewer.get_visible_chunk()
         self.signals_med = med = np.median(sigs, axis=0)
         self.signals_mad = np.median(np.abs(sigs-med),axis=0)*1.4826
+        self.signals_min = np.min(sigs)
+        self.signals_max = np.max(sigs)
     
     def compute_rescale(self):
         scale_mode = self.viewer.params['scale_mode']
-        print('compute_rescale', scale_mode)
         
         self.viewer.by_channel_params.blockSignals(True)
         
         gains = np.ones(self.viewer.nb_channel)
         offsets = np.zeros(self.viewer.nb_channel)
         nb_visible = np.sum(self.visible_channels)
+        self.estimate_median_mad()
+        
         if scale_mode=='real_scale':
-            self.viewer.params['ylim_min'] = np.min(self.viewer.last_sigs_chunk)
-            self.viewer.params['ylim_max'] = np.max(self.viewer.last_sigs_chunk)
+            self.viewer.params['ylim_min'] = np.min(self.signals_min)
+            self.viewer.params['ylim_max'] = np.max(self.signals_max)
         else:
-            
-            self.estimate_median_mad()
-            #~ if sigs is not None:
-            if True:
-                if scale_mode=='same_for_all':
-                    gains[self.visible_channels] = np.ones(nb_visible, dtype=float) / max(self.signals_mad[self.visible_channels]) / 9.
-                elif scale_mode=='by_channel':
-                    gains[self.visible_channels] = np.ones(nb_visible, dtype=float) / self.signals_mad[self.visible_channels] / 9.
-                offsets[self.visible_channels] = np.arange(nb_visible)[::-1] - self.signals_med[self.visible_channels]*gains[self.visible_channels]
-                self.viewer.params['ylim_min'] = -0.5
-                self.viewer.params['ylim_max'] = nb_visible-0.5
+            if scale_mode=='same_for_all':
+                gains[self.visible_channels] = np.ones(nb_visible, dtype=float) / max(self.signals_mad[self.visible_channels]) / 9.
+            elif scale_mode=='by_channel':
+                gains[self.visible_channels] = np.ones(nb_visible, dtype=float) / self.signals_mad[self.visible_channels] / 9.
+            offsets[self.visible_channels] = np.arange(nb_visible)[::-1] - self.signals_med[self.visible_channels]*gains[self.visible_channels]
+            self.viewer.params['ylim_min'] = -0.5
+            self.viewer.params['ylim_max'] = nb_visible-0.5
             
         self.gains = gains
         self.offsets = offsets
@@ -329,24 +314,16 @@ class OscilloscopeController(QtGui.QWidget):
         
         self.viewer.all_params.blockSignals(True)
         if scale_mode=='real_scale':
-            #~ self.ygain_factor *= factor_ratio
-            
             self.viewer.params['ylim_max'] = self.viewer.params['ylim_max']*factor_ratio
             self.viewer.params['ylim_min'] = self.viewer.params['ylim_min']*factor_ratio
-            
-            pass
-            #TODO ylims
         else :
-            #~ self.ygain_factor *= factor_ratio
             if not hasattr(self, 'self.signals_med'):
                 self.estimate_median_mad()
             self.gains = self.gains * factor_ratio
             self.offsets = self.offsets + self.signals_med*self.gains * (1-factor_ratio)
-        
         self.viewer.all_params.blockSignals(False)
         
         self.viewer.refresh()
-        print('apply_ygain_zoom', factor_ratio)#, 'self.ygain_factor', self.ygain_factor)
         
     def apply_xsize_zoom(self, xmove):
         factor = xmove/100.
@@ -354,15 +331,6 @@ class OscilloscopeController(QtGui.QWidget):
         factor = min(factor, 1)
         newsize = self.viewer.params['xsize']*(factor+1.)
         self.viewer.params['xsize'] = max(newsize, MIN_XSIZE)
-
-    
-    #~ def on_auto_gain_and_offset(self):
-        #~ mode = self.sender().mode
-        #~ self.viewer.auto_gain_and_offset(mode=mode, visibles=self.selected)
-    
-    #~ def on_gain_zoom(self):
-        #~ factor = self.sender().factor
-        #~ self.viewer.gain_zoom(factor, selected=self.selected)
 
 
 default_params = [
@@ -414,7 +382,6 @@ class QOscilloscope(BaseOscilloscope):
             self.viewBox.gain_zoom.connect(self.params_controller.apply_ygain_zoom)
         self.viewBox.xsize_zoom.connect(self.apply_xsize_zoom)
             
-        #~ self.params.param('xsize').setLimits([2./self.input.params['sample_rate'], self.max_xsize*.95])
         self.params.param('xsize').setLimits([2./self.sample_rate, self.max_xsize*.95])
         
         self.curves = []
@@ -436,7 +403,6 @@ class QOscilloscope(BaseOscilloscope):
         gains = np.array([p['gain'] for p in self.by_channel_params.children()])
         offsets = np.array([p['offset'] for p in self.by_channel_params.children()])
         visibles = np.array([p['visible'] for p in self.by_channel_params.children()], dtype=bool)
-        #~ sr = self.input.params['sample_rate']
         xsize = self.params['xsize'] 
         
         head = self._head
@@ -536,16 +502,6 @@ class QOscilloscope(BaseOscilloscope):
                 p['offset'] = p['offset'] + self.all_mean[i]*p['gain'] - self.all_mean[i]*p['gain']*factor
             p['gain'] = p['gain']*factor
     
-    #~ def autoestimate_scales(self):
-        #~ if self._head is None:
-            #~ return None, None
-        #~ head = self._head
-        #~ xsize = self.params['xsize']
-        #~ np_arr = self.inputs['signals'].get_data(head-self.full_size, head)
-        #~ self.all_sd = np.nanstd(np_arr, axis=0)
-        #~ self.all_mean = np.nanmedian(np_arr, axis=0)
-        #~ return self.all_mean, self.all_sd
-    
     def get_visible_chunk(self):
         head = self._head
         sigs = self.inputs['signals'].get_data(head-self.full_size, head)
@@ -566,43 +522,6 @@ class QOscilloscope(BaseOscilloscope):
         
         self.params_controller.compute_rescale()
         self.refresh()
-
-
-    #~ def auto_gain_and_offset(self, mode=0, visibles=None):
-        #~ """
-        #~ mode = 0, 1, 2
-        #~ """
-        #~ if visibles is None:
-            #~ visibles = np.ones(self.nb_channel, dtype=bool)
-        
-        #~ n = np.sum(visibles)
-        #~ if n==0: return
-        
-        #~ av, sd = self.autoestimate_scales()
-        #~ if av is None: return
-        
-        #~ if mode==0:
-            #~ ylim_min, ylim_max = np.min(av[visibles]-3*sd[visibles]), np.max(av[visibles]+3*sd[visibles]) 
-            #~ gains = np.ones(self.nb_channel, dtype=float)
-            #~ offsets = np.zeros(self.nb_channel, dtype=float)
-        #~ elif mode in [1, 2]:
-            #~ ylim_min, ylim_max = -.5, n-.5 
-            #~ gains = np.ones(self.nb_channel, dtype=float)
-            #~ if mode==1 and max(sd[visibles])!=0:
-                #~ gains = np.ones(self.nb_channel, dtype=float) * 1./(6.*max(sd[visibles]))
-            #~ elif mode==2:
-                #~ gains[sd!=0] = 1./(6.*sd[sd!=0])
-            #~ offsets = np.zeros(self.nb_channel, dtype=float)
-            #~ offsets[visibles] = range(n)[::-1] - av[visibles]*gains[visibles]
-        
-        #~ # apply
-        #~ for i,param in enumerate(self.by_channel_params.children()):
-            #~ param['gain'] = gains[i]
-            #~ param['offset'] = offsets[i]
-            #~ param['visible'] = visibles[i]
-        #~ self.params['ylim_min'] = ylim_min
-        #~ self.params['ylim_max'] = ylim_max
-
 
 register_node_type(QOscilloscope)
 
