@@ -277,8 +277,8 @@ class OscilloscopeController(QtGui.QWidget):
 
     def estimate_median_mad(self):
         sigs = self.viewer.get_visible_chunk()
-        self.signals_med = med = np.median(sigs, axis=0)
-        self.signals_mad = np.median(np.abs(sigs-med),axis=0)*1.4826
+        self.signals_med = med = np.nanmedian(sigs, axis=0)
+        self.signals_mad = np.nanmedian(np.abs(sigs-med),axis=0)*1.4826
         self.signals_min = np.min(sigs)
         self.signals_max = np.max(sigs)
     
@@ -293,8 +293,8 @@ class OscilloscopeController(QtGui.QWidget):
         self.estimate_median_mad()
         
         if scale_mode=='real_scale':
-            self.viewer.params['ylim_min'] = np.min(self.signals_min)
-            self.viewer.params['ylim_max'] = np.max(self.signals_max)
+            self.viewer.params['ylim_min'] = np.nanmin(self.signals_min)
+            self.viewer.params['ylim_max'] = np.nanmax(self.signals_max)
         else:
             if scale_mode=='same_for_all':
                 gains[self.visible_channels] = np.ones(nb_visible, dtype=float) / max(self.signals_mad[self.visible_channels]) / 9.
@@ -507,19 +507,7 @@ class QOscilloscope(BaseOscilloscope):
         sigs = self.inputs['signals'].get_data(head-self.full_size, head)
         return sigs
         
-
     def auto_scale(self):
-        print('auto_scale', self.last_sigs_chunk)
-        if self.last_sigs_chunk is None:
-            xsize = self.params['xsize']
-            t_start, t_stop = self.t-xsize*self._xratio , self.t+xsize*(1-self._xratio)
-            visibles, = np.nonzero(self.params_controller.visible_channels)
-            gains = self.params_controller.gains
-            offsets = self.params_controller.offsets
-            _, _, _, _, _, _,sigs_chunk, _ = self.datagrabber.get_data(self.t, t_start, t_stop, gains, 
-                                            offsets, visibles, self.params['decimation_method'])
-            self.last_sigs_chunk = sigs_chunk
-        
         self.params_controller.compute_rescale()
         self.refresh()
 
