@@ -62,7 +62,7 @@ def lauch_qoscilloscope(transfermode, axisorder):
     # start for a while
     timer = QtCore.QTimer(singleShot=True, interval=2000)
     timer.timeout.connect(terminate)
-    timer.start()
+    #~ timer.start()
     
     app.exec_()
 
@@ -87,7 +87,7 @@ def test_qoscilloscope4():
 
 if __name__ == '__main__':
     test_qoscilloscope1()
-    test_qoscilloscope2()
-    test_qoscilloscope3()
-    test_qoscilloscope4()
+    #~ test_qoscilloscope2()
+    #~ test_qoscilloscope3()
+    #~ test_qoscilloscope4()
 
