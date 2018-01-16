@@ -26,7 +26,7 @@ class MyViewBox(pg.ViewBox):
         ev.accept()
     def mouseDragEvent(self, ev):
         ev.ignore()
-    def wheelEvent(self, ev):
+    def wheelEvent(self, ev, axis=None):
         if ev.modifiers() == QtCore.Qt.ControlModifier:
             z = 10 if ev.delta()>0 else 1/10.
         else:
@@ -36,7 +36,6 @@ class MyViewBox(pg.ViewBox):
     def mouseDragEvent(self, ev):
         ev.accept()
         self.xsize_zoom.emit((ev.pos()-ev.lastPos()).x())
-
 
 class BaseOscilloscope(WidgetNode):
     """
