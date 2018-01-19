@@ -10,6 +10,7 @@ from pyqtgraph.util.mutex import Mutex
 try:
     import nidaqmx
     import nidaqmx.constants as const
+    from nidaqmx._task_modules.read_functions import _read_analog_f_64
     HAVE_NIDAQMX = True
 except ImportError:
     HAVE_NIDAQMX = False
@@ -214,12 +215,17 @@ class DAQmxPollThread(QtCore.QThread):
             self.running = True
         
         aitask = self.node.aitask
-        buffer_time = self.node._chunksize / self.node._conf['sample_rate']
-        aitask.in_stream.timeout = buffer_time*10.
+        chunksize = self.node._chunksize
+        buffer_time = chunksize / self.node._conf['sample_rate']
+        aitask.in_stream.timeout = timeout = buffer_time*10.
         
-        raw_data = np.zeros((self.node._chunksize, self.node._nb_ai_channel), dtype='int16')
-        raw_data_flat = raw_data
-        raw_data_flat.reshape(-1)
+        if self.node.magnitude_mode=='raw':
+            raw_data = np.zeros((chunksize, self.node._nb_ai_channel), dtype='int16')
+            raw_data_flat = raw_data
+            raw_data_flat.reshape(-1)
+        else:
+            data_float64 = np.zeros((self.node._nb_ai_channel, chunksize), dtype='float64')
+        
         
         stream = self.node.outputs['aichannels']
         
@@ -229,17 +235,19 @@ class DAQmxPollThread(QtCore.QThread):
                 if not self.running:
                     break
             
-            nb_sample = aitask.in_stream.readinto(raw_data_flat)
-            if nb_sample==0:
-                continue
-            
-            n += raw_data.shape[0]
-
             if self.node.magnitude_mode=='raw':
+                nb_sample = aitask.in_stream.readinto(raw_data_flat)
+                if nb_sample==0:
+                    continue
+                n += raw_data.shape[0]
                 stream.send(raw_data, index=n)
             else:
-                scaled_data = raw_data.astype(self.node._ai_dt)
-                scaled_data *= self.node._ai_gains
+                nb_sample = _read_analog_f_64(aitask._handle, data_float64, chunksize, timeout)
+                if nb_sample==0:
+                    continue
+                scaled_data = np.require(data_float64.T, dtype=self.node._ai_dt, requirements='C')
+                #~ scaled_data = data_float64.T.astype(self.node._ai_dt)
+                n += scaled_data.shape[0]
                 stream.send(scaled_data, index=n)
 
     def stop(self):
