@@ -10,3 +10,4 @@ from .core import *
 from .devices import *
 from .viewers import *
 from .dsp import *
+from .rec import *
