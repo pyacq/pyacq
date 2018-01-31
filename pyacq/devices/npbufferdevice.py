@@ -42,18 +42,18 @@ class NumpyDeviceBuffer(Node):
         self.chunksize = chunksize
         
         self.output.spec['shape'] = (-1, nb_channel)
-        self.output.spec['sample_rate'] = 1./sample_interval
+        self.output.spec['sample_rate'] = 1. / sample_interval
         
         if buffer is None:
             nloop = 40
-            self.length =nloop*self.chunksize
-            t = np.arange(self.length)*sample_interval
-            self.buffer = np.random.rand(self.length, nb_channel)*.05
-            self.buffer += np.sin(2*np.pi*440.*t)[:,None]*.5
+            self.length = nloop * self.chunksize
+            t = np.arange(self.length) * sample_interval
+            self.buffer = np.random.rand(self.length, nb_channel) * .05
+            self.buffer += np.sin(2 * np.pi * 440. * t)[:, None] * .5
             self.buffer = self.buffer.astype('float32')
         else:
             assert buffer.shape[1] == self.nb_channel, 'Wrong nb_channel'
-            assert buffer.shape[0]%chunksize == 0, 'Wrong buffer.shape[0] not multiple chunksize'
+            assert buffer.shape[0] % chunksize == 0, 'Wrong buffer.shape[0] not multiple chunksize'
             self.buffer = buffer
             self.length = buffer.shape[0]
         
@@ -61,7 +61,8 @@ class NumpyDeviceBuffer(Node):
     
     def _initialize(self):
         self.head = 0
-        self.timer = QtCore.QTimer(singleShot=False, interval=int(self.chunksize*self.sample_interval*1000))
+        ival = int(self.chunksize * self.sample_interval * 1000)
+        self.timer = QtCore.QTimer(singleShot=False, interval=ival)
         self.timer.timeout.connect(self.send_data)
     
     def _start(self):

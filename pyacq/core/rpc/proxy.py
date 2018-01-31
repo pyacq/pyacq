@@ -86,6 +86,8 @@ class ObjectProxy(object):
     def __init__(self, rpc_addr, obj_id, ref_id, type_str='', attributes=(), **kwds):
         object.__init__(self)
         ## can't set attributes directly because setattr is overridden.
+        if isinstance(rpc_addr, str):
+            rpc_addr = rpc_addr.encode()
         self.__dict__.update(dict(
             _rpc_addr=rpc_addr,
             _obj_id=obj_id,
@@ -200,8 +202,11 @@ class ObjectProxy(object):
     def _save(self):
         """Convert this proxy to a serializable structure.
         """
+        addr = self._rpc_addr
+        if isinstance(addr, bytes):
+            addr = addr.decode()
         state = {
-            'rpc_addr': self._rpc_addr, 
+            'rpc_addr': addr, 
             'obj_id': self._obj_id,
             'ref_id': self._ref_id,
             'type_str': self._type_str,

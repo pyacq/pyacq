@@ -23,10 +23,27 @@ class ThreadPollInput(QtCore.QThread):
     This class is used where low-latency response to data is needed within a Qt
     main thread (because polling from the main thread with QTimer either 
     introduces too much latency or consumes too much CPU).
+
+    When a packet is received from the stream, the ``new_data`` signal is emitted
+    with the new position of the stream and the data array as arguments.
+
+    Parameters
+    ----------
+    input_stream : InputStream
+        The stream on which to receive data.
+    timeout : int
+        Poll timeout in ms. The thread will unblock at this interval to check
+        for calls to `stop()`.
+    return_data : bool
+        If True, then the `new_data` signal will be emitted with the received
+        data array. If False, then only the new stream pointer is emitted.
+    parent : QObject or None
+        QObject parent for the poller QThread.
     
     The `process_data()` method may be reimplemented to define other behaviors.
     """
-    new_data = QtCore.Signal(int,object)
+    new_data = QtCore.Signal(int, object)
+    
     def __init__(self, input_stream, timeout=200, return_data=None, parent=None):
         QtCore.QThread.__init__(self, parent)
         self.input_stream = weakref.ref(input_stream)

@@ -1,8 +1,8 @@
 """
-Simple demonstration of streaming data from a PyAudio device to a QOscilloscope
-viewer.
+PyAudio wavelet spectrogram
 
-Both device and viewer nodes are created locally without a manager.
+Streams audio data to a QTimeFreq Node, which displays a frequency spectrogram
+from a Morlet continuous wavelet transform.
 """
 
 from pyacq.devices.audio_pyaudio import PyAudio
@@ -27,7 +27,7 @@ dev = ng.create_node('PyAudio')
 default_input = dev.default_input_device()
 dev.configure(nb_channel=1, sample_rate=44100., input_device_index=default_input,
               format='int16', chunksize=1024)
-dev.output.configure(protocol='tcp', interface='127.0.0.1', transfertmode='plaindata')
+dev.output.configure(protocol='tcp', interface='127.0.0.1', transfermode='plaindata')
 dev.initialize()
 
 

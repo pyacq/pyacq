@@ -25,15 +25,13 @@ class PyAudio(Node):
     """Simple wrapper around PyAudio for input and output to audio devices.
     """
 
-    _input_specs = {'signals': dict(streamtype='analogsignal',dtype='int16',
-                                                shape=(-1, 2), compression ='', timeaxis=0,
-                                                sample_rate =44100.
-                                                )}
+    _input_specs = {'signals': dict(streamtype='analogsignal', dtype='int16',
+                                    shape=(-1, 2), compression='', timeaxis=0,
+                                    sample_rate=44100.)}
 
-    _output_specs = {'signals': dict(streamtype='analogsignal',dtype='int16',
-                                                shape=(-1, 2), compression ='', timeaxis=0,
-                                                sample_rate =44100.
-                                                )}
+    _output_specs = {'signals': dict(streamtype='analogsignal', dtype='int16',
+                                     shape=(-1, 2), compression='', timeaxis=0,
+                                     sample_rate=44100.)}
 
     def __init__(self, **kargs):
         Node.__init__(self, **kargs)
