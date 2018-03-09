@@ -2,16 +2,14 @@
 # Copyright (c) 2016, French National Center for Scientific Research (CNRS)
 # Distributed under the (new) BSD License. See LICENSE for more info.
 
-import time
-import ctypes
+
 
 
 import numpy as np
 
-from ..core import Node, register_node_type
-from pyqtgraph.Qt import QtCore, QtGui
-from pyqtgraph.util.mutex import Mutex
 
+import time
+import ctypes
 
 try:
     import clr
@@ -22,66 +20,12 @@ try:
 except ImportError:
     HAVE_PYTHONNET = False
 
+from ..core import Node, register_node_type
+from pyqtgraph.Qt import QtCore, QtGui
+from pyqtgraph.util.mutex import Mutex
 
+#~ mcsusbnet_url = 'http://download.multichannelsystems.com/download_data/software/McsNetUsb/McsUsbNet_3.2.45.zip'
 
-
-
-mcsusbnet_url = 'http://download.multichannelsystems.com/download_data/software/McsNetUsb/McsUsbNet_3.2.45.zip'
-
-#~ def download_MscUsbNet():
-
-
-class McsW2100_Thread(QtCore.QThread):
-    def __init__(self, outputs, device, chunk_duration, nb_channel, parent=None):
-        QtCore.QThread.__init__(self, parent=parent)
-        self.outputs = outputs
-        self.device = device
-        self.chunk_duration = chunk_duration
-        self.nb_channel = nb_channel
-        
-        self.lock = Mutex()
-        self.running = False
-
-    def run(self):
-        
-        with self.lock:
-            self.running = True
-
-        dt = np.dtype('float32')
-
-        head = 0
-        
-        while True:
-            with self.lock:
-                    if not self.running:
-                        break
-            
-            nb_available = device.ChannelBlock_AvailFrames(0)
-            if nb_available == 0:
-                # sleep half the channelblocksize duration 0.1 second
-                time.sleep(self.chunk_duration/2.)
-            else:
-                raw_data, nb_read = device.ChannelBlock_ReadFramesDictI16(0, nb_available, 0)
-                # raw_data is a dict with one key
-                raw_data = raw_data[0]
-                print('nb_read', nb_read, len(raw_data))
-                
-                # convert the System.Array to numpy.array
-                src_hndl = GCHandle.Alloc(raw_data, GCHandleType.Pinned)
-                try:
-                    src_ptr = src_hndl.AddrOfPinnedObject().ToInt64()
-                    np_data = np.fromstring(ctypes.string_at(src_ptr, len(raw_data)*2), dtype='uint16')
-                finally:
-                    if src_hndl.IsAllocated:
-                        src_hndl.Free()
-            
-            sigs = np_data.reshape(-1, self.nb_channel).astype(dt)
-            head += data.shape[0]
-            self.outputs['signals'].send(sigs, index=head)
-            
-    def stop(self):
-        with self.lock:
-            self.running = False
 
 
 
@@ -127,7 +71,7 @@ class MultiChannelSystemW2100(Node):
 
     def __init__(self, **kargs):
         Node.__init__(self, **kargs)
-        assert HAVE_PYTHONNET, 'You must install pythonnet modules'
+        #~ assert HAVE_PYTHONNET, 'You must install pythonnet modules'
 
     def _configure(self, dll_path=None, use_digital_channel=True, sample_rate=10000.):
         '''
@@ -141,29 +85,31 @@ class MultiChannelSystemW2100(Node):
         self.sample_rate = sample_rate
         
         if use_digital_channel:
+            # TODO add a second output stream when digital channel is used
             raise(NotImplementedError)
-        
+
         dll = Assembly.LoadFile(dll_path)
         clr.AddReference("Mcs")
         import Mcs.Usb
         
         devicelist = Mcs.Usb.CMcsUsbListNet()
         devicelist.Initialize(Mcs.Usb.DeviceEnumNet.MCS_MEA_DEVICE)
-        assert len(devicelist) ==1, 'MCS device not found or several device'
+        assert devicelist.GetNumberOfDevices() ==1, 'MCS device not found or several device'
         self.device = Mcs.Usb.CMeaDeviceNet(Mcs.Usb.McsBusTypeEnumNet.MCS_USB_BUS)
         
         # Connect to device
-        status = device.Connect(devicelist.GetUsbListEntry(0))
+        status = self.device.Connect(devicelist.GetUsbListEntry(0))
         assert status ==0, 'Impossible to Connect to device'
         
+        info = Mcs.Usb.CMcsUsbDacqNet.CHWInfo(self.device)
         
         # get channel info
         status, nb_adc_channel = info. GetNumberOfHWADCChannels(0)
-        print('GetNumberOfHWADCChannels:', nb_adc_channel)
+        # print('GetNumberOfHWADCChannels:', nb_adc_channel)
         status, nb_digit_channel = info. GetNumberOfHWDigitalChannels(0)
-        print('GetNumberOfHWDigitalChannels',nb_digit_channel)
+        # print('GetNumberOfHWDigitalChannels',nb_digit_channel)
         
-        status = device.SetNumberOfChannels(nb_adc_channel, 0)
+        status = self.device.SetNumberOfChannels(nb_adc_channel, 0)
 
         self.device.EnableChecksum(False, 0)
         self.device. EnableDigitalIn(self.use_digital_channel, 0)
@@ -171,14 +117,9 @@ class MultiChannelSystemW2100(Node):
 
         status, analogchannels, digitalchannels, checksumchannels,\
                     timestampchannels,channelsinblock = self.device.GetChannelLayout(0, 0, 0, 0, 0, 0)
-        print('analogchannels', analogchannels)
-        print('digitalchannels', digitalchannels)
-        print('checksumchannels', checksumchannels)
-        print('timestampchannels', timestampchannels)
-        print('channelsinblock', channelsinblock)
-
+        
         self.device.SetSampleRate(int(self.sample_rate), 1, 0)
-        sr = device.GetSampleRate(0)
+        sr = self.device.GetSampleRate(0)
         assert self.sample_rate==sr, 'Setting sample rate error'
         
         # recommended by MCS maybe we can go lower
@@ -189,24 +130,21 @@ class MultiChannelSystemW2100(Node):
         selected_channel = np.zeros(channelsinblock, dtype='bool')
         selected_channel[:32] = True # 32 channel on headstage
         selected_channel[168:176] = True # analogsignal on board
-        print('selected_channel', selected_channel)
 
         selChannels = Array[bool](selected_channel.tolist())
         self.device.SetSelectedData(selChannels, 10 * self.chunksize, self.chunksize, 
                                 Mcs.Usb.SampleSizeNet.SampleSize16Unsigned, channelsinblock)
         
         # select th first headstage if not yet selected
-        self.func_w2100 = Mcs.Usb.CW2100_FunctionNet(device)
+        self.func_w2100 = Mcs.Usb.CW2100_FunctionNet(self.device)
         self.func_w2100.SetMultiHeadstageMode(False)
-        headstagestate = func_w2100.GetSelectedHeadstageState(0)
-        headstages = func_w2100.GetAvailableHeadstages(30)
+        headstagestate = self.func_w2100.GetSelectedHeadstageState(0)
+        headstages = self.func_w2100.GetAvailableHeadstages(30)
         if headstagestate.IdType.ID == 0xFFFF:
             if len(headstages)>0:
                 self.func_w2100.SelectHeadstage(headstages[0].ID, 0)
         
-
         # Setup output streamm attr
-        
         self.nb_channel = int(np.sum(selected_channel))
         self.outputs['signals'].spec['shape'] = (-1, self.nb_channel)
         self.outputs['signals'].spec['sample_rate'] = self.sample_rate
@@ -217,6 +155,10 @@ class MultiChannelSystemW2100(Node):
                         self.chunk_duration, self.nb_channel, parent=self)
 
     def _start(self):
+        # stop in case in was already running
+        self.device.StopDacq()
+        self.func_w2100.SetHeadstageSamplingActive(False, 0)
+        
         self.func_w2100.SetHeadstageSamplingActive(True, 0)
         self.device.StartDacq()
         
@@ -228,10 +170,63 @@ class MultiChannelSystemW2100(Node):
 
         self.device.StopDacq()
         self.func_w2100.SetHeadstageSamplingActive(False, 0)
-        
 
     def _close(self):
         pass
+
+
+class McsW2100_Thread(QtCore.QThread):
+    def __init__(self, outputs, device, chunk_duration, nb_channel, parent=None):
+        QtCore.QThread.__init__(self) # parent
+        self.outputs = outputs
+        self.device = device
+        self.chunk_duration = chunk_duration
+        self.nb_channel = nb_channel
+        
+        self.lock = Mutex()
+        self.running = False
+
+    def run(self):
+        with self.lock:
+            self.running = True
+
+        dt = np.dtype('float32')
+
+        head = 0
+        while True:
+            with self.lock:
+                    if not self.running:
+                        break
+            
+            nb_available = self.device.ChannelBlock_AvailFrames(0)
+            if nb_available == 0:
+                # sleep half the channelblocksize duration 0.1 second
+                time.sleep(self.chunk_duration/2.)
+            else:
+                raw_data, nb_read = self.device.ChannelBlock_ReadFramesDictI16(0, nb_available, 0)
+                # raw_data is a dict with one key
+                raw_data = raw_data[0]
+                print('nb_read', nb_read, len(raw_data))
+                
+                # convert the System.Array to numpy.array
+                src_hndl = GCHandle.Alloc(raw_data, GCHandleType.Pinned)
+                try:
+                    src_ptr = src_hndl.AddrOfPinnedObject().ToInt64()
+                    np_data = np.fromstring(ctypes.string_at(src_ptr, len(raw_data)*2), dtype='uint16')
+                except:
+                    break
+                    # TODO something clean
+                finally:
+                    if src_hndl.IsAllocated:
+                        src_hndl.Free()
+
+                sigs = np_data.reshape(-1, self.nb_channel).astype(dt)
+                head += sigs.shape[0]
+                self.outputs['signals'].send(sigs, index=head)
+            
+    def stop(self):
+        with self.lock:
+            self.running = False
 
 
 register_node_type(MultiChannelSystemW2100)
