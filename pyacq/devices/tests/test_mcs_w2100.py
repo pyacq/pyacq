@@ -2,24 +2,30 @@
 # Copyright (c) 2016, French National Center for Scientific Research (CNRS)
 # Distributed under the (new) BSD License. See LICENSE for more info.
 
+from pyqtgraph.Qt import QtCore, QtGui
+
 import time
 
-from pyacq import create_manager
-from pyacq.devices.mcs_w2100 import MultiChannelSystemW2100
+import pyacq
 from pyacq.viewers import QOscilloscope
-
-from pyqtgraph.Qt import QtCore, QtGui
+from pyacq import create_manager
+from pyacq.devices.mcs_w2100 import MultiChannelSystemW2100, download_dll
 
 import pytest
 
 
-@pytest.mark.skipif(True, reason='Need brainamp device to test')
+def test_download_dll():
+    url_path = download_dll()
+    print(url_path)
+
+
+@pytest.mark.skipif(True, reason='Need MSC device for test')
 def test_MultiChannelSystemW2100():
     # in main App
     app = QtGui.QApplication([])
     
     dev = MultiChannelSystemW2100()
-    dev.configure(dll_path=None, use_digital_channel=False, sample_rate=10000.)
+    dev.configure(dll_path=None, use_digital_channel=False, sample_rate=2000.)
     dev.outputs['signals'].configure(protocol='tcp', interface='127.0.0.1',transfermode='plaindata',)
     dev.initialize()
     
@@ -47,4 +53,5 @@ def test_MultiChannelSystemW2100():
     app.exec_()
 
 if __name__ == '__main__':
+    #~ test_download_dll()
     test_MultiChannelSystemW2100()

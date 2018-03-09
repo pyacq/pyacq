@@ -10,6 +10,14 @@ import numpy as np
 
 import time
 import ctypes
+import os
+import sys
+from urllib.request import urlretrieve
+import inspect
+import zipfile
+import shutil
+
+
 
 try:
     import clr
@@ -24,7 +32,6 @@ from ..core import Node, register_node_type
 from pyqtgraph.Qt import QtCore, QtGui
 from pyqtgraph.util.mutex import Mutex
 
-#~ mcsusbnet_url = 'http://download.multichannelsystems.com/download_data/software/McsNetUsb/McsUsbNet_3.2.45.zip'
 
 
 
@@ -87,7 +94,10 @@ class MultiChannelSystemW2100(Node):
         if use_digital_channel:
             # TODO add a second output stream when digital channel is used
             raise(NotImplementedError)
-
+        
+        if dll_path is None:
+            dll_path= download_dll()
+        
         dll = Assembly.LoadFile(dll_path)
         clr.AddReference("Mcs")
         import Mcs.Usb
@@ -175,6 +185,26 @@ class MultiChannelSystemW2100(Node):
         pass
 
 
+mcsusbnet_url = 'http://download.multichannelsystems.com/download_data/software/McsNetUsb/McsUsbNet_3.2.45.zip'
+
+
+def download_dll():
+    localdir = os.path.dirname(os.path.abspath(__file__))
+    localfile = os.path.join(localdir, 'McsUsbNet.zip')
+    if not os.path.exists(localfile):
+        urlretrieve(mcsusbnet_url, localfile)
+    
+    dll_path = os.path.join(localdir, 'McsUsbNet.dll')
+    if not os.path.exists(dll_path):
+        with zipfile.ZipFile(localfile, 'r') as z:
+            z.extract('McsUsbNetPackage/x64/McsUsbNet.dll', path=localdir)
+        # move to localdir
+        shutil.move(os.path.join(localdir,'McsUsbNetPackage/x64/McsUsbNet.dll'),
+                        os.path.join(localdir,'McsUsbNet.dll'))
+        shutil.rmtree(os.path.join(localdir,'McsUsbNetPackage'))
+    
+    return dll_path
+
 class McsW2100_Thread(QtCore.QThread):
     def __init__(self, outputs, device, chunk_duration, nb_channel, parent=None):
         QtCore.QThread.__init__(self) # parent
@@ -206,7 +236,6 @@ class McsW2100_Thread(QtCore.QThread):
                 raw_data, nb_read = self.device.ChannelBlock_ReadFramesDictI16(0, nb_available, 0)
                 # raw_data is a dict with one key
                 raw_data = raw_data[0]
-                print('nb_read', nb_read, len(raw_data))
                 
                 # convert the System.Array to numpy.array
                 src_hndl = GCHandle.Alloc(raw_data, GCHandleType.Pinned)
