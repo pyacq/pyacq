@@ -2,12 +2,6 @@
 # Copyright (c) 2016, French National Center for Scientific Research (CNRS)
 # Distributed under the (new) BSD License. See LICENSE for more info.
 
-
-
-
-import numpy as np
-
-
 import time
 import ctypes
 import os
@@ -17,7 +11,7 @@ import inspect
 import zipfile
 import shutil
 
-
+import numpy as np
 
 try:
     import clr
@@ -28,7 +22,7 @@ try:
 except ImportError:
     HAVE_PYTHONNET = False
 
-from ..core import Node, register_node_type
+from ..core import Node, register_node_type, OutputStream
 from pyqtgraph.Qt import QtCore, QtGui
 from pyqtgraph.util.mutex import Mutex
 
@@ -46,7 +40,7 @@ class MultiChannelSystemW2100(Node):
     This is based on the McsUsbNet.ddl downloadable here:
     https://www.multichannelsystems.com/software/mcsusbnetdll
     
-    This DDL is written in C# unfortunatly. So this code works with `pythonnet
+    This DDL is written in C#. So this code works with `pythonnet
     <https://github.com/pythonnet/pythonnet>`_ a bridge between python and
     .NET CLR
 
@@ -70,33 +64,50 @@ class MultiChannelSystemW2100(Node):
       * 32 channels from one wireless headstage
       * 8 IF analog channels
       * 1 digital channels (16 wire)
-
+    
+    
+    The range for headstage is +/- 12.5uV with int16.
+    The range for IF board analogsignal is +/-2.5V
     
     """
-    _output_specs = {'signals': dict(streamtype='analogsignal'),
-                                }
-
+    _output_specs = {} # outputs depend on configure
+    
     def __init__(self, **kargs):
         Node.__init__(self, **kargs)
-        #~ assert HAVE_PYTHONNET, 'You must install pythonnet modules'
+        assert HAVE_PYTHONNET, 'You must install pythonnet modules'
 
-    def _configure(self, dll_path=None, use_digital_channel=True, sample_rate=10000.):
+    def _configure(self, dll_path=None, sample_rate=10000.,
+                    heastage_channel_selection=True, ifb_channel_selection=True, 
+                    use_digital_channel=True,):
         '''
         Parameters
         ----------
-        : str
-            path to McsUsbNet dll
+        dll_path: str or None
+            path to McsUsbNet dll. If None given try to download directly from MCS.
+        sample_rate: float
+            Sample rate in Hz. The system support few of them depending the channel number.
+            (1000, 2000, 10000, 20000) see MCS documentation.
+        heastage_channel_selection: np.array of bool of shape 32
+            Selection of channels from headstage. If scalar True all channel are selected.
+        ifb_channel_selection: np.array of bool of shape 8
+            Selection of channels from IF board. If scalar True all channel are selected.
+        use_digital_channel: bool
+            Grab digital channel or not. If True a new output is created
         '''
         
-        self.use_digital_channel = use_digital_channel
-        self.sample_rate = sample_rate
         
-        if use_digital_channel:
-            # TODO add a second output stream when digital channel is used
-            raise(NotImplementedError)
+        self.sample_rate = sample_rate
+        if isinstance(heastage_channel_selection, bool):
+            heastage_channel_selection = np.array([heastage_channel_selection]*32, dtype='bool')
+        self.heastage_channel_selection = heastage_channel_selection
+        if isinstance(ifb_channel_selection, bool):
+            ifb_channel_selection = np.array([ifb_channel_selection]*8, dtype='bool')
+        self.ifb_channel_selection = ifb_channel_selection
+        self.use_digital_channel = use_digital_channel
         
         if dll_path is None:
             dll_path= download_dll()
+            assert dll_path is not None, 'Impossible to download McsUsbNet.dll'
         
         dll = Assembly.LoadFile(dll_path)
         clr.AddReference("Mcs")
@@ -115,9 +126,7 @@ class MultiChannelSystemW2100(Node):
         
         # get channel info
         status, nb_adc_channel = info. GetNumberOfHWADCChannels(0)
-        # print('GetNumberOfHWADCChannels:', nb_adc_channel)
         status, nb_digit_channel = info. GetNumberOfHWDigitalChannels(0)
-        # print('GetNumberOfHWDigitalChannels',nb_digit_channel)
         
         status = self.device.SetNumberOfChannels(nb_adc_channel, 0)
 
@@ -138,8 +147,9 @@ class MultiChannelSystemW2100(Node):
         
         # select 32 channel form headstage and 8 from IF board
         selected_channel = np.zeros(channelsinblock, dtype='bool')
-        selected_channel[:32] = True # 32 channel on headstage
-        selected_channel[168:176] = True # analogsignal on board
+        selected_channel[:32] = self.heastage_channel_selection # 32 channel on headstage
+        selected_channel[168:176] = self.ifb_channel_selection # analogsignal on FB board
+        selected_channel[176] = self.use_digital_channel
 
         selChannels = Array[bool](selected_channel.tolist())
         self.device.SetSelectedData(selChannels, 10 * self.chunksize, self.chunksize, 
@@ -154,15 +164,59 @@ class MultiChannelSystemW2100(Node):
             if len(headstages)>0:
                 self.func_w2100.SelectHeadstage(headstages[0].ID, 0)
         
-        # Setup output streamm attr
-        self.nb_channel = int(np.sum(selected_channel))
-        self.outputs['signals'].spec['shape'] = (-1, self.nb_channel)
-        self.outputs['signals'].spec['sample_rate'] = self.sample_rate
-        self.outputs['signals'].spec['nb_channel'] = self.nb_channel
+        # Setup output stream  split into 3 streams (headstage/if_board/digital)
+        #~ self.nb_channel = int(np.sum(selected_channel))
+        self.nb_headstage_channel = np.sum(self.heastage_channel_selection)
+        self.nb_ifb_channel = np.sum(self.ifb_channel_selection)
+        
+        self.channel_map = []
+        n = 0
+        if self.nb_headstage_channel>0:
+            name='signals_headstage'
+            output = OutputStream(spec={}, node=self, name=name)
+            self.outputs[name] = output
+            output.spec['shape'] = (-1, self.nb_headstage_channel)
+            output.spec['sample_rate'] = self.sample_rate
+            output.spec['nb_channel'] = self.nb_headstage_channel
+            output.spec['dtype'] = 'float32'
+            output.spec['streamtype'] = 'analogsignal'
+            gain = 12.5 / 2**15 # gain to uV
+            self.channel_map.append((name, slice(n, n+self.nb_headstage_channel), np.dtype('float32'), gain))
+            n += self.nb_headstage_channel
+        
+        if self.nb_ifb_channel>0:
+            name='signals_ifb'
+            output = OutputStream(spec={}, node=self, name=name)
+            self.outputs[name] = output
+            output.spec['shape'] = (-1, self.nb_ifb_channel)
+            output.spec['sample_rate'] = self.sample_rate
+            output.spec['nb_channel'] = self.nb_ifb_channel
+            output.spec['dtype'] = 'float32'
+            output.spec['streamtype'] = 'analogsignal'
+            gain = 2.5 / 2**15 # gain to V
+            self.channel_map.append((name, slice(n, n+self.nb_ifb_channel), np.dtype('float32'), gain))
+            n += self.nb_ifb_channel
+        
+        if self.use_digital_channel:
+            name='digital'
+            output = OutputStream(spec={}, node=self, name=name)
+            self.outputs[name] = output
+            output.spec['shape'] = (-1, 1)
+            output.spec['sample_rate'] = self.sample_rate
+            output.spec['nb_channel'] = 16
+            output.spec['dtype'] = 'int16'
+            output.spec['streamtype'] = 'digitalsignal'
+            gain = None
+            self.channel_map.append((name, slice(n, n+1), np.dtype('uint16'), gain))
+            n += 1
+        
+        self.nb_total_channel = n
+        
 
     def _initialize(self):
         self._thread = McsW2100_Thread(self.outputs, self.device, 
-                        self.chunk_duration, self.nb_channel, parent=self)
+                        self.chunk_duration, self.channel_map, 
+                        self.nb_total_channel, parent=self)
 
     def _start(self):
         # stop in case in was already running
@@ -194,24 +248,29 @@ def download_dll():
     if not os.path.exists(localfile):
         urlretrieve(mcsusbnet_url, localfile)
     
-    dll_path = os.path.join(localdir, 'McsUsbNet.dll')
-    if not os.path.exists(dll_path):
-        with zipfile.ZipFile(localfile, 'r') as z:
-            z.extract('McsUsbNetPackage/x64/McsUsbNet.dll', path=localdir)
-        # move to localdir
-        shutil.move(os.path.join(localdir,'McsUsbNetPackage/x64/McsUsbNet.dll'),
-                        os.path.join(localdir,'McsUsbNet.dll'))
-        shutil.rmtree(os.path.join(localdir,'McsUsbNetPackage'))
+    try:
+        dll_path = os.path.join(localdir, 'McsUsbNet.dll')
+        if not os.path.exists(dll_path):
+            with zipfile.ZipFile(localfile, 'r') as z:
+                z.extract('McsUsbNetPackage/x64/McsUsbNet.dll', path=localdir)
+            # move to localdir
+            shutil.move(os.path.join(localdir,'McsUsbNetPackage/x64/McsUsbNet.dll'),
+                            os.path.join(localdir,'McsUsbNet.dll'))
+            shutil.rmtree(os.path.join(localdir,'McsUsbNetPackage'))
+    except:
+        dll_path = None
     
     return dll_path
 
 class McsW2100_Thread(QtCore.QThread):
-    def __init__(self, outputs, device, chunk_duration, nb_channel, parent=None):
+    def __init__(self, outputs, device, chunk_duration, channel_map, 
+                            nb_total_channel, parent=None):
         QtCore.QThread.__init__(self) # parent
         self.outputs = outputs
         self.device = device
         self.chunk_duration = chunk_duration
-        self.nb_channel = nb_channel
+        self.channel_map = channel_map
+        self.nb_total_channel = nb_total_channel
         
         self.lock = Mutex()
         self.running = False
@@ -248,11 +307,15 @@ class McsW2100_Thread(QtCore.QThread):
                 finally:
                     if src_hndl.IsAllocated:
                         src_hndl.Free()
-
-                sigs = np_data.reshape(-1, self.nb_channel).astype(dt)
-                head += sigs.shape[0]
-                self.outputs['signals'].send(sigs, index=head)
-            
+                
+                all_sigs = np_data.reshape(-1, self.nb_total_channel)#.astype(dt)
+                head += all_sigs.shape[0]
+                for name, slice_, dtype, gain in self.channel_map:
+                    sigs = all_sigs[:, slice_].astype(dtype)
+                    if gain is not None:
+                        sigs = (sigs - 2**15) * gain
+                    self.outputs[name].send(sigs, index=head)
+    
     def stop(self):
         with self.lock:
             self.running = False

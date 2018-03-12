@@ -25,30 +25,39 @@ def test_MultiChannelSystemW2100():
     app = QtGui.QApplication([])
     
     dev = MultiChannelSystemW2100()
-    dev.configure(dll_path=None, use_digital_channel=False, sample_rate=2000.)
-    dev.outputs['signals'].configure(protocol='tcp', interface='127.0.0.1',transfermode='plaindata',)
+    dev.configure(dll_path=None,
+                heastage_channel_selection=True, ifb_channel_selection=True, 
+                use_digital_channel=True, sample_rate=2000.)
+    for name, output in dev.outputs.items():
+        dev.outputs[name].configure(protocol='tcp', interface='127.0.0.1',transfermode='plaindata',)
     dev.initialize()
     
-    viewer = QOscilloscope()
-    viewer.configure()
-    viewer.input.connect(dev.outputs['signals'])
-    viewer.initialize()
-    viewer.show()
+    viewers = []
+    for name, output in dev.outputs.items():
+        viewer = QOscilloscope()
+        viewer.configure()
+        viewer.input.connect(dev.outputs[name])
+        viewer.initialize()
+        viewer.show()
+        viewers.append(viewer)
     
     dev.start()
-    viewer.start()
+    for viewer in viewers:
+        viewer.start()
     
     def terminate():
-        viewer.stop()
+        for viewer in viewers:
+            viewer.stop()
+            viewer.close()
+        
         dev.stop()
-        viewer.close()
         dev.close()
         app.quit()
     
     # start for a while
     timer = QtCore.QTimer(singleShot=True, interval=5000)
     timer.timeout.connect(terminate)
-    #~ timer.start()
+    timer.start()
     
     app.exec_()
 
