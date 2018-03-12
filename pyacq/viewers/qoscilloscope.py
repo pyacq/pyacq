@@ -201,6 +201,10 @@ class OscilloscopeController(QtGui.QWidget):
         h.addLayout(v)
         
         self.channel_visibility_changed.connect(self.on_channel_visibility_changed)
+
+        but = QtGui.QPushButton('Auto scale')
+        v.addWidget(but)
+        but.clicked.connect(self.compute_rescale)
         
         if self.viewer.nb_channel>1:
             v.addWidget(QtGui.QLabel('<b>Select channel...</b>'))
@@ -270,7 +274,6 @@ class OscilloscopeController(QtGui.QWidget):
         self.channel_visibility_changed.emit()
 
     def on_channel_visibility_changed(self):
-        print('on_channel_visibility_changed')
         self.compute_rescale()
         self.viewer.refresh()
 
@@ -278,8 +281,8 @@ class OscilloscopeController(QtGui.QWidget):
         sigs = self.viewer.get_visible_chunk()
         self.signals_med = med = np.nanmedian(sigs, axis=0)
         self.signals_mad = np.nanmedian(np.abs(sigs-med),axis=0)*1.4826
-        self.signals_min = np.min(sigs)
-        self.signals_max = np.max(sigs)
+        self.signals_min = np.min(sigs, axis=0)
+        self.signals_max = np.max(sigs, axis=0)
     
     def compute_rescale(self):
         scale_mode = self.viewer.params['scale_mode']
@@ -292,17 +295,21 @@ class OscilloscopeController(QtGui.QWidget):
         self.estimate_median_mad()
         
         if scale_mode=='real_scale':
-            self.viewer.params['ylim_min'] = np.nanmin(self.signals_min)
-            self.viewer.params['ylim_max'] = np.nanmax(self.signals_max)
+            self.viewer.params['ylim_min'] = np.nanmin(self.signals_min[self.visible_channels])
+            self.viewer.params['ylim_max'] = np.nanmax(self.signals_max[self.visible_channels])
         else:
             if scale_mode=='same_for_all':
-                gains[self.visible_channels] = np.ones(nb_visible, dtype=float) / max(self.signals_mad[self.visible_channels]) / 9.
+                inv_scale =  max(self.signals_mad[self.visible_channels]) * 9.
+                if inv_scale == 0:
+                    inv_scale = 1.
             elif scale_mode=='by_channel':
-                gains[self.visible_channels] = np.ones(nb_visible, dtype=float) / self.signals_mad[self.visible_channels] / 9.
+                inv_scale = self.signals_mad[self.visible_channels] * 9.
+                inv_scale[inv_scale==0.] = 1.
+            gains[self.visible_channels] = np.ones(nb_visible, dtype=float) / inv_scale
             offsets[self.visible_channels] = np.arange(nb_visible)[::-1] - self.signals_med[self.visible_channels]*gains[self.visible_channels]
             self.viewer.params['ylim_min'] = -0.5
             self.viewer.params['ylim_max'] = nb_visible-0.5
-            
+        
         self.gains = gains
         self.offsets = offsets
         self.viewer.by_channel_params.blockSignals(False)
@@ -313,13 +320,17 @@ class OscilloscopeController(QtGui.QWidget):
         
         self.viewer.all_params.blockSignals(True)
         if scale_mode=='real_scale':
-            self.viewer.params['ylim_max'] = self.viewer.params['ylim_max']*factor_ratio
-            self.viewer.params['ylim_min'] = self.viewer.params['ylim_min']*factor_ratio
+            ymin, ymax = self.viewer.params['ylim_min'], self.viewer.params['ylim_max']
+            d = (ymax-ymin) * factor_ratio / 2.
+            self.viewer.params['ylim_max'] = (ymin+ymax)/2. + d
+            self.viewer.params['ylim_min'] = (ymin+ymax)/2. - d
         else :
             if not hasattr(self, 'self.signals_med'):
                 self.estimate_median_mad()
+            vis_offset = self.offsets + self.signals_med*self.gains
             self.gains = self.gains * factor_ratio
-            self.offsets = self.offsets + self.signals_med*self.gains * (1-factor_ratio)
+            #~ self.offsets = self.offsets + self.signals_med*self.gains * (1-factor_ratio)
+            self.offsets = vis_offset - self.signals_med*self.gains
         self.viewer.all_params.blockSignals(False)
         
         self.viewer.refresh()
@@ -340,7 +351,7 @@ default_params = [
         'values':['real_scale', 'same_for_all', 'by_channel'] },
     {'name': 'background_color', 'type': 'color', 'value': 'k'},
     {'name': 'refresh_interval', 'type': 'int', 'value': 100, 'limits':[5, 1000]},
-    {'name': 'mode', 'type': 'list', 'value': 'scroll', 'values': ['scan', 'scroll']},
+    {'name': 'mode', 'type': 'list', 'value': 'scan', 'values': ['scan', 'scroll']},
     {'name': 'auto_decimate', 'type': 'bool', 'value': True},
     {'name': 'decimate', 'type': 'int', 'value': 1, 'limits': [1, None], },
     {'name': 'decimation_method', 'type': 'list', 'value': 'pure_decimate', 'values': ['pure_decimate', 'min_max', 'mean']},
