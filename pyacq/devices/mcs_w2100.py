@@ -180,7 +180,7 @@ class MultiChannelSystemW2100(Node):
             output.spec['nb_channel'] = self.nb_headstage_channel
             output.spec['dtype'] = 'float32'
             output.spec['streamtype'] = 'analogsignal'
-            gain = 12.5 / 2**15 # gain to uV
+            gain = 12500 / 2**15 # gain to uV
             self.channel_map.append((name, slice(n, n+self.nb_headstage_channel), np.dtype('float32'), gain))
             n += self.nb_headstage_channel
         
