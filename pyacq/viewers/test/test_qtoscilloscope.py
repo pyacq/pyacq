@@ -28,6 +28,9 @@ def lauch_qoscilloscope(transfermode, axisorder):
     t = np.arange(length)/sample_rate
     buffer = np.random.rand(length, nb_channel)*.3
     buffer += np.sin(2*np.pi*1.2*t)[:,None]*.5
+    # add offset 
+    buffer += np.random.randn(nb_channel)[None, :]*50
+    buffer[:, -1] = 0
     buffer = buffer.astype('float32')
 
     #~ dev =NumpyDeviceBuffer()
@@ -47,6 +50,7 @@ def lauch_qoscilloscope(transfermode, axisorder):
     viewer.initialize()
     viewer.show()
     viewer.params['decimation_method'] = 'min_max'
+    #~ viewer.params['scale_mode'] = 'by_channel'
 
 
     def terminate():
