@@ -2,28 +2,41 @@
 # Copyright (c) 2016, French National Center for Scientific Research (CNRS)
 # Distributed under the (new) BSD License. See LICENSE for more info.
 
-import time
+import pytest
 
 from pyacq import create_manager
 from pyacq.devices.webcam_av import WebCamAV, HAVE_AV
 from pyacq.viewers.imageviewer import ImageViewer
+from pyacq.rec.avirecorder import AviRecorder
+
+import numpy as np
 
 from pyqtgraph.Qt import QtCore, QtGui
+import pyqtgraph as pg
 
-import pytest
+import os
+import shutil
+import datetime
 
 
-@pytest.mark.skipif(not HAVE_AV, reason='no have av')
-def test_webcam_opencv():
-    # in main App
+
+def test_AviRecorder():
     app = QtGui.QApplication([])
     
     dev = WebCamAV(name='cam')
     dev.configure(camera_num=0)
     dev.output.configure(protocol='tcp', interface='127.0.0.1',transfermode='plaindata',)
     dev.initialize()
-    print(dev.output.params)
+
+    dirname = './test_rec_avi'
+    if os.path.exists(dirname):
+        shutil.rmtree(dirname)
     
+    rec = AviRecorder()
+    #~ rec = ng1.create_node('RawRecorder')
+    rec.configure(streams=[dev.output], autoconnect=True, dirname=dirname)
+    rec.initialize()
+
     viewer = ImageViewer()
     viewer.configure()
     viewer.input.connect(dev.output)
@@ -31,6 +44,7 @@ def test_webcam_opencv():
     viewer.show()
     
     dev.start()
+    rec.start()
     viewer.start()
     
     def terminate():
@@ -38,13 +52,19 @@ def test_webcam_opencv():
         dev.stop()
         viewer.close()
         dev.close()
+        rec.stop()
+        rec.close()
         app.quit()
     
     # start for a while
-    timer = QtCore.QTimer(singleShot=True, interval=3000)
+    timer = QtCore.QTimer(singleShot=True, interval=10000)
     timer.timeout.connect(terminate)
-    #~ timer.start()
+    timer.start()
     app.exec_()
 
+
+
+
+
 if __name__ == '__main__':
-    test_webcam_opencv()
+    test_AviRecorder()
