@@ -160,6 +160,7 @@ class NIDAQmx(Node):
     def _stop(self):
         if self.aitask is not None:
             self.thread.stop()
+            self.thread.wait()
             self.aitask.stop()
 
     def _close(self):
