@@ -3,9 +3,10 @@ import logging
 import ctypes
 import os
 
-#~ from ..core import Node, register_node_type, ThreadPollInput
+from ..core import Node, register_node_type, ThreadPollInput
 from pyqtgraph.Qt import QtCore, QtGui
 from pyqtgraph.util.mutex import Mutex
+
 
 # http://www.ifnamemain.com/posts/2013/Dec/10/c_structs_python/
 
@@ -25,7 +26,7 @@ Question for blackrock support:
 try:
     cdskkdll = ctypes.windll.cbsdk
     HAVE_BLACKROCK = True
-except WindowsError:
+except :
     cdskkdll = None
     HAVE_BLACKROCK = False
 
@@ -78,7 +79,7 @@ class Blackrock(Node):
     def _configure(self,):
         pass
     
-    def _initialize(self, ai_channels=[], self.nInstance=0):
+    def _initialize(self, ai_channels=[], nInstance=0):
         """
         ai_channels are blackrock channel 1-based
         
@@ -106,7 +107,7 @@ class Blackrock(Node):
         # that will be sliced in continuous arrays
         self.trial = cbSdkTrialCont()
         self.ai_buffer = np.zeros((cbNUM_ANALOG_CHANS, cbSdk_CONTINUOUS_DATA_SAMPLES, ), dtype='int16')
-        for i in range(cbNUM_ANALOG_CHANS:
+        for i in range(cbNUM_ANALOG_CHANS):
             arr = self._ai_buffer[i]
             # TODO test if continuous
             self.trial.samples[i] = np.ctypeslib.as_ctypes(arr)
@@ -169,7 +170,7 @@ class BlackrockThread(QtCore.QThread):
 
 
 
-register_node_type(NIDAQmx)
+register_node_type(Blackrock)
 
 
 # constant and Struct
@@ -180,125 +181,56 @@ cbSdk_CONTINUOUS_DATA_SAMPLES = 102400
 
 
 # for convinient translation
-#~ UINT32 = ctypes.c_ulong
-#~ UINT16 = ctypes.c_ushort
-#~ UINT8 = ctypes.c_ubyte
-
-
-#~ typedef struct {
-    #~ UINT32     time;           // system clock timestamp
-    #~ UINT16     chid;           // 0x8000
-    #~ UINT8   type;           // cbPKTTYPE_AINP*
-    #~ UINT8   dlen;           // cbPKT_DLENCHANINFO
-
-    #~ UINT32     chan;           // actual channel id of the channel being configured
-    #~ UINT32     proc;           // the address of the processor on which the channel resides
-    #~ UINT32     bank;           // the address of the bank on which the channel resides
-    #~ UINT32     term;           // the terminal number of the channel within it's bank
-    #~ UINT32     chancaps;       // general channel capablities (given by cbCHAN_* flags)
-    #~ UINT32     doutcaps;       // digital output capablities (composed of cbDOUT_* flags)
-    #~ UINT32     dinpcaps;       // digital input capablities (composed of cbDINP_* flags)
-    #~ UINT32     aoutcaps;       // analog output capablities (composed of cbAOUT_* flags)
-    #~ UINT32     ainpcaps;       // analog input capablities (composed of cbAINP_* flags)
-    #~ UINT32     spkcaps;        // spike processing capabilities
-    #~ cbSCALING  physcalin;      // physical channel scaling information
-    #~ cbFILTDESC phyfiltin;      // physical channel filter definition
-    #~ cbSCALING  physcalout;     // physical channel scaling information
-    #~ cbFILTDESC phyfiltout;     // physical channel filter definition
-    #~ char       label[cbLEN_STR_LABEL];   // Label of the channel (null terminated if <16 characters)
-    #~ UINT32     userflags;      // User flags for the channel state
-    #~ INT32      position[4];    // reserved for future position information
-    #~ cbSCALING  scalin;         // user-defined scaling information for AINP
-    #~ cbSCALING  scalout;        // user-defined scaling information for AOUT
-    #~ UINT32     doutopts;       // digital output options (composed of cbDOUT_* flags)
-    #~ UINT32     dinpopts;       // digital input options (composed of cbDINP_* flags)
-    #~ UINT32     aoutopts;       // analog output options
-    #~ UINT32     eopchar;        // digital input capablities (given by cbDINP_* flags)
-    #~ union {
-        #~ struct {
-            #~ UINT32              monsource;      // address of channel to monitor
-            #~ INT32               outvalue;       // output value
-        #~ };
-        #~ struct {
-            #~ UINT16              lowsamples;     // address of channel to monitor
-            #~ UINT16              highsamples;    // address of channel to monitor
-            #~ INT32               offset;         // output value
-        #~ };
-    #~ };
-    #~ UINT8				trigtype;		// trigger type (see cbDOUT_TRIGGER_*)
-    #~ UINT16				trigchan;		// trigger channel
-    #~ UINT16				trigval;		// trigger value
-    #~ UINT32              ainpopts;       // analog input options (composed of cbAINP* flags)
-    #~ UINT32              lncrate;          // line noise cancellation filter adaptation rate
-    #~ UINT32              smpfilter;        // continuous-time pathway filter id
-    #~ UINT32              smpgroup;         // continuous-time pathway sample group
-    #~ INT32               smpdispmin;       // continuous-time pathway display factor
-    #~ INT32               smpdispmax;       // continuous-time pathway display factor
-    #~ UINT32              spkfilter;        // spike pathway filter id
-    #~ INT32               spkdispmax;       // spike pathway display factor
-    #~ INT32               lncdispmax;       // Line Noise pathway display factor
-    #~ UINT32              spkopts;          // spike processing options
-    #~ INT32               spkthrlevel;      // spike threshold level
-    #~ INT32               spkthrlimit;      //
-    #~ UINT32              spkgroup;         // NTrodeGroup this electrode belongs to - 0 is single unit, non-0 indicates a multi-trode grouping
-    #~ INT16               amplrejpos;       // Amplitude rejection positive value
-    #~ INT16               amplrejneg;       // Amplitude rejection negative value
-    #~ UINT32              refelecchan;      // Software reference electrode channel
-    #~ cbMANUALUNITMAPPING unitmapping[cbMAXUNITS];            // manual unit mapping
-    #~ cbHOOP              spkhoops[cbMAXUNITS][cbMAXHOOPS];   // spike hoop sorting set
-#~ } cbPKT_CHANINFO;
+INT32 = ctypes.c_int32
+UINT32 = ctypes.c_uint32
+INT16 = ctypes.c_int16
+UINT16 = ctypes.c_uint16
+INT8 = ctypes.c_int8
+UINT8 = ctypes.c_uint8
+CHAR = ctypes.c_char
 
 
 
-    #~ ('time', UINT32),
-    #~ ('chid', UINT16),
-    #~ ('type', UINT8),
-    #~ ('dlen', UINT8),
-    #~ ('chan', UINT32),
-    #~ ('proc', UINT32),
-    #~ ('bank', UINT32),
-    #~ ('term', UINT32),
-    #~ ('chancaps', UINT32),
-    #~ ('doutcaps', UINT32),
-    #~ ('dinpcaps', UINT32),
-    #~ ('aoutcaps', UINT32),
-    #~ ('ainpcaps', UINT32),
-    #~ ('spkcaps', UINT32),
-    #~ ('physcalin', cbSCALING),
-    #~ ('phyfiltin', cbFILTDESC),
-    #~ ('physcalout', cbSCALING),
-    #~ ('phyfiltout', cbFILTDESC),
-    #~ ('label', c_char * 16),
-    #~ ('userflags', UINT32),
-    #~ ('position', INT32 * 4),
-    #~ ('scalin', cbSCALING),
-    #~ ('scalout', cbSCALING),
-    #~ ('doutopts', UINT32),
-    #~ ('dinpopts', UINT32),
-    #~ ('aoutopts', UINT32),
-    #~ ('eopchar', UINT32),
-    #~ ('unnamed_1', union_anon_42),
-    #~ ('trigtype', UINT8),
-    #~ ('trigchan', UINT16),
-    #~ ('trigval', UINT16),
-    #~ ('ainpopts', UINT32),
-    #~ ('lncrate', UINT32),
-    #~ ('smpfilter', UINT32),
-    #~ ('smpgroup', UINT32),
-    #~ ('smpdispmin', INT32),
-    #~ ('smpdispmax', INT32),
-    #~ ('spkfilter', UINT32),
-    #~ ('spkdispmax', INT32),
-    #~ ('lncdispmax', INT32),
-    #~ ('spkopts', UINT32),
-    #~ ('spkthrlevel', INT32),
-    #~ ('spkthrlimit', INT32),
-    #~ ('spkgroup', UINT32),
-    #~ ('amplrejpos', INT16),
-    #~ ('amplrejneg', INT16),
-    #~ ('refelecchan', UINT32),
-    #~ ('unitmapping', cbMANUALUNITMAPPING * 5),
-    #~ ('spkhoops', (cbHOOP * 4) * 5),
+
+
+
+class cbSCALING(ctypes.Structure):
+    _fields_ = [
+        ('digmin', INT16),
+        ('digmax', INT16),
+        ('anamin', INT32),
+        ('anamax', INT32),
+        ('anagain', INT32),
+        ('anaunit', CHAR*8),
+    ]
+
+class cbFILTDESC(ctypes.Structure):
+    _fields_ = [
+        ('label', CHAR*16), 
+        ('hpfreq', UINT32), # high-pass corner frequency in milliHertz
+        ('hporder', UINT32), # high-pass filter order
+        ('hptype', UINT32), # high-pass filter type
+        ('lpfreq', UINT32), # low-pass frequency in milliHertz
+        ('lporder', UINT32),# low-pass filter order
+        ('lptype', UINT32), # low-pass filter type
+    ]
+
+class cbMANUALUNITMAPPING(ctypes.Structure):
+    _fields_ = [
+        ('nOverride', INT16),
+        ('afOrigin', INT16*3),
+        ('afShape', (INT16*3)*3),
+        ('aPhi', INT16),
+        ('bValid', UINT32),
+    ]
+
+class cbHOOP(ctypes.Structure):
+    _fields_ = [
+        ('valid', UINT16),
+        ('time', INT16),
+        ('min', INT16),
+        ('max', INT16),
+    ]
 
 
 class cbPKT_CHANINFO(ctypes.Structure):
@@ -310,61 +242,56 @@ class cbPKT_CHANINFO(ctypes.Structure):
         
         ('chan', UINT32), # actual channel id of the channel being configured
         ('proc', UINT32), # the address of the processor on which the channel resides
+        ('bank', UINT32), # the address of the bank on which the channel resides
+        ('term', UINT32), # the terminal number of the channel within it's bank
+        ('chancaps', UINT32), # general channel capablities (given by cbCHAN_* flags)
+        ('doutcaps', UINT32), # digital output capablities (composed of cbDOUT_* flags)
+        ('dinpcaps', UINT32), # digital input capablities (composed of cbDINP_* flags)
+        ('aoutcaps', UINT32), # analog output capablities (composed of cbAOUT_* flags)
+        ('ainpcaps', UINT32), # analog input capablities (composed of cbAINP_* flags)
+        ('spkcaps', UINT32), # spike processing capabilities
+        ('physcalin', cbSCALING), # physical channel scaling information
+        ('phyfiltin', cbFILTDESC), # physical channel filter definition
+        ('physcalout', cbSCALING), # physical channel scaling information
+        ('phyfiltout', cbFILTDESC), # physical channel filter definition
+        ('label', CHAR * 16), # Label of the channel (null terminated if <16 characters)
+        ('userflags', UINT32), # User flags for the channel state
+        ('position', INT32 * 4), # reserved for future position information
+        ('scalin', cbSCALING), # user-defined scaling information for AINP
+        ('scalout', cbSCALING), # user-defined scaling information for AOUT
+        ('doutopts', UINT32), # digital output options (composed of cbDOUT_* flags)
+        ('dinpopts', UINT32), # digital input options (composed of cbDINP_* flags)
+        ('aoutopts', UINT32), # analog output options
+        ('eopchar', UINT32), # digital input capablities (given by cbDINP_* flags)
         
-    #~ UINT32     bank;           // the address of the bank on which the channel resides
-    #~ UINT32     term;           // the terminal number of the channel within it's bank
-    #~ UINT32     chancaps;       // general channel capablities (given by cbCHAN_* flags)
-    #~ UINT32     doutcaps;       // digital output capablities (composed of cbDOUT_* flags)
-    #~ UINT32     dinpcaps;       // digital input capablities (composed of cbDINP_* flags)
-    #~ UINT32     aoutcaps;       // analog output capablities (composed of cbAOUT_* flags)
-    #~ UINT32     ainpcaps;       // analog input capablities (composed of cbAINP_* flags)
-    #~ UINT32     spkcaps;        // spike processing capabilities
-    #~ cbSCALING  physcalin;      // physical channel scaling information
-    #~ cbFILTDESC phyfiltin;      // physical channel filter definition
-    #~ cbSCALING  physcalout;     // physical channel scaling information
-    #~ cbFILTDESC phyfiltout;     // physical channel filter definition
-    #~ char       label[cbLEN_STR_LABEL];   // Label of the channel (null terminated if <16 characters)
-    #~ UINT32     userflags;      // User flags for the channel state
-    #~ INT32      position[4];    // reserved for future position information
-    #~ cbSCALING  scalin;         // user-defined scaling information for AINP
-    #~ cbSCALING  scalout;        // user-defined scaling information for AOUT
-    #~ UINT32     doutopts;       // digital output options (composed of cbDOUT_* flags)
-    #~ UINT32     dinpopts;       // digital input options (composed of cbDINP_* flags)
-    #~ UINT32     aoutopts;       // analog output options
-    #~ UINT32     eopchar;        // digital input capablities (given by cbDINP_* flags)
-    #~ union {
-        #~ struct {
-            #~ UINT32              monsource;      // address of channel to monitor
-            #~ INT32               outvalue;       // output value
-        #~ };
-        #~ struct {
-            #~ UINT16              lowsamples;     // address of channel to monitor
-            #~ UINT16              highsamples;    // address of channel to monitor
-            #~ INT32               offset;         // output value
-        #~ };
-    #~ };
-    #~ UINT8				trigtype;		// trigger type (see cbDOUT_TRIGGER_*)
-    #~ UINT16				trigchan;		// trigger channel
-    #~ UINT16				trigval;		// trigger value
-    #~ UINT32              ainpopts;       // analog input options (composed of cbAINP* flags)
-    #~ UINT32              lncrate;          // line noise cancellation filter adaptation rate
-    #~ UINT32              smpfilter;        // continuous-time pathway filter id
-    #~ UINT32              smpgroup;         // continuous-time pathway sample group
-    #~ INT32               smpdispmin;       // continuous-time pathway display factor
-    #~ INT32               smpdispmax;       // continuous-time pathway display factor
-    #~ UINT32              spkfilter;        // spike pathway filter id
-    #~ INT32               spkdispmax;       // spike pathway display factor
-    #~ INT32               lncdispmax;       // Line Noise pathway display factor
-    #~ UINT32              spkopts;          // spike processing options
-    #~ INT32               spkthrlevel;      // spike threshold level
-    #~ INT32               spkthrlimit;      //
-    #~ UINT32              spkgroup;         // NTrodeGroup this electrode belongs to - 0 is single unit, non-0 indicates a multi-trode grouping
-    #~ INT16               amplrejpos;       // Amplitude rejection positive value
-    #~ INT16               amplrejneg;       // Amplitude rejection negative value
-    #~ UINT32              refelecchan;      // Software reference electrode channel
-    #~ cbMANUALUNITMAPPING unitmapping[cbMAXUNITS];            // manual unit mapping
-    #~ cbHOOP              spkhoops[cbMAXUNITS][cbMAXHOOPS];   // spike hoop sorting set        
+        # here is in fact a union
+        ##('monsource', UINT32), # address of channel to monitor
+        ## ('outvalue', INT32), # address of channel to monitor
+        ('lowsamples', UINT16), # address of channel to monitor
+        ('highsamples', UINT16), # 
+        ('offset', INT32), # output value
         
+        ('trigtype', UINT8), # trigger type (see cbDOUT_TRIGGER_*)
+        ('trigchan', UINT16), # trigger channel
+        ('trigval', UINT16), # trigger value
+        ('ainpopts', UINT32), # analog input options (composed of cbAINP* flags)
+        ('lncrate', UINT32), # line noise cancellation filter adaptation rate
+        ('smpfilter', UINT32), # continuous-time pathway filter id
+        ('smpgroup', UINT32), # continuous-time pathway sample group
+        ('smpdispmin', INT32), # continuous-time pathway display factor
+        ('smpdispmax', INT32), # continuous-time pathway display factor
+        ('spkfilter', UINT32), # spike pathway filter id
+        ('spkdispmax', INT32), # spike pathway display factor
+        ('lncdispmax', INT32), # Line Noise pathway display factor
+        ('spkopts', UINT32), # spike processing options
+        ('spkthrlevel', INT32), # spike threshold level
+        ('spkthrlimit', INT32), # 
+        ('spkgroup', UINT32), # NTrodeGroup this electrode belongs to - 0 is single unit, non-0 indicates a multi-trode grouping
+        ('amplrejpos', INT16), # Amplitude rejection positive value
+        ('amplrejneg', INT16), # Amplitude rejection negative value
+        ('refelecchan', UINT32), # Software reference electrode channel
+        ('unitmapping', cbMANUALUNITMAPPING * 5), # manual unit mapping
+        ('spkhoops', (cbHOOP * 4) * 5), # spike hoop sorting set  
     ]
 
 
@@ -376,6 +303,6 @@ class cbSdkTrialCont(ctypes.Structure):
         ('sample_rates', (UINT16 * cbNUM_ANALOG_CHANS)),
         ('num_samples', (UINT32 * cbNUM_ANALOG_CHANS)),
         ('time', UINT32),
-        ('samples', (c_void_p * cbNUM_ANALOG_CHANS)),
+        ('samples', (ctypes.c_void_p * cbNUM_ANALOG_CHANS)),
     ]
 

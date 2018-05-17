@@ -48,4 +48,4 @@ def test_blackrock():
     app.exec_()
 
 if __name__ == '__main__':
-    test_ni_daqmx()
+    test_blackrock()
