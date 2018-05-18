@@ -9,6 +9,7 @@ from pyqtgraph.util.mutex import Mutex
 
 
 # http://www.ifnamemain.com/posts/2013/Dec/10/c_structs_python/
+# http://scipy-cookbook.readthedocs.io/items/Ctypes.html
 
 
 """
@@ -22,13 +23,22 @@ Question for blackrock support:
 """
 
 
+p1 = 'C:/Program Files (x86)/Blackrock Microsystems/Cerebus Windows Suite'
+p2 = 'C:/Program Files (x86)/Blackrock Microsystems/Cerebus Windows Suite/cbsdk/lib'
+#~ os.environ['PATH'] = os.path.dirname(__file__) + ';' + os.environ['PATH']
+os.environ['PATH'] = p1 + ';' + p2 + ';' + os.environ['PATH']
+
 
 try:
-    cdskkdll = ctypes.windll.cbsdk
+    dll_cbsdk = ctypes.windll.LoadLibrary('cbsdkx64.dll')
     HAVE_BLACKROCK = True
 except :
-    cdskkdll = None
+    dll_cbsdk = None
     HAVE_BLACKROCK = False
+
+print('HAVE_BLACKROCK', HAVE_BLACKROCK)
+print(dll_cbsdk)
+
 
 
 class CbSdkError( Exception ):
@@ -38,7 +48,7 @@ class CbSdkError( Exception ):
         #~ err_msg = ctypes.create_string_buffer(UL.ERRSTRLEN)
         #~ errno2 = _cbw.cbGetErrMsg(errno,err_msg)
         #~ assert errno2==0, Exception('_cbw.cbGetErrMsg do not work')
-        errstr = 'CbSdkError %d: %s'%(errno,err_msg.value)                
+        errstr = 'CbSdkError %d: %s'%(errno,err_msg)                
         Exception.__init__(self, errstr)
 
 
@@ -53,8 +63,30 @@ def decorate_with_error(f):
     return func_with_error
 
 class CBSDK:
+    
+    _hack_func_name_to_num = {
+        'Open' : 23,
+        'GetChannelConfig' : 5,
+        'SetChannelConfig' : 28,
+        'SetTrialConfig' : 38,
+        'InitTrialData' : 21,
+        'GetTrialData' : 17,
+    }
+    
+    
     def __getattr__(self, attr):
-        f = getattr(cdskkdll, 'cbSdk'+attr)
+        # this is the normal way
+        # f = getattr(dll_cbsdk, 'cbSdk'+attr)
+        
+        # name of function are mangled because blackrock do no use  exrtern C
+        # but with http://www.dependencywalker.com/
+        # we can inspect the DLL and "guess" the func
+        # here the resul
+        
+        f = dll_cbsdk[self._hack_func_name_to_num[attr]]
+        #~ print(f)
+        print('call', attr)
+        
         return decorate_with_error(f)
 
 
@@ -76,41 +108,89 @@ class Blackrock(Node):
         Node.__init__(self, **kargs)
         assert HAVE_BLACKROCK, "Imposible to found DLL: cbsdk.dll"
 
-    def _configure(self,):
-        pass
-    
-    def _initialize(self, ai_channels=[], nInstance=0):
+    def _configure(self, ai_channels=[], nInstance=0, chunksize=4096):
         """
         ai_channels are blackrock channel 1-based
         
         """
+        self.ai_channels = ai_channels
+        self.nb_channel = len(self.ai_channels)
         self.nInstance = nInstance
+        
+        #~ self.chunksize = cbSdk_CONTINUOUS_DATA_SAMPLES
+        self.chunksize = chunksize
+        
+        
+        
+        self.outputs['aichannels'].spec.update({
+            'chunksize': chunksize,
+            'shape': (chunksize, self.nb_channel),
+            'dtype': 'int16',
+            'sample_rate': 30000.,
+            #~ 'nb_channel': self.nb_channel,
+            'nb_channel': cbSdk_CONTINUOUS_DATA_SAMPLES,
+            
+        })
+    
+    def _initialize(self):
+        
         cbSdk.Open(self.nInstance, CBSDKCONNECTION_DEFAULT)
         
-        # configure channels
-        for ai_channel in ai_channels:
+        for c in range(cbNUM_ANALOG_CHANS):
             chan_info = cbPKT_CHANINFO()
-            cbSdk.GetChannelConfig(self.nInstance, ctype.c_short(ai_channel), ctypes.byref(chan_info))
-            chan_info.smpgroup = 5 # continuous sampling rate (30kHz)
-            cbSdk.SetChannelConfig(self.nInstance, ctype.c_short(ai_channel), ctypes.byref(chan_info))
+            cbSdk.GetChannelConfig(self.nInstance, ctypes.c_short(c+1), ctypes.byref(chan_info))
+            print('c', c, 'chan', chan_info.chan, chan_info.proc, chan_info.bank, chan_info.label, chan_info.type, chan_info.dlen)
         
+        #~ exit()
+        
+        # configure channels
+        for ai_channel in self.ai_channels:
+            #~ print('ai_channel', ai_channel)
+            chan_info = cbPKT_CHANINFO()
+            cbSdk.GetChannelConfig(self.nInstance, ctypes.c_short(ai_channel), ctypes.byref(chan_info))
+            #~ print('chan_info',ai_channel, chan_info.smpgroup)
+            chan_info.smpfilter = 0 # no filter
+            chan_info.smpgroup = 5 # continuous sampling rate (30kHz)
+            chan_info.type = 78 # raw + continuous
+            cbSdk.SetChannelConfig(self.nInstance, ctypes.c_short(ai_channel), ctypes.byref(chan_info))
+            #~ print('chan_info',ai_channel, chan_info.smpgroup)
+        
+        
+        #~
+        #~ chunksize = 4096
         # configure continuous acq
             #~ CBSDKAPI    cbSdkResult cbSdkSetTrialConfig(UINT32 self.nInstance,
                              #~ UINT32 bActive, UINT16 begchan = 0, UINT32 begmask = 0, UINT32 begval = 0,
                              #~ UINT16 endchan = 0, UINT32 endmask = 0, UINT32 endval = 0, bool bDouble = false,
                              #~ UINT32 uWaveforms = 0, UINT32 uConts = cbSdk_CONTINUOUS_DATA_SAMPLES, UINT32 uEvents = cbSdk_EVENT_DATA_SAMPLES,
                              #~ UINT32 uComments = 0, UINT32 uTrackings = 0, bool bAbsolute = false); // Configure a data collection trial
-        cbSdk.SetTrialConfig(self.nInstance, 1, 0, 0, 0, 0, 0, 0, false, 0, cbSdk_CONTINUOUS_DATA_SAMPLES, 0, 0, 0, true)
+        cbSdk.SetTrialConfig(self.nInstance, 1, 0, 0, 0, 0, 0, 0, False, 0, self.chunksize, 0, 0, 0, True)
         
         # create structure to hold the data
         # here contrary to example in CPP I create only one buffer
         # that will be sliced in continuous arrays
-        self.trial = cbSdkTrialCont()
-        self.ai_buffer = np.zeros((cbNUM_ANALOG_CHANS, cbSdk_CONTINUOUS_DATA_SAMPLES, ), dtype='int16')
+        self.trialcont = cbSdkTrialCont()
+        self.ai_buffer = np.zeros((cbNUM_ANALOG_CHANS, self.chunksize, ), dtype='int16')
+        print(self.ai_buffer.shape)
+        #~ exit()
         for i in range(cbNUM_ANALOG_CHANS):
-            arr = self._ai_buffer[i]
-            # TODO test if continuous
-            self.trial.samples[i] = np.ctypeslib.as_ctypes(arr)
+            arr = self.ai_buffer[i]
+            # self.trial.samples[i] = ctypes.cast(np.ctypeslib.as_ctypes(arr), ctypes.c_void_p)
+            #~ print(arr.flags)
+
+            addr, read_only_flag  = arr.__array_interface__['data']
+            self.trialcont.samples[i] = ctypes.c_void_p(addr)
+            #~ print(self.trial.samples[i])
+
+            
+            #~ print(arr.__array_interface__['data'])
+            #~ print(type(self.trial.samples[i]))
+            #~ print(read_only_flag )
+            #~ print(ctypes.c_void_p(addr))
+            #~ print(ctypes.cast(addr,  ctypes.c_void_p))
+            #~ print(ctypes.cast(np.ctypeslib.as_ctypes(arr), ctypes.c_void_p))
+            
+        #~ exit()
         
         self.thread = BlackrockThread(self, parent=None)
 
@@ -144,23 +224,42 @@ class BlackrockThread(QtCore.QThread):
         
         
         stream = self.node.outputs['aichannels']
-        trial = self.node.trial
+        trialcont = self.node.trialcont
         ai_buffer = self.node.ai_buffer
+        nInstance = self.node.nInstance
         
         n = 0
         while True:
+            print('n', n)
             with self.lock:
                 if not self.running:
                     break
+                    
+                #~ CBSDKAPI    cbSdkResult cbSdkInitTrialData(UINT32 nInstance, UINT32 bActive,
+                                           #~ cbSdkTrialEvent * trialevent, cbSdkTrialCont * trialcont,
+                                           #~ cbSdkTrialComment * trialcomment, cbSdkTrialTracking * trialtracking);
+            
+            #~ trialcont.count = 1
+            #~ trialcont.chan[0] = 1
+            cbSdk.InitTrialData(nInstance, 1, None, ctypes.byref(trialcont), None, None);
             
             #~ CBSDKAPI    cbSdkResult cbSdkGetTrialData(UINT32 nInstance,
                                           #~ UINT32 bActive, cbSdkTrialEvent * trialevent, cbSdkTrialCont * trialcont,
                                           #~ cbSdkTrialComment * trialcomment, cbSdkTrialTracking * trialtracking);            
             
-            cbSdk.GetTrialData(self.nInstance, 1, None, ctypes.byref(trial), None, None)
+            cbSdk.GetTrialData(nInstance, 1, None, ctypes.byref(trialcont), None, None)
+            #~ print(trialcont)
+            #~ print('yep')
+            
+            print('trialcont.count', trialcont.count, 'trialcont.time', trialcont.time, 'trialcont.num_samples', trialcont.num_samples[0])
+            print(np.ctypeslib.as_array(trialcont.num_samples))
+            print(np.ctypeslib.as_array(trialcont.sample_rates))
+            print(np.ctypeslib.as_array(trialcont.chan))
+            
             
             # since internanlly the memory layout is chanXsample we swap it
             data = ai_buffer.T.copy()
+            print('data.sum', np.sum(data))
             n += data.shape[0]
             stream.send(data, index=n)
 
@@ -178,6 +277,7 @@ register_node_type(Blackrock)
 CBSDKRESULT_SUCCESS = 0
 cbNUM_ANALOG_CHANS = 256 + 16
 cbSdk_CONTINUOUS_DATA_SAMPLES = 102400
+CBSDKCONNECTION_DEFAULT = 0
 
 
 # for convinient translation
@@ -188,9 +288,6 @@ UINT16 = ctypes.c_uint16
 INT8 = ctypes.c_int8
 UINT8 = ctypes.c_uint8
 CHAR = ctypes.c_char
-
-
-
 
 
 
@@ -294,15 +391,16 @@ class cbPKT_CHANINFO(ctypes.Structure):
         ('spkhoops', (cbHOOP * 4) * 5), # spike hoop sorting set  
     ]
 
-
+#~ print(ctypes.sizeof(cbPKT_CHANINFO))
+#~ exit()
 
 class cbSdkTrialCont(ctypes.Structure):
     _fields_ = [
-        ('count', UINT16),
-        ('chan', (UINT16 * cbNUM_ANALOG_CHANS)),
-        ('sample_rates', (UINT16 * cbNUM_ANALOG_CHANS)),
-        ('num_samples', (UINT32 * cbNUM_ANALOG_CHANS)),
-        ('time', UINT32),
-        ('samples', (ctypes.c_void_p * cbNUM_ANALOG_CHANS)),
+        ('count', UINT16), # Number of valid channels in this trial (up to cbNUM_ANALOG_CHANS)
+        ('chan', (UINT16 * cbNUM_ANALOG_CHANS)), # Channel numbers (1-based)
+        ('sample_rates', (UINT16 * cbNUM_ANALOG_CHANS)), # Current sample rate (samples per second)
+        ('num_samples', (UINT32 * cbNUM_ANALOG_CHANS)), # Number of samples
+        ('time', UINT32), # Start time for trial continuous data
+        ('samples', (ctypes.c_void_p * cbNUM_ANALOG_CHANS)), # Buffer to hold sample vectors
     ]
 

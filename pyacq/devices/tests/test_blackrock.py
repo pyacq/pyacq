@@ -6,7 +6,7 @@ import time
 
 from pyacq import create_manager
 from pyacq.devices.blackrock import Blackrock, HAVE_BLACKROCK
-
+from pyacq.viewers import QOscilloscope
 
 from pyqtgraph.Qt import QtCore, QtGui
 
@@ -19,13 +19,23 @@ def test_blackrock():
     app = QtGui.QApplication([])
 
     dev = Blackrock()
-    dev.configure()
+    dev.configure(ai_channels=[1,2,3, 4, 10, 11, 12, 13])
     dev.outputs['aichannels'].configure(protocol='tcp', interface='127.0.0.1', transfertmode='plaindata')
     dev.initialize()
-    dev.start()
     
     global n
     n = 0
+
+
+    viewer = QOscilloscope()
+    viewer.configure(with_user_dialog=True)
+    viewer.input.connect(dev.output)
+    viewer.initialize()
+    viewer.show()
+    #~ viewer.params['decimation_method'] = 'min_max'
+    
+    dev.start()
+    #~ viewer.start()
     
     def terminate():
         global n
@@ -43,7 +53,7 @@ def test_blackrock():
     # start  and stop 3 times
     timer = QtCore.QTimer(singleShot=False, interval=1000)
     timer.timeout.connect(terminate)
-    timer.start()
+    #~ timer.start()
 
     app.exec_()
 
