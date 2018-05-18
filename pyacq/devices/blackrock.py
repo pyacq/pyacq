@@ -117,8 +117,8 @@ class Blackrock(Node):
         self.nb_channel = len(self.ai_channels)
         self.nInstance = nInstance
         
-        #~ self.chunksize = cbSdk_CONTINUOUS_DATA_SAMPLES
-        self.chunksize = chunksize
+        self.chunksize = cbSdk_CONTINUOUS_DATA_SAMPLES
+        #~ self.chunksize = chunksize
         
         
         
@@ -140,20 +140,29 @@ class Blackrock(Node):
             chan_info = cbPKT_CHANINFO()
             cbSdk.GetChannelConfig(self.nInstance, ctypes.c_short(c+1), ctypes.byref(chan_info))
             print('c', c, 'chan', chan_info.chan, chan_info.proc, chan_info.bank, chan_info.label, chan_info.type, chan_info.dlen)
+            print('smpgroup', chan_info.smpgroup)
         
         #~ exit()
-        
-        # configure channels
-        for ai_channel in self.ai_channels:
-            #~ print('ai_channel', ai_channel)
-            chan_info = cbPKT_CHANINFO()
-            cbSdk.GetChannelConfig(self.nInstance, ctypes.c_short(ai_channel), ctypes.byref(chan_info))
-            #~ print('chan_info',ai_channel, chan_info.smpgroup)
-            chan_info.smpfilter = 0 # no filter
-            chan_info.smpgroup = 5 # continuous sampling rate (30kHz)
-            chan_info.type = 78 # raw + continuous
-            cbSdk.SetChannelConfig(self.nInstance, ctypes.c_short(ai_channel), ctypes.byref(chan_info))
-            #~ print('chan_info',ai_channel, chan_info.smpgroup)
+
+
+        #~ for c in range(cbNUM_ANALOG_CHANS):
+            #~ chan_info = cbPKT_CHANINFO()
+            #~ cbSdk.GetChannelConfig(self.nInstance, ctypes.c_short(c+1), ctypes.byref(chan_info))
+            #~ print('c', c, 'chan', chan_info.chan, chan_info.proc, chan_info.bank, chan_info.label, chan_info.type, chan_info.dlen)
+            #~ chan_info.smpfilter = 0 # no filter
+            #~ chan_info.smpgroup = 5 # continuous sampling rate (30kHz)
+            #~ chan_info.type = 78 # raw + continuous
+            #~ cbSdk.SetChannelConfig(self.nInstance, ctypes.c_short(c+1), ctypes.byref(chan_info))
+
+        # TODO problem here smpgroup do not work properly.
+        #~ # configure channels
+        #~ for ai_channel in self.ai_channels:
+            #~ chan_info = cbPKT_CHANINFO()
+            #~ cbSdk.GetChannelConfig(self.nInstance, ctypes.c_short(ai_channel), ctypes.byref(chan_info))
+            #~ chan_info.smpfilter = 0 # no filter
+            #~ chan_info.smpgroup = 5 # continuous sampling rate (30kHz)
+            #~ chan_info.type = 78 # raw + continuous
+            #~ cbSdk.SetChannelConfig(self.nInstance, ctypes.c_short(ai_channel), ctypes.byref(chan_info))
         
         
         #~
@@ -165,6 +174,7 @@ class Blackrock(Node):
                              #~ UINT32 uWaveforms = 0, UINT32 uConts = cbSdk_CONTINUOUS_DATA_SAMPLES, UINT32 uEvents = cbSdk_EVENT_DATA_SAMPLES,
                              #~ UINT32 uComments = 0, UINT32 uTrackings = 0, bool bAbsolute = false); // Configure a data collection trial
         cbSdk.SetTrialConfig(self.nInstance, 1, 0, 0, 0, 0, 0, 0, False, 0, self.chunksize, 0, 0, 0, True)
+        #~ cbSdk.SetTrialConfig(self.nInstance, 1, 1, 0, 0, 4, 0, 0, False, 0, self.chunksize, 0, 0, 0, True)
         
         # create structure to hold the data
         # here contrary to example in CPP I create only one buffer
@@ -227,6 +237,14 @@ class BlackrockThread(QtCore.QThread):
         trialcont = self.node.trialcont
         ai_buffer = self.node.ai_buffer
         nInstance = self.node.nInstance
+
+            #~ CBSDKAPI    cbSdkResult cbSdkInitTrialData(UINT32 nInstance, UINT32 bActive,
+                                       #~ cbSdkTrialEvent * trialevent, cbSdkTrialCont * trialcont,
+                                       #~ cbSdkTrialComment * trialcomment, cbSdkTrialTracking * trialtracking);
+        
+        #~ trialcont.count = 1
+        #~ trialcont.chan[0] = 1
+        cbSdk.InitTrialData(nInstance, 1, None, ctypes.byref(trialcont), None, None)            
         
         n = 0
         while True:
@@ -235,14 +253,6 @@ class BlackrockThread(QtCore.QThread):
                 if not self.running:
                     break
                     
-                #~ CBSDKAPI    cbSdkResult cbSdkInitTrialData(UINT32 nInstance, UINT32 bActive,
-                                           #~ cbSdkTrialEvent * trialevent, cbSdkTrialCont * trialcont,
-                                           #~ cbSdkTrialComment * trialcomment, cbSdkTrialTracking * trialtracking);
-            
-            #~ trialcont.count = 1
-            #~ trialcont.chan[0] = 1
-            cbSdk.InitTrialData(nInstance, 1, None, ctypes.byref(trialcont), None, None);
-            
             #~ CBSDKAPI    cbSdkResult cbSdkGetTrialData(UINT32 nInstance,
                                           #~ UINT32 bActive, cbSdkTrialEvent * trialevent, cbSdkTrialCont * trialcont,
                                           #~ cbSdkTrialComment * trialcomment, cbSdkTrialTracking * trialtracking);            
@@ -250,7 +260,8 @@ class BlackrockThread(QtCore.QThread):
             cbSdk.GetTrialData(nInstance, 1, None, ctypes.byref(trialcont), None, None)
             #~ print(trialcont)
             #~ print('yep')
-            
+            #~ if trialcont.count==0:
+                #~ continue
             print('trialcont.count', trialcont.count, 'trialcont.time', trialcont.time, 'trialcont.num_samples', trialcont.num_samples[0])
             print(np.ctypeslib.as_array(trialcont.num_samples))
             print(np.ctypeslib.as_array(trialcont.sample_rates))
@@ -258,10 +269,10 @@ class BlackrockThread(QtCore.QThread):
             
             
             # since internanlly the memory layout is chanXsample we swap it
-            data = ai_buffer.T.copy()
-            print('data.sum', np.sum(data))
-            n += data.shape[0]
-            stream.send(data, index=n)
+            #~ data = ai_buffer.T.copy()
+            #~ print('data.sum', np.sum(data))
+            #~ n += data.shape[0]
+            #~ stream.send(data, index=n)
 
     def stop(self):
         with self.lock:
