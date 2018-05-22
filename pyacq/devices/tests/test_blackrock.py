@@ -15,11 +15,17 @@ import pytest
 
 @pytest.mark.skipif(not HAVE_BLACKROCK, reason='no have blackrock')
 def test_blackrock():
+    ai_channels = [1, ]
+    #~ ai_channels = [1,2,3, 4, 10, 11, 12, 13]
+    #~ ai_channels = list(range(16, 25))
+    #~ ai_channels = [20, 21, 22, 23]
+    
+
     # in main App
     app = QtGui.QApplication([])
 
     dev = Blackrock()
-    dev.configure(ai_channels=[1,2,3, 4, 10, 11, 12, 13])
+    dev.configure(ai_channels=ai_channels, chunksize=2*14)
     dev.outputs['aichannels'].configure(protocol='tcp', interface='127.0.0.1', transfertmode='plaindata')
     dev.initialize()
     
@@ -32,10 +38,12 @@ def test_blackrock():
     viewer.input.connect(dev.output)
     viewer.initialize()
     viewer.show()
-    #~ viewer.params['decimation_method'] = 'min_max'
+    viewer.params['scale_mode'] = 'by_channel'
+    viewer.params['xsize'] = 1
+    
     
     dev.start()
-    #~ viewer.start()
+    viewer.start()
     
     def terminate():
         global n

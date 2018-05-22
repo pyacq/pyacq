@@ -2,6 +2,7 @@ import numpy as np
 import logging
 import ctypes
 import os
+import time
 
 from ..core import Node, register_node_type, ThreadPollInput
 from pyqtgraph.Qt import QtCore, QtGui
@@ -85,7 +86,7 @@ class CBSDK:
         
         f = dll_cbsdk[self._hack_func_name_to_num[attr]]
         #~ print(f)
-        print('call', attr)
+        #~ print('call', attr)
         
         return decorate_with_error(f)
 
@@ -115,21 +116,22 @@ class Blackrock(Node):
         """
         self.ai_channels = ai_channels
         self.nb_channel = len(self.ai_channels)
+        #~ self.nb_channel = cbNUM_ANALOG_CHANS
+        #~ self.nb_channel = 1
         self.nInstance = nInstance
         
-        self.chunksize = cbSdk_CONTINUOUS_DATA_SAMPLES
-        #~ self.chunksize = chunksize
+        #~ self.chunksize = cbSdk_CONTINUOUS_DATA_SAMPLES
+        self.chunksize = chunksize
         
         
         
         self.outputs['aichannels'].spec.update({
             'chunksize': chunksize,
-            'shape': (chunksize, self.nb_channel),
+            #~ 'shape': (chunksize, self.nb_channel),
+            'shape': (-1, self.nb_channel),
             'dtype': 'int16',
             'sample_rate': 30000.,
-            #~ 'nb_channel': self.nb_channel,
-            'nb_channel': cbSdk_CONTINUOUS_DATA_SAMPLES,
-            
+            'nb_channel': self.nb_channel,
         })
     
     def _initialize(self):
@@ -139,8 +141,9 @@ class Blackrock(Node):
         for c in range(cbNUM_ANALOG_CHANS):
             chan_info = cbPKT_CHANINFO()
             cbSdk.GetChannelConfig(self.nInstance, ctypes.c_short(c+1), ctypes.byref(chan_info))
-            print('c', c, 'chan', chan_info.chan, chan_info.proc, chan_info.bank, chan_info.label, chan_info.type, chan_info.dlen)
-            print('smpgroup', chan_info.smpgroup)
+            print('c', c, 'chan', chan_info.chan, 'chid',chan_info.chid, chan_info.proc, chan_info.bank, 
+                        chan_info.label, 'type', chan_info.type,
+                        'ainpopts', chan_info.ainpopts, 'smpgroup', chan_info.smpgroup)
         
         #~ exit()
 
@@ -150,18 +153,24 @@ class Blackrock(Node):
             #~ cbSdk.GetChannelConfig(self.nInstance, ctypes.c_short(c+1), ctypes.byref(chan_info))
             #~ print('c', c, 'chan', chan_info.chan, chan_info.proc, chan_info.bank, chan_info.label, chan_info.type, chan_info.dlen)
             #~ chan_info.smpfilter = 0 # no filter
-            #~ chan_info.smpgroup = 5 # continuous sampling rate (30kHz)
-            #~ chan_info.type = 78 # raw + continuous
+            #~ chan_info.smpgroup = 0 # continuous sampling rate (30kHz)
+            #~ # chan_info.type = 78 # raw + continuous
             #~ cbSdk.SetChannelConfig(self.nInstance, ctypes.c_short(c+1), ctypes.byref(chan_info))
 
-        # TODO problem here smpgroup do not work properly.
         #~ # configure channels
         #~ for ai_channel in self.ai_channels:
             #~ chan_info = cbPKT_CHANINFO()
             #~ cbSdk.GetChannelConfig(self.nInstance, ctypes.c_short(ai_channel), ctypes.byref(chan_info))
             #~ chan_info.smpfilter = 0 # no filter
-            #~ chan_info.smpgroup = 5 # continuous sampling rate (30kHz)
-            #~ chan_info.type = 78 # raw + continuous
+            #chan_info.smpgroup = 5 # continuous sampling rate (30kHz)
+            #~ #chan_info.type = 78
+            #~ #chan_info.ainpopts = 320
+            #~ #cbAINP_RAWSTREAM           0x00000040
+            #chan_info.ainpopts = 0x00000040
+            #~ chan_info.smpgroup = 0 # continuous sampling rate (30kHz)
+            #~ chan_info.type = 74
+            #~ chan_info.ainpopts = 256
+            
             #~ cbSdk.SetChannelConfig(self.nInstance, ctypes.c_short(ai_channel), ctypes.byref(chan_info))
         
         
@@ -184,7 +193,7 @@ class Blackrock(Node):
         print(self.ai_buffer.shape)
         #~ exit()
         for i in range(cbNUM_ANALOG_CHANS):
-            arr = self.ai_buffer[i]
+            arr = self.ai_buffer[i,: ]
             # self.trial.samples[i] = ctypes.cast(np.ctypeslib.as_ctypes(arr), ctypes.c_void_p)
             #~ print(arr.flags)
 
@@ -237,6 +246,10 @@ class BlackrockThread(QtCore.QThread):
         trialcont = self.node.trialcont
         ai_buffer = self.node.ai_buffer
         nInstance = self.node.nInstance
+        nb_channel = self.node.nb_channel
+        
+        #~ chan_select = np.array(ai_channels, dtype=int) - 1
+        
 
             #~ CBSDKAPI    cbSdkResult cbSdkInitTrialData(UINT32 nInstance, UINT32 bActive,
                                        #~ cbSdkTrialEvent * trialevent, cbSdkTrialCont * trialcont,
@@ -244,15 +257,17 @@ class BlackrockThread(QtCore.QThread):
         
         #~ trialcont.count = 1
         #~ trialcont.chan[0] = 1
-        cbSdk.InitTrialData(nInstance, 1, None, ctypes.byref(trialcont), None, None)            
-        
+        #~ cbSdk.InitTrialData(nInstance, 1, None, ctypes.byref(trialcont), None, None)
+        #~ cbSdk.InitTrialData(nInstance, 1, None, ctypes.byref(trialcont), None, None)
         n = 0
         while True:
-            print('n', n)
+            #~ print('n', n)
             with self.lock:
                 if not self.running:
                     break
-                    
+            
+            cbSdk.InitTrialData(nInstance, 1, None, ctypes.byref(trialcont), None, None)
+            
             #~ CBSDKAPI    cbSdkResult cbSdkGetTrialData(UINT32 nInstance,
                                           #~ UINT32 bActive, cbSdkTrialEvent * trialevent, cbSdkTrialCont * trialcont,
                                           #~ cbSdkTrialComment * trialcomment, cbSdkTrialTracking * trialtracking);            
@@ -263,16 +278,27 @@ class BlackrockThread(QtCore.QThread):
             #~ if trialcont.count==0:
                 #~ continue
             print('trialcont.count', trialcont.count, 'trialcont.time', trialcont.time, 'trialcont.num_samples', trialcont.num_samples[0])
-            print(np.ctypeslib.as_array(trialcont.num_samples))
-            print(np.ctypeslib.as_array(trialcont.sample_rates))
-            print(np.ctypeslib.as_array(trialcont.chan))
+            if trialcont.count==0:
+                time.sleep(0.001)
+                continue
+            
+            print(np.ctypeslib.as_array(trialcont.num_samples)[:10])
+            #~ print(np.ctypeslib.as_array(trialcont.sample_rates)[:10])
+            print(np.ctypeslib.as_array(trialcont.chan)[:10])
+            #~ print(ai_buffer[0:10, :20])
             
             
             # since internanlly the memory layout is chanXsample we swap it
             #~ data = ai_buffer.T.copy()
-            #~ print('data.sum', np.sum(data))
-            #~ n += data.shape[0]
-            #~ stream.send(data, index=n)
+            #~ data = ai_buffer[:, :trialcont.num_samples[0]].T.astype('float32')
+            #~ data = ai_buffer[:nb_channel, : trialcont.num_samples[0]].T.copy()
+            data = ai_buffer[:nb_channel, : trialcont.num_samples[0]].T.copy()
+            #~ data = ai_buffer[: trialcont.num_samples[0], 0].reshape(-1, 1)
+            print('data.shape', data.shape)
+            print('data.sum', np.sum(data))
+            n += data.shape[0]
+            stream.send(data, index=n)
+            print('*'*5)
 
     def stop(self):
         with self.lock:
@@ -286,7 +312,8 @@ register_node_type(Blackrock)
 # constant and Struct
 
 CBSDKRESULT_SUCCESS = 0
-cbNUM_ANALOG_CHANS = 256 + 16
+#~ cbNUM_ANALOG_CHANS = 256 + 16
+cbNUM_ANALOG_CHANS = 150
 cbSdk_CONTINUOUS_DATA_SAMPLES = 102400
 CBSDKCONNECTION_DEFAULT = 0
 
@@ -303,6 +330,7 @@ CHAR = ctypes.c_char
 
 
 class cbSCALING(ctypes.Structure):
+    _pack_ = 1
     _fields_ = [
         ('digmin', INT16),
         ('digmax', INT16),
@@ -313,6 +341,7 @@ class cbSCALING(ctypes.Structure):
     ]
 
 class cbFILTDESC(ctypes.Structure):
+    _pack_ = 1
     _fields_ = [
         ('label', CHAR*16), 
         ('hpfreq', UINT32), # high-pass corner frequency in milliHertz
@@ -324,6 +353,7 @@ class cbFILTDESC(ctypes.Structure):
     ]
 
 class cbMANUALUNITMAPPING(ctypes.Structure):
+    _pack_ = 1
     _fields_ = [
         ('nOverride', INT16),
         ('afOrigin', INT16*3),
@@ -333,6 +363,7 @@ class cbMANUALUNITMAPPING(ctypes.Structure):
     ]
 
 class cbHOOP(ctypes.Structure):
+    _pack_ = 1
     _fields_ = [
         ('valid', UINT16),
         ('time', INT16),
@@ -342,6 +373,7 @@ class cbHOOP(ctypes.Structure):
 
 
 class cbPKT_CHANINFO(ctypes.Structure):
+    _pack_ = 1
     _fields_ = [
         ('time', UINT32), # system clock timestamp
         ('chid', UINT16), # 0x8000
