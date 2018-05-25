@@ -5,7 +5,7 @@
 import time
 
 from pyacq import create_manager
-from pyacq.devices.blackrock import Blackrock, HAVE_BLACKROCK
+from pyacq.devices.blackrock import Blackrock, open_sbSdk_dll, cbSdkConnection, CbSdkError
 from pyacq.viewers import QOscilloscope
 
 from pyqtgraph.Qt import QtCore, QtGui
@@ -13,10 +13,31 @@ from pyqtgraph.Qt import QtCore, QtGui
 import pytest
 
 
-@pytest.mark.skipif(not HAVE_BLACKROCK, reason='no have blackrock')
+def test_open_sbSdk_dll():
+    #~ cbSdk = open_sbSdk_dll(dll_path='c:/')
+    #~ assert cbSdk is None
+    
+    cbSdk = open_sbSdk_dll(dll_path=None)
+    nInstance=0
+    nInPort=51002
+    nOutPort=51001
+    nRecBufSize=4096*2048
+    szInIP=b"192.168.137.1"
+    szOutIP=b"192.168.137.128"
+    
+    con = cbSdkConnection(nInPort, nOutPort,nRecBufSize, 0,
+                        szInIP, szOutIP)
+    cbSdk.Open(0, 0, con)
+    cbSdk.Close(0)
+    with pytest.raises(CbSdkError):
+        cbSdk.Close(0)
+    
+
+
+#~ @pytest.mark.skipif()
 def test_blackrock():
-    ai_channels = [1, ]
-    #~ ai_channels = [1,2,3, 4, 10, 11, 12, 13]
+    #~ ai_channels = [1, ]
+    ai_channels = [1,2,3, 4, 10, 11, 12, 13]
     #~ ai_channels = list(range(16, 25))
     #~ ai_channels = [20, 21, 22, 23]
     #~ ai_channels = [1, 2, 3, 4, 5, 6, 7, 8, 
@@ -36,8 +57,9 @@ def test_blackrock():
     
     dev = Blackrock()
     
-    dev.configure(ai_channels=ai_channels, nInstance=0, apply_config=True)
-    #~ dev.configure(ai_channels=ai_channels, nInstance=0, apply_config=False)
+    #~ dev.configure(nInstance=0, ai_channels=ai_channels,  apply_config=True)
+    #~ dev.configure(nInstance=0,szInIP=b"192.168.137.1", ai_channels=ai_channels, apply_config=True)
+    dev.configure(nInstance=0, connection_type='central', ai_channels=ai_channels,  apply_config=False)
     dev.outputs['aichannels'].configure(protocol='tcp', interface='127.0.0.1', transfertmode='plaindata')
     dev.initialize()
     
@@ -52,7 +74,7 @@ def test_blackrock():
     viewer.show()
     viewer.params['scale_mode'] = 'by_channel'
     viewer.params['xsize'] = 1
-    viewer.params['refresh_interval'] = 500
+    viewer.params['refresh_interval'] = 100
     
     
     dev.start()
@@ -85,4 +107,5 @@ def test_blackrock():
     app.exec_()
 
 if __name__ == '__main__':
+    #~ test_open_sbSdk_dll()
     test_blackrock()

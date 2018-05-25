@@ -24,184 +24,103 @@ Question for blackrock support:
 
 
 TODO:
-  * class DLL multi version:
-    * constant
-    * pointer to function
-    * path
   * apply_config = check channel number
-  * force adress
   * connection choice (UDP, central)
   * debug UDP only
+  * argtypes to be safe on C call
     
 """
 
 
 
-#~ p1 = 'C:/Program Files (x86)/Blackrock Microsystems/Cerebus Windows Suite'
-#~ p2 = 'C:/Program Files (x86)/Blackrock Microsystems/Cerebus Windows Suite/cbsdk/lib'
-p1 = 'C:/Program Files (x86)/Blackrock Microsystems/NeuroPort Windows Suite/cbsdk/lib'
-p2 = 'C:/Program Files (x86)/Blackrock Microsystems/NeuroPort Windows Suite'
-#~ os.environ['PATH'] = os.path.dirname(__file__) + ';' + os.environ['PATH']
-os.environ['PATH'] = p1 + ';' + p2 + ';' + os.environ['PATH']
-
-# TODO make a clas  for DLL load with path.
-
-
-try:
-    dll_cbsdk = ctypes.windll.LoadLibrary('cbsdkx64.dll')
-    HAVE_BLACKROCK = True
-except :
-    dll_cbsdk = None
-    HAVE_BLACKROCK = False
-
-print('HAVE_BLACKROCK', HAVE_BLACKROCK)
-print(dll_cbsdk)
-
-
-
-class CbSdkError( Exception ):
-    def __init__(self, errno):
-        self.errno = errno
-        err_msg = ''
-        #~ err_msg = ctypes.create_string_buffer(UL.ERRSTRLEN)
-        #~ errno2 = _cbw.cbGetErrMsg(errno,err_msg)
-        #~ assert errno2==0, Exception('_cbw.cbGetErrMsg do not work')
-        errstr = 'CbSdkError %d: %s'%(errno,err_msg)                
-        Exception.__init__(self, errstr)
-
-
-
-
-def decorate_with_error(f):
-    def func_with_error(*args):
-        errno = f(*args)
-        if errno != CBSDKRESULT_SUCCESS:
-            raise CbSdkError(errno)
-        return errno
-    return func_with_error
-
-class CBSDK:
-    
-    _hack_func_name_to_num = {
-        # This is for version 7.0.3 and 6.05.04
-        'Open' : 23,
-        'Close' : 3,
-        'GetChannelConfig' : 5,
-        'SetChannelConfig' : 28,
-        'SetTrialConfig' : 38,
-        'InitTrialData' : 21,
-        'GetTrialData' : 17,
-
-        #~ # This is for version 6.04
-        #~ 'Open' : 21,
-        #~ 'Close' : 3,
-        #~ 'GetChannelConfig' : 5,
-        #~ 'SetChannelConfig' : 26,
-        #~ 'SetTrialConfig' : 36,
-        #~ 'InitTrialData' : 19,
-        #~ 'GetTrialData' : 15,
-        
-        
-    }
-    
-    def __getattr__(self, attr):
-        # this is the normal way
-        # f = getattr(dll_cbsdk, 'cbSdk'+attr)
-        
-        # name of function are mangled because blackrock do no use  exrtern C
-        # but with http://www.dependencywalker.com/
-        # we can inspect the DLL and "guess" the func
-        # here the resul
-        
-        f = dll_cbsdk[self._hack_func_name_to_num[attr]]
-        #~ print(f)
-        #~ print('call', attr)
-        
-        return decorate_with_error(f)
-
-
-if HAVE_BLACKROCK:
-    cbSdk = CBSDK()
 
 
 
 class Blackrock(Node):
-    """Simple wrapper on top of cbsdk.dll provide by BlackRock micro system.
-    To get signal for the CB system.
+    """
+    None on top the cbSdk.dll
+    This grab only the continuous signal for the moment of aichannels.
+    Spike/event are not streamed here.
+    But to come soon.
+    
+    Connection are done with UDP directly on the NSP so several instance
+    of this Node can run on the same or sevral PCs.
     """
     
     _output_specs = {
         'aichannels': {}
     }
     
-    def __init__(self, **kargs):
+    def __init__(self, dll_path=None, version='6.5.4', **kargs):
         Node.__init__(self, **kargs)
-        assert HAVE_BLACKROCK, "Imposible to found DLL: cbsdk.dll"
+        self.cbSdk = open_sbSdk_dll(dll_path=dll_path, version=version)
+        assert self.cbSdk is not None, "Imposible to found DLL: cbsdkx64.dll"
 
-    def _configure(self, ai_channels=[], nInstance=0, chunksize=4096, apply_config=False):
+    def _configure(self, nInstance=0, connection_type='udp',
+            nInPort=51002, nOutPort=51001, nRecBufSize=4096*2048,
+            szInIP=b"192.168.137.1", szOutIP=b"192.168.137.128",
+            ai_channels=[], apply_config=False):
         """
+        The following variable come from the blacrock dialect
+        nInstance
+        connection_type 'udp' or 'central' or 'default'
+        nInPort
+        nOutPort
+        nRecBufSize
+        szInIP
+        szOutIP
+        
         ai_channels are blackrock channel 1-based
         
         apply_config: True/False if True it apply config to ai_channels.
                     False use NSP config done by user with "Central" software.
         
         """
+        # the following variable come from the blacrock dialect
+        self.nInstance = nInstance
+        self.connection_type = connection_type
+        self.nInPort = nInPort
+        self.nOutPort = nOutPort
+        self.nRecBufSize = nRecBufSize
+        self.szInIP = szInIP
+        self.szOutIP = szOutIP
+        
+        # here it is my own
         self.ai_channels = ai_channels
         self.nb_channel = len(self.ai_channels)
-        #~ self.nb_channel = cbNUM_ANALOG_CHANS
-        #~ self.nb_channel = 1
-        self.nInstance = nInstance
-        
-        #~ self.chunksize = cbSdk_CONTINUOUS_DATA_SAMPLES
-        self.chunksize = chunksize
-        
         self.apply_config = apply_config
         
         
         self.outputs['aichannels'].spec.update({
-            'chunksize': chunksize,
+            'chunksize': 300, # TODO check this
             #~ 'shape': (chunksize, self.nb_channel),
             'shape': (-1, self.nb_channel),
             'dtype': 'int16',
             'sample_rate': 30000.,
             'nb_channel': self.nb_channel,
         })
+        
     
     def _initialize(self):
+        cbSdk = self.cbSdk
         
-        con = cbSdkConnection(nInPort=51002,
-                       nOutPort=51001,
-                       nRecBufSize=4096*2048,
-                       szInIP=b"192.168.137.2",
-                       szOutIP=b"192.168.137.128")
-        print(con)
-        print(con.szInIP)
-        
-        print(ctypes.sizeof(con))
-        #~ print(con.nInPort, con.szOutIP)
-        #~ cbSdk.Open(self.nInstance, CBSDKCONNECTION_DEFAULT)
-        #~ cbSdk.Open(self.nInstance, CBSDKCONNECTION_DEFAULT, ctypes.byref(con))
-        #~ cbSdk.Open(self.nInstance, CBSDKCONNECTION_DEFAULT, con)
-        #~ cbSdk.Open(self.nInstance, CBSDKCONNECTION_CENTRAL)
-        #~ cbSdk.Open(self.nInstance, CBSDKCONNECTION_UDP)
-        #~ print(dll_cbsdk[23].argtypes)
-        #~ Open = dll_cbsdk[23]
-        #~ cbSdk.Open(self.nInstance, CBSDKCONNECTION_UDP, con)
-        #~ Open.argtpes = [ctypes.c_int32, ctypes.c_int32, cbSdkConnection]
-        #~ cbSdk.Open(ctypes.c_uint32(self.nInstance), ctypes.c_int64(CBSDKCONNECTION_UDP), con)
-        cbSdk.Open(ctypes.c_uint32(self.nInstance), ctypes.c_int32(CBSDKCONNECTION_UDP), con)
-        #~ exit()
+        con = cbSdkConnection(self.nInPort, self.nOutPort,self.nRecBufSize, 0,
+                        self.szInIP, self.szOutIP)
+        # print(ctypes.sizeof(con)) this should be 28 when read .h but in factc it is 32
+        conv = { 'default':0, 'central':1, 'udp': 2}
+        con_type = ctypes.c_int32(conv.get(self.connection_type, 0))
+        cbSdk.Open(ctypes.c_uint32(self.nInstance),con_type, con)
 
         
         self.nb_available_ai_channel = None
-        for c in range(cbNUM_ANALOG_CHANS):
+        for c in range(cbSdk.cbNUM_ANALOG_CHANS):
             chan_info = cbPKT_CHANINFO()
             try:
                 cbSdk.GetChannelConfig(self.nInstance, ctypes.c_short(c+1), ctypes.byref(chan_info))
-                print('c', c, 'chan', chan_info.chan, 'chid',chan_info.chid, chan_info.proc, chan_info.bank, 
-                            chan_info.label, 'type', chan_info.type,
-                            'ainpopts', chan_info.ainpopts, 'smpgroup', chan_info.smpgroup,
-                            'ainpcaps', chan_info.ainpcaps)
+                #~ print('c', c, 'chan', chan_info.chan, 'chid',chan_info.chid, chan_info.proc, chan_info.bank, 
+                            #~ chan_info.label, 'type', chan_info.type,
+                            #~ 'ainpopts', chan_info.ainpopts, 'smpgroup', chan_info.smpgroup,
+                            #~ 'ainpcaps', chan_info.ainpcaps)
             except:
                 self.nb_available_ai_channel = c
                 break
@@ -209,17 +128,8 @@ class Blackrock(Node):
         #~ print('nb_available_ai_channel', self.nb_available_ai_channel)
         #~ exit()
 
-
-        #~ for c in range(cbNUM_ANALOG_CHANS):
-            #~ chan_info = cbPKT_CHANINFO()
-            #~ cbSdk.GetChannelConfig(self.nInstance, ctypes.c_short(c+1), ctypes.byref(chan_info))
-            #~ print('c', c, 'chan', chan_info.chan, chan_info.proc, chan_info.bank, chan_info.label, chan_info.type, chan_info.dlen)
-            #~ chan_info.smpfilter = 0 # no filter
-            #~ chan_info.smpgroup = 0 # continuous sampling rate (30kHz)
-            #~ # chan_info.type = 78 # raw + continuous
-            #~ cbSdk.SetChannelConfig(self.nInstance, ctypes.c_short(c+1), ctypes.byref(chan_info))
-        
         if self.apply_config:
+            # TODO debug this : this do not work in all situation ?!?
             # configure channels
             for ai_channel in self.ai_channels:
                 chan_info = cbPKT_CHANINFO()
@@ -249,50 +159,29 @@ class Blackrock(Node):
 #define  cbAINP_RAWSTREAM_ENABLED   0x00000040      // Raw data stream enabled
 #define  cbAINP_OFFSET_CORRECT      0x00000100      // Offset correction mode (0-disabled 1-enabled)
         
-        #~ exit()
-            
         
-        
-        #~
-        #~ chunksize = 4096
-        # configure continuous acq
-            #~ CBSDKAPI    cbSdkResult cbSdkSetTrialConfig(UINT32 self.nInstance,
-                             #~ UINT32 bActive, UINT16 begchan = 0, UINT32 begmask = 0, UINT32 begval = 0,
-                             #~ UINT16 endchan = 0, UINT32 endmask = 0, UINT32 endval = 0, bool bDouble = false,
-                             #~ UINT32 uWaveforms = 0, UINT32 uConts = cbSdk_CONTINUOUS_DATA_SAMPLES, UINT32 uEvents = cbSdk_EVENT_DATA_SAMPLES,
-                             #~ UINT32 uComments = 0, UINT32 uTrackings = 0, bool bAbsolute = false); // Configure a data collection trial
-        cbSdk.SetTrialConfig(self.nInstance, 1, 0, 0, 0, 0, 0, 0, False, 0, cbSdk_CONTINUOUS_DATA_SAMPLES, 0, 0, 0, True)
-        #~ cbSdk.SetTrialConfig(self.nInstance, 1, 0, 0, 0, 0, 0, 0, False, 0, self.chunksize, 0, 0, 0, True)
-        
-        #~ cbSdk.SetTrialConfig(self.nInstance, 1, 1, 0, 0, 4, 0, 0, False, 0, self.chunksize, 0, 0, 0, True)
+        #~ CBSDKAPI    cbSdkResult cbSdkSetTrialConfig(UINT32 self.nInstance,
+                         #~ UINT32 bActive, UINT16 begchan = 0, UINT32 begmask = 0, UINT32 begval = 0,
+                         #~ UINT16 endchan = 0, UINT32 endmask = 0, UINT32 endval = 0, bool bDouble = false,
+                         #~ UINT32 uWaveforms = 0, UINT32 uConts = cbSdk_CONTINUOUS_DATA_SAMPLES, UINT32 uEvents = cbSdk_EVENT_DATA_SAMPLES,
+                         #~ UINT32 uComments = 0, UINT32 uTrackings = 0, bool bAbsolute = false); // Configure a data collection trial
+        cbSdk.SetTrialConfig(self.nInstance, 1, 0, 0, 0, 0, 0, 0, False, 0, cbSdk.cbSdk_CONTINUOUS_DATA_SAMPLES, 0, 0, 0, True)
         
         # create structure to hold the data
-        # here contrary to example in CPP I create only one buffer
-        # that will be sliced in continuous arrays
+        # here contrary to example in CPP I create only one big continuous buffer
+        # that will be sliced in continuous arrays with numpy
         
-        self.trialcont = cbSdkTrialCont()
-        self.ai_buffer = np.zeros((cbNUM_ANALOG_CHANS, self.chunksize, ), dtype='int16')
-        print(self.ai_buffer.shape)
-        #~ exit()
-        for i in range(cbNUM_ANALOG_CHANS):
+        self.trialcont = cbSdk.cbSdkTrialCont()
+        self.ai_buffer = np.zeros((cbSdk.cbNUM_ANALOG_CHANS, cbSdk.cbSdk_CONTINUOUS_DATA_SAMPLES, ), dtype='int16')
+        
+        for i in range(cbSdk.cbNUM_ANALOG_CHANS):
             arr = self.ai_buffer[i,: ]
             # self.trial.samples[i] = ctypes.cast(np.ctypeslib.as_ctypes(arr), ctypes.c_void_p)
             #~ print(arr.flags)
-
+            
             addr, read_only_flag  = arr.__array_interface__['data']
             self.trialcont.samples[i] = ctypes.c_void_p(addr)
-            #~ print(self.trial.samples[i])
-
             
-            #~ print(arr.__array_interface__['data'])
-            #~ print(type(self.trial.samples[i]))
-            #~ print(read_only_flag )
-            #~ print(ctypes.c_void_p(addr))
-            #~ print(ctypes.cast(addr,  ctypes.c_void_p))
-            #~ print(ctypes.cast(np.ctypeslib.as_ctypes(arr), ctypes.c_void_p))
-            
-        #~ exit()
-        
         self.thread = BlackrockThread(self, parent=None)
 
     def _start(self):
@@ -301,14 +190,9 @@ class Blackrock(Node):
     def _stop(self):
         self.thread.stop()
         self.thread.wait()
-        
-        
 
     def _close(self):
         cbSdk.Close(self.nInstance)
-
-
-
 
 class BlackrockThread(QtCore.QThread):
     def __init__(self, node, parent=None):
@@ -322,25 +206,12 @@ class BlackrockThread(QtCore.QThread):
         with self.lock:
             self.running = True
         
-        
-        
         stream = self.node.outputs['aichannels']
         trialcont = self.node.trialcont
         ai_buffer = self.node.ai_buffer
         nInstance = self.node.nInstance
         nb_channel = self.node.nb_channel
-        
-        #~ chan_select = np.array(ai_channels, dtype=int) - 1
-        
-
-            #~ CBSDKAPI    cbSdkResult cbSdkInitTrialData(UINT32 nInstance, UINT32 bActive,
-                                       #~ cbSdkTrialEvent * trialevent, cbSdkTrialCont * trialcont,
-                                       #~ cbSdkTrialComment * trialcomment, cbSdkTrialTracking * trialtracking);
-        
-        #~ trialcont.count = 1
-        #~ trialcont.chan[0] = 1
-        #~ cbSdk.InitTrialData(nInstance, 1, None, ctypes.byref(trialcont), None, None)
-        #~ cbSdk.InitTrialData(nInstance, 1, None, ctypes.byref(trialcont), None, None)
+        cbSdk = self.node.cbSdk
         
         n = 0
         next_timestamp = None
@@ -351,14 +222,13 @@ class BlackrockThread(QtCore.QThread):
                 if not self.running:
                     break
             
-            
             cbSdk.InitTrialData(nInstance, 1, None, ctypes.byref(trialcont), None, None)
             #~ print('INIT trialcont.count', trialcont.count)
             #~ CBSDKAPI    cbSdkResult cbSdkGetTrialData(UINT32 nInstance,
                                           #~ UINT32 bActive, cbSdkTrialEvent * trialevent, cbSdkTrialCont * trialcont,
                                           #~ cbSdkTrialComment * trialcomment, cbSdkTrialTracking * trialtracking);            
             
-            print(' trialcont.count',  trialcont.count)
+            #~ print(' trialcont.count',  trialcont.count)
             
             if trialcont.count==0:
                 time.sleep(0.003)
@@ -377,7 +247,7 @@ class BlackrockThread(QtCore.QThread):
                 time.sleep(0.003)
                 continue
             
-            print(num_samples)
+            #~ print(num_samples)
             
             cbSdk.GetTrialData(nInstance, 1, None, ctypes.byref(trialcont), None, None)
             #~ print(trialcont)
@@ -393,16 +263,16 @@ class BlackrockThread(QtCore.QThread):
             t0 = t1
             
             num_samples = np.ctypeslib.as_array(trialcont.num_samples)[:nb_channel]
-            print(num_samples)
+            #~ print(num_samples)
             #~ assert np.all(num_samples[0]==num_samples)
             
             num_sample = num_samples[0]
             #~ print('num_sample', num_sample)
             #~ print(ai_buffer.shape)
             
-            print(np.ctypeslib.as_array(trialcont.num_samples)[:10])
-            print(np.ctypeslib.as_array(trialcont.sample_rates)[:10])
-            print(np.ctypeslib.as_array(trialcont.chan)[:10])
+            #~ print(np.ctypeslib.as_array(trialcont.num_samples)[:10])
+            #~ print(np.ctypeslib.as_array(trialcont.sample_rates)[:10])
+            #~ print(np.ctypeslib.as_array(trialcont.chan)[:10])
             #~ print(ai_buffer[0:10, :20])
             
             
@@ -425,7 +295,7 @@ class BlackrockThread(QtCore.QThread):
             
             print('*'*5)
             #~ cbSdk.InitTrialData(nInstance, 1, None, ctypes.byref(trialcont), None, None)
-            
+            time.sleep(0)
 
     def stop(self):
         with self.lock:
@@ -436,20 +306,140 @@ class BlackrockThread(QtCore.QThread):
 register_node_type(Blackrock)
 
 
+class CbSdkError(Exception):
+    """
+    This handle properly exception woth error message.
+    """
+    def __init__(self, errno, func_name=''):
+        self.errno = errno
+        self.func_name = func_name
+        err_msg = error_message_dict.get(errno, 'Unkown Error message')
+        errstr = 'CbSdkError %d: %s %s'%(errno, self.func_name, err_msg)                
+        Exception.__init__(self, errstr)
+
+
+def open_sbSdk_dll(dll_path=None, version='6.5.4'):
+    """
+    Try to open cbsdkx64.dll.
+    This DLL is C++ and not C compliant. So standard ctypes call do
+    not work because function names are mangled.
+    
+    With http://www.dependencywalker.com/ we can inspect the DLL and 
+    call func by index.
+    
+    So actual implementation only support some version: 7.0.3, 6.05.04 and 6.04
+    To support more version we need to "dependencywalker" again
+    
+    Path are searched in:
+      * C:/Program Files (x86)/Blackrock Microsystems/Cerebus Windows Suite
+      * or C:/Program Files (x86)/Blackrock Microsystems/NeuroPort Windows Suite
+    
+    This function do not retun the ctypes DLL itself but a mapper
+    that do the same with correct error message.
+    
+    Usage:
+    cbSdk = open_sbSdk_dll()
+    cbSdk.Open(...)
+    cbSdk.Close(...)
+    
+    """
+    if dll_path is None:
+        dll_path = 'C:/Program Files (x86)/Blackrock Microsystems/NeuroPort Windows Suite'
+        if not os.path.exists(dll_path):
+            dll_path = 'C:/Program Files (x86)/Blackrock Microsystems/Cerebus Windows Suite'
+    if not os.path.exists(dll_path):
+        return None
+    p1, p2 = dll_path, dll_path + '/cbsdk/lib'
+    os.environ['PATH'] = p1 + ';' + p2 + ';' + os.environ['PATH']
+
+    
+    try:
+        dll_cbsdk = ctypes.windll.LoadLibrary('cbsdkx64.dll')
+    except :
+        return None
+
+    
+    def decorate_with_error(f, func_name):
+        #~ print('decorate_with_error', f, func_name)
+        def func_with_error(*args):
+            #~ print('DLL function call', func_name, args)
+            errno = f(*args)
+            # CBSDKRESULT_SUCCESS = 0
+            if errno != 0:
+                raise CbSdkError(errno, func_name)
+            return errno
+        return func_with_error
+    
+    func_name_to_func_index = {
+        '6.5.4': {
+            'Open' : 23,
+            'Close' : 3,
+            'GetChannelConfig' : 5,
+            'SetChannelConfig' : 28,
+            'SetTrialConfig' : 38,
+            'InitTrialData' : 21,
+            'GetTrialData' : 17,
+        },
+        '6.4': {
+            'Open' : 21,
+            'Close' : 3,
+            'GetChannelConfig' : 5,
+            'SetChannelConfig' : 26,
+            'SetTrialConfig' : 36,
+            'InitTrialData' : 19,
+            'GetTrialData' : 15,
+        }
+    }
+    func_name_to_func_index['7.0.3'] = func_name_to_func_index['6.5.4']
+    
+    if version not in func_name_to_func_index:
+        return None
+    
+    class CBSDK_mapper:
+        def __init__(self, version):
+            for name, ind in func_name_to_func_index[version].items():
+                func = dll_cbsdk[ind]
+                # TODO argtypes for some functions here
+                func_decorated = decorate_with_error(func, name)
+                setattr(self, name, func_decorated)
+            
+            if version in ('7.0.3', ):
+                self.cbNUM_ANALOG_CHANS = 256 + 16
+            elif version in ('6.5.4', '6.4'):
+                self.cbNUM_ANALOG_CHANS = 128 + 16
+            
+            self.cbSdk_CONTINUOUS_DATA_SAMPLES = 102400
+
+
+            class cbSdkTrialCont_(ctypes.Structure):
+                _fields_ = [
+                    ('count', UINT16), # Number of valid channels in this trial (up to cbNUM_ANALOG_CHANS)
+                    ('chan', (UINT16 * self.cbNUM_ANALOG_CHANS)), # Channel numbers (1-based)
+                    ('sample_rates', (UINT16 * self.cbNUM_ANALOG_CHANS)), # Current sample rate (samples per second)
+                    ('num_samples', (UINT32 * self.cbNUM_ANALOG_CHANS)), # Number of samples
+                    ('time', UINT32), # Start time for trial continuous data
+                    ('samples', (ctypes.c_void_p * self.cbNUM_ANALOG_CHANS)), # Buffer to hold sample vectors
+                ]
+            self.cbSdkTrialCont = cbSdkTrialCont_
+
+    
+    cbSdk = CBSDK_mapper(version)
+    
+    return cbSdk
+
 # constant and Struct
 
-CBSDKRESULT_SUCCESS = 0
-# TODO do this dynamicaly
-#cbNUM_ANALOG_CHANS = 256 + 16 # this is version 7.0.x
-cbNUM_ANALOG_CHANS = 128 + 16 # this is version 6.5.4
-#~ cbNUM_ANALOG_CHANS = 150
-cbSdk_CONTINUOUS_DATA_SAMPLES = 102400
+# TODO do this dynamicaly in open_dll
 
-CBSDKCONNECTION_DEFAULT = 0 # Try Central then UDP
-CBSDKCONNECTION_CENTRAL = 1 # Use Central
-CBSDKCONNECTION_UDP = 2 # Use UDP
-CBSDKCONNECTION_CLOSED = 3 # Closed
-CBSDKCONNECTION_COUNT = 4 # Allways the last value (Unknown)
+#~ #cbNUM_ANALOG_CHANS = 256 + 16 # this is version 7.0.x
+#~ cbNUM_ANALOG_CHANS = 128 + 16 # this is version 6.5.4
+#~ cbSdk_CONTINUOUS_DATA_SAMPLES = 102400
+
+#~ CBSDKCONNECTION_DEFAULT = 0 # Try Central then UDP
+#~ CBSDKCONNECTION_CENTRAL = 1 # Use Central
+#~ CBSDKCONNECTION_UDP = 2 # Use UDP
+#~ CBSDKCONNECTION_CLOSED = 3 # Closed
+#~ CBSDKCONNECTION_COUNT = 4 # Allways the last value (Unknown)
 
 
 
@@ -605,13 +595,50 @@ class cbPKT_CHANINFO(ctypes.Structure):
 #~ print(ctypes.sizeof(cbPKT_CHANINFO))
 #~ exit()
 
-class cbSdkTrialCont(ctypes.Structure):
-    _fields_ = [
-        ('count', UINT16), # Number of valid channels in this trial (up to cbNUM_ANALOG_CHANS)
-        ('chan', (UINT16 * cbNUM_ANALOG_CHANS)), # Channel numbers (1-based)
-        ('sample_rates', (UINT16 * cbNUM_ANALOG_CHANS)), # Current sample rate (samples per second)
-        ('num_samples', (UINT32 * cbNUM_ANALOG_CHANS)), # Number of samples
-        ('time', UINT32), # Start time for trial continuous data
-        ('samples', (ctypes.c_void_p * cbNUM_ANALOG_CHANS)), # Buffer to hold sample vectors
-    ]
+#~ class cbSdkTrialCont(ctypes.Structure):
+    #~ _fields_ = [
+        #~ ('count', UINT16), # Number of valid channels in this trial (up to cbNUM_ANALOG_CHANS)
+        #~ ('chan', (UINT16 * cbNUM_ANALOG_CHANS)), # Channel numbers (1-based)
+        #~ ('sample_rates', (UINT16 * cbNUM_ANALOG_CHANS)), # Current sample rate (samples per second)
+        #~ ('num_samples', (UINT32 * cbNUM_ANALOG_CHANS)), # Number of samples
+        #~ ('time', UINT32), # Start time for trial continuous data
+        #~ ('samples', (ctypes.c_void_p * cbNUM_ANALOG_CHANS)), # Buffer to hold sample vectors
+    #~ ]
 
+# copied from _cbSdkResult
+error_message_dict = {
+    3: 'If file conversion is needed',
+    2: 'Library is already closed',
+    1: 'Library is already opened',
+    # 0: 'Successful operation',
+    -1: 'Not implemented',
+    -2: 'Unknown error',
+    -3: 'Invalid parameter',
+    -4: 'Interface is closed cannot do this operation',
+    -5: 'Interface is open cannot do this operation',
+    -6: 'Null pointer',
+    -7: 'Unable to open Central interface',
+    -8: 'Unable to open UDP interface (might happen if default)',
+    -9: 'Unable to open UDP port',
+    -10: 'Unable to allocate RAM for trial cache data',
+    -11: 'Unable to open UDP timer thread',
+    -12: 'Unable to open Central communication thread',
+    -13: 'Invalid channel number',
+    -14: 'Comment too long or invalid',
+    -15: 'Filename too long or invalid',
+    -16: 'Invalid callback type',
+    -17: 'Callback register/unregister failed',
+    -18: 'Trying to run an unconfigured method',
+    -19: 'Invalid trackable id, or trackable not present',
+    -20: 'Invalid video source id, or video source not present',
+    -21: 'Cannot open file',
+    -22: 'Wrong file format',
+    -23: 'Socket option error (possibly permission issue)',
+    -24: 'Socket memory assignment error',
+    -25: 'Invalid range or instrument address',
+    -26: 'library memory allocation error',
+    -27: 'Library initialization error',
+    -28: 'Conection timeout error',
+    -29: 'Resource is busy',
+    -30: 'Instrument is offline',
+}
