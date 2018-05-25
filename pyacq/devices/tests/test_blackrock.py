@@ -15,16 +15,16 @@ import pytest
 
 @pytest.mark.skipif(not HAVE_BLACKROCK, reason='no have blackrock')
 def test_blackrock():
-    #~ ai_channels = [1, ]
+    ai_channels = [1, ]
     #~ ai_channels = [1,2,3, 4, 10, 11, 12, 13]
     #~ ai_channels = list(range(16, 25))
     #~ ai_channels = [20, 21, 22, 23]
-    ai_channels = [1, 2, 3, 4, 5, 6, 7, 8, 
-                17, 18, 19, 20, 21, 22, 23, 24, 
-                33, 34, 35, 36, 37, 38, 39, 40,
-                49, 50, 51, 52, 53, 54, 55, 56,
-                129,
-                ]
+    #~ ai_channels = [1, 2, 3, 4, 5, 6, 7, 8, 
+                #~ 17, 18, 19, 20, 21, 22, 23, 24, 
+                #~ 33, 34, 35, 36, 37, 38, 39, 40,
+                #~ 49, 50, 51, 52, 53, 54, 55, 56,
+                #~ 129,
+                #~ ]
     
 
     # in main App
@@ -52,6 +52,7 @@ def test_blackrock():
     viewer.show()
     viewer.params['scale_mode'] = 'by_channel'
     viewer.params['xsize'] = 1
+    viewer.params['refresh_interval'] = 500
     
     
     dev.start()

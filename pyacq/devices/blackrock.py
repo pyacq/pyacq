@@ -22,7 +22,19 @@ Question for blackrock support:
    * chan_info.smpgroup  ??
 
 
+
+TODO:
+  * class DLL multi version:
+    * constant
+    * pointer to function
+    * path
+  * apply_config = check channel number
+  * force adress
+  * connection choice (UDP, central)
+  * debug UDP only
+    
 """
+
 
 
 #~ p1 = 'C:/Program Files (x86)/Blackrock Microsystems/Cerebus Windows Suite'
@@ -79,6 +91,17 @@ class CBSDK:
         'SetTrialConfig' : 38,
         'InitTrialData' : 21,
         'GetTrialData' : 17,
+
+        #~ # This is for version 6.04
+        #~ 'Open' : 21,
+        #~ 'Close' : 3,
+        #~ 'GetChannelConfig' : 5,
+        #~ 'SetChannelConfig' : 26,
+        #~ 'SetTrialConfig' : 36,
+        #~ 'InitTrialData' : 19,
+        #~ 'GetTrialData' : 15,
+        
+        
     }
     
     def __getattr__(self, attr):
@@ -146,7 +169,11 @@ class Blackrock(Node):
     
     def _initialize(self):
         
-        con = cbSdkConnection()
+        con = cbSdkConnection(nInPort=51002,
+                       nOutPort=51001,
+                       nRecBufSize=4096*2048,
+                       szInIP=b"192.168.137.2",
+                       szOutIP=b"192.168.137.128")
         print(con)
         print(con.szInIP)
         
@@ -156,8 +183,13 @@ class Blackrock(Node):
         #~ cbSdk.Open(self.nInstance, CBSDKCONNECTION_DEFAULT, ctypes.byref(con))
         #~ cbSdk.Open(self.nInstance, CBSDKCONNECTION_DEFAULT, con)
         #~ cbSdk.Open(self.nInstance, CBSDKCONNECTION_CENTRAL)
-        cbSdk.Open(self.nInstance, CBSDKCONNECTION_UDP)
-        #~ cbSdk.Open(self.nInstance, ctypes.c_int32(CBSDKCONNECTION_UDP), con)
+        #~ cbSdk.Open(self.nInstance, CBSDKCONNECTION_UDP)
+        #~ print(dll_cbsdk[23].argtypes)
+        #~ Open = dll_cbsdk[23]
+        #~ cbSdk.Open(self.nInstance, CBSDKCONNECTION_UDP, con)
+        #~ Open.argtpes = [ctypes.c_int32, ctypes.c_int32, cbSdkConnection]
+        #~ cbSdk.Open(ctypes.c_uint32(self.nInstance), ctypes.c_int64(CBSDKCONNECTION_UDP), con)
+        cbSdk.Open(ctypes.c_uint32(self.nInstance), ctypes.c_int32(CBSDKCONNECTION_UDP), con)
         #~ exit()
 
         
@@ -435,23 +467,26 @@ CHAR = ctypes.c_char
 class cbSdkConnection(ctypes.Structure):
     _pack_ = 1
     _fields_ = [
+        
         ('nInPort', INT32), # int Client port number
         ('nOutPort', INT32), # int Instrument port number
         ('nRecBufSize', INT32), # int Receive buffer size (0 to ignore altogether)
+        ('bad', INT32), # bad
         ('szInIP', ctypes.c_char_p), # Client IPv4 address
         ('szOutIP', ctypes.c_char_p), # Instrument IPv4 address
+        
     ]
     
-    def __init__(self, nInPort=51002,
-                       nOutPort=51001,
-                       nRecBufSize=4096*2048,
-                       szInIP=b"192.168.137.1",
-                       szOutIP=b"192.168.137.128"):
+    #~ def __init__(self, nInPort=51002,
+                       #~ nOutPort=51001,
+                       #~ nRecBufSize=4096*2048,
+                       #~ szInIP=b"192.168.137.1",
+                       #~ szOutIP=b"192.168.137.128"):
         #~ self._szInIP = ctypes.c_char_p(szInIP)
         #~ self._szOutIP = ctypes.c_char_p(szOutIP)
-        super().__init__(nInPort, nOutPort, nRecBufSize,
-                    szInIP,
-                    szOutIP)
+        #~ super().__init__(nInPort, nOutPort, nRecBufSize,
+                    #~ szInIP,
+                    #~ szOutIP)
                     #~ self._szInIP,
                     #~ self._szOutIP)
                     #~ ctypes.c_char_p(szInIP),
