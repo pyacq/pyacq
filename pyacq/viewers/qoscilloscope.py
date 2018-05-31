@@ -284,7 +284,7 @@ class OscilloscopeController(QtGui.QWidget):
         self.signals_min = np.min(sigs, axis=0)
         self.signals_max = np.max(sigs, axis=0)
     
-    def compute_rescale(self):
+    def compute_rescale(self, spacing_factor=9.):
         scale_mode = self.viewer.params['scale_mode']
         
         self.viewer.by_channel_params.blockSignals(True)
@@ -299,11 +299,11 @@ class OscilloscopeController(QtGui.QWidget):
             self.viewer.params['ylim_max'] = np.nanmax(self.signals_max[self.visible_channels])
         else:
             if scale_mode=='same_for_all':
-                inv_scale =  max(self.signals_mad[self.visible_channels]) * 9.
+                inv_scale =  max(self.signals_mad[self.visible_channels]) * spacing_factor
                 if inv_scale == 0:
                     inv_scale = 1.
             elif scale_mode=='by_channel':
-                inv_scale = self.signals_mad[self.visible_channels] * 9.
+                inv_scale = self.signals_mad[self.visible_channels] * spacing_factor
                 inv_scale[inv_scale==0.] = 1.
             gains[self.visible_channels] = np.ones(nb_visible, dtype=float) / inv_scale
             offsets[self.visible_channels] = np.arange(nb_visible)[::-1] - self.signals_med[self.visible_channels]*gains[self.visible_channels]
@@ -517,8 +517,8 @@ class QOscilloscope(BaseOscilloscope):
         sigs = self.inputs['signals'].get_data(head-self.full_size, head)
         return sigs
         
-    def auto_scale(self):
-        self.params_controller.compute_rescale()
+    def auto_scale(self, spacing_factor=9):
+        self.params_controller.compute_rescale(spacing_factor=spacing_factor)
         self.refresh()
 
 register_node_type(QOscilloscope)
