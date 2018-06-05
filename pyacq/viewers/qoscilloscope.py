@@ -204,7 +204,9 @@ class OscilloscopeController(QtGui.QWidget):
 
         but = QtGui.QPushButton('Auto scale')
         v.addWidget(but)
-        but.clicked.connect(self.compute_rescale)
+        #~ but.clicked.connect(self.compute_rescale)
+        but.clicked.connect(self.on_channel_visibility_changed)
+        
         
         if self.viewer.nb_channel>1:
             v.addWidget(QtGui.QLabel('<b>Select channel...</b>'))
@@ -514,10 +516,10 @@ class QOscilloscope(BaseOscilloscope):
     
     def get_visible_chunk(self):
         head = self._head
-        sigs = self.inputs['signals'].get_data(head-self.full_size, head)
+        sigs = self.inputs['signals'].get_data(max(-1, head-self.full_size), head) # this ensure having at least one sample
         return sigs
         
-    def auto_scale(self, spacing_factor=9):
+    def auto_scale(self, spacing_factor=9.):
         self.params_controller.compute_rescale(spacing_factor=spacing_factor)
         self.refresh()
 
