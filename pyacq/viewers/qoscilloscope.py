@@ -100,8 +100,8 @@ class BaseOscilloscope(WidgetNode):
         # Create parameters
         all = []
         for i in range(self.nb_channel):
-            pname = 'ch{}'.format(i)
-            all.append({'name': pname, 'type': 'group', 'children': self._default_by_channel_params})
+            by_chan_p = [{'name': 'label', 'type': 'str', 'value': self.channel_names[i], 'readonly':True}] + list(self._default_by_channel_params)
+            all.append({'name': 'ch{}'.format(i), 'type': 'group', 'children': by_chan_p})
         self.by_channel_params = pg.parametertree.Parameter.create(name='AnalogSignals', type='group', children=all)
         self.params = pg.parametertree.Parameter.create(name='Global options',
                                                     type='group', children=self._default_params)
