@@ -90,12 +90,18 @@ class BaseOscilloscope(WidgetNode):
         self.inputs['signals'].set_buffer(size=buf_size, axisorder=[1,0], double=True)
         #TODO : check that this not lead 
         
+        # channel names
+        channel_info = self.inputs['signals'].params.get('channel_info', None)
+        if channel_info is None:
+            self.channel_names = ['ch{}'.format(c) for c in range(self.nb_channel)]
+        else:
+            self.channel_names = [ch_info['name'] for ch_info in channel_info]
 
         # Create parameters
         all = []
         for i in range(self.nb_channel):
-            name = 'ch{}'.format(i)
-            all.append({'name': name, 'type': 'group', 'children': self._default_by_channel_params})
+            by_chan_p = [{'name': 'label', 'type': 'str', 'value': self.channel_names[i], 'readonly':True}] + list(self._default_by_channel_params)
+            all.append({'name': 'ch{}'.format(i), 'type': 'group', 'children': by_chan_p})
         self.by_channel_params = pg.parametertree.Parameter.create(name='AnalogSignals', type='group', children=all)
         self.params = pg.parametertree.Parameter.create(name='Global options',
                                                     type='group', children=self._default_params)
@@ -210,11 +216,12 @@ class OscilloscopeController(QtGui.QWidget):
         
         if self.viewer.nb_channel>1:
             v.addWidget(QtGui.QLabel('<b>Select channel...</b>'))
-            names = [p.name() for p in self.viewer.by_channel_params]
+            names = [ '{}: {}'.format(c, name) for c, name in enumerate(self.viewer.channel_names)]
             self.qlist = QtGui.QListWidget()
             v.addWidget(self.qlist, 2)
             self.qlist.addItems(names)
             self.qlist.setSelectionMode(QtGui.QAbstractItemView.ExtendedSelection)
+            self.qlist.doubleClicked.connect(self.on_double_clicked)
             
             for i in range(len(names)):
                 self.qlist.item(i).setSelected(True)            
@@ -269,6 +276,17 @@ class OscilloscopeController(QtGui.QWidget):
         for i,param in enumerate(self.viewer.by_channel_params.children()):
             param['visible'] = visibles[i]
             if visibles[i]:
+                self.viewer.curves[i].show()
+            else:
+                self.viewer.curves[i].hide()
+        self.viewer.by_channel_params.blockSignals(False)
+        self.channel_visibility_changed.emit()
+    
+    def on_double_clicked(self, index):
+        self.viewer.by_channel_params.blockSignals(True)
+        for i, p in enumerate(self.viewer.by_channel_params.children()):
+            p['visible'] = (i==index.row())
+            if p['visible']:
                 self.viewer.curves[i].show()
             else:
                 self.viewer.curves[i].hide()
@@ -403,7 +421,8 @@ class QOscilloscope(BaseOscilloscope):
             curve = pg.PlotCurveItem(pen=color)
             self.plot.addItem(curve)
             self.curves.append(curve)
-            label = pg.TextItem('TODO name{}'.format(i), color=color, anchor=(0.5, 0.5), border=None, fill=pg.mkColor((128,128,128, 200)))
+            txt = '{}: {}'.format(i, self.channel_names[i])
+            label = pg.TextItem(txt, color=color, anchor=(0.5, 0.5), border=None, fill=pg.mkColor((128,128,128, 200)))
             self.plot.addItem(label)
             self.channel_labels.append(label)
         
