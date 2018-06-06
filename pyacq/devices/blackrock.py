@@ -38,7 +38,7 @@ TODO:
 
 class Blackrock(Node):
     """
-    None on top the cbSdk.dll
+    Node on top the cbSdk.dll
     This grab only the continuous signal for the moment of aichannels.
     Spike/event are not streamed here.
     But to come soon.
@@ -113,6 +113,7 @@ class Blackrock(Node):
 
         
         self.nb_available_ai_channel = None
+        self._all_channel_names = []
         for c in range(cbSdk.cbNUM_ANALOG_CHANS):
             chan_info = cbPKT_CHANINFO()
             try:
@@ -121,9 +122,16 @@ class Blackrock(Node):
                             #~ chan_info.label, 'type', chan_info.type,
                             #~ 'ainpopts', chan_info.ainpopts, 'smpgroup', chan_info.smpgroup,
                             #~ 'ainpcaps', chan_info.ainpcaps)
+                self._all_channel_names.append(str(chan_info.chan))
             except:
                 self.nb_available_ai_channel = c
                 break
+
+        
+        self.channel_names = [ self._all_channel_names[ai_chan-1] for ai_chan in self.ai_channels ]
+        channel_info = [ {'name': name} for name in range(self.channel_names) ]
+        self.outputs['aichannels'].params['channel_info'] = channel_info
+
         
         #~ print('nb_available_ai_channel', self.nb_available_ai_channel)
         #~ exit()
