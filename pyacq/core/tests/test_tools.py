@@ -3,7 +3,7 @@
 # Distributed under the (new) BSD License. See LICENSE for more info.
 
 from pyacq.core import OutputStream, InputStream
-from pyacq.core.tools import ThreadPollInput, StreamConverter, ChannelSplitter
+from pyacq.core.tools import ThreadPollInput, StreamConverter, ChannelSplitter, ChunkResizer
 from pyqtgraph.Qt import QtCore, QtGui
 import pyqtgraph as pg
 
@@ -172,6 +172,47 @@ def test_stream_splitter():
     
     
     app.exec_()
+
+
+def test_ChunkResizer():
+    app = pg.mkQApp()
+    
+    outstream = OutputStream()
+    outstream.configure(**stream_spec)
+    sender = ThreadSender(output_stream=outstream)
+
+    chunkresizer = ChunkResizer()
+    chunkresizer.configure(chunksize=33)
+    chunkresizer.input.connect(outstream)
+    chunkresizer.output.configure()
+    chunkresizer.initialize()
+
+
+    def on_new_data(pos, arr):
+        #~ print('recv', arr.shape, pos)
+        assert arr.shape[0] == 33
+    
+    instream = InputStream()
+    instream.connect(chunkresizer.output)
+    poller = ThreadPollInput(input_stream=instream, return_data=True)
+    poller.new_data.connect(on_new_data)
+    
+        
+    def terminate():
+        sender.wait()
+        chunkresizer.stop()
+        poller.stop()
+        poller.wait()
+        app.quit()
+        
+    sender.finished.connect(terminate)
+    
+    poller.start()
+    chunkresizer.start()
+    sender.start()
+    
+    
+    app.exec_()
     
     
 
@@ -179,3 +220,4 @@ if __name__ == '__main__':
     test_ThreadPollInput()
     test_streamconverter()
     test_stream_splitter()
+    test_ChunkResizer()
