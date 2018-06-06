@@ -445,7 +445,10 @@ class QTimeFreq(WidgetNode):
                 self.global_timer.start()
     
     def compute_maps(self):
-        head = int(self.global_poller.pos())
+        head = self.global_poller.pos()
+        if head is None:
+            return
+        head = int(head)
         for i in range(self.nb_channel):
             if self.by_channel_params.children()[i]['visible']:
                 if self.local_workers:

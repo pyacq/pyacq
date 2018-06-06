@@ -117,24 +117,26 @@ class Blackrock(Node):
         for c in range(cbSdk.cbNUM_ANALOG_CHANS):
             chan_info = cbPKT_CHANINFO()
             try:
+            #~ if 1:
                 cbSdk.GetChannelConfig(self.nInstance, ctypes.c_short(c+1), ctypes.byref(chan_info))
                 #~ print('c', c, 'chan', chan_info.chan, 'chid',chan_info.chid, chan_info.proc, chan_info.bank, 
                             #~ chan_info.label, 'type', chan_info.type,
                             #~ 'ainpopts', chan_info.ainpopts, 'smpgroup', chan_info.smpgroup,
                             #~ 'ainpcaps', chan_info.ainpcaps)
-                self._all_channel_names.append(str(chan_info.chan))
+                self._all_channel_names.append(chan_info.label.decode('ascii'))
             except:
-                self.nb_available_ai_channel = c
+                #~ self.nb_available_ai_channel = c
                 break
-
-        
-        self.channel_names = [ self._all_channel_names[ai_chan-1] for ai_chan in self.ai_channels ]
-        channel_info = [ {'name': name} for name in range(self.channel_names) ]
-        self.outputs['aichannels'].params['channel_info'] = channel_info
-
-        
-        #~ print('nb_available_ai_channel', self.nb_available_ai_channel)
+        self.nb_available_ai_channel = len(self._all_channel_names)
+        print('nb_available_ai_channel', self.nb_available_ai_channel)
         #~ exit()
+
+        self.channel_names = [ self._all_channel_names[ai_chan-1] for ai_chan in self.ai_channels ]
+        channel_info = [ {'name': name} for name in self.channel_names ]
+        self.outputs['aichannels'].params['channel_info'] = channel_info
+        
+        print(self.channel_names)
+        
 
         if self.apply_config:
             # TODO debug this : this do not work in all situation ?!?
@@ -215,6 +217,7 @@ class BlackrockThread(QtCore.QThread):
             self.running = True
         
         stream = self.node.outputs['aichannels']
+        ai_channels = np.array(self.node.ai_channels, dtype='uint16')
         trialcont = self.node.trialcont
         ai_buffer = self.node.ai_buffer
         nInstance = self.node.nInstance
@@ -223,7 +226,8 @@ class BlackrockThread(QtCore.QThread):
         
         n = 0
         next_timestamp = None
-        t0 = time.perf_counter()
+        #~ t0 = time.perf_counter()
+        first_buffer = True
         while True:
             #~ print('n', n)
             with self.lock:
@@ -244,38 +248,72 @@ class BlackrockThread(QtCore.QThread):
             
             #~ cbSdk.GetTrialData(nInstance, 1, None, ctypes.byref(trialcont), None, None)
             
-            num_samples = np.ctypeslib.as_array(trialcont.num_samples)[:nb_channel]
+            num_samples = np.ctypeslib.as_array(trialcont.num_samples)
             
             #~ print(num_samples)
             
             if num_samples[0] < 300:
                 # it is too early!!!!!!
-                print('too early (<300)', num_samples[0])
-                print('*'*5)
+                #~ print('too early (<300)', num_samples[0])
+                #~ print('*'*5)
                 time.sleep(0.003)
                 continue
+            
+            # TODO detect the first loop and do not take the buffer because it is very big (32000)
+            
             
             #~ print(num_samples)
             
             cbSdk.GetTrialData(nInstance, 1, None, ctypes.byref(trialcont), None, None)
+            
+            if first_buffer:
+                # trash the first buffer because it is a very big one
+                first_buffer = False
+                continue
+                
+            
             #~ print(trialcont)
             #~ print('yep')
             #~ if trialcont.count==0:
                 #~ continue
-            print('trialcont.count', trialcont.count, 'trialcont.time', trialcont.time, 'trialcont.num_samples', trialcont.num_samples[0])
+            #~ print('trialcont.count', trialcont.count, 'trialcont.time', trialcont.time, 'trialcont.num_samples', trialcont.num_samples[0])
             #~ if trialcont.count==0:
                 #~ time.sleep(0.001)
                 #~ continue
-            t1 = time.perf_counter()
-            print((t1-t0)*1000)
-            t0 = t1
+            #~ t1 = time.perf_counter()
+            #~ print((t1-t0)*1000)s
+            #~ t0 = t1
             
-            num_samples = np.ctypeslib.as_array(trialcont.num_samples)[:nb_channel]
-            #~ print(num_samples)
+            num_samples = np.ctypeslib.as_array(trialcont.num_samples)
+            sample_rates = np.ctypeslib.as_array(trialcont.sample_rates)
+            #~ print(num_samples)s
             #~ assert np.all(num_samples[0]==num_samples)
             
             num_sample = num_samples[0]
             #~ print('num_sample', num_sample)
+            channels_in_buffer = np.ctypeslib.as_array(trialcont.chan)
+            #~ print(channels_in_buffer)
+            channel_mask = np.in1d(channels_in_buffer, ai_channels)
+            channel_mask &= (sample_rates==30000)
+            #~ print('channel_mask', channel_mask)
+            #~ print('ok channel', channels_in_buffer[channel_mask])
+            
+            num_samples = num_samples[channel_mask]
+            #~ print(num_samples)
+            
+            # 2 case  or 
+            if np.sum(channel_mask)==nb_channel:
+                # all channel are i n the buffer
+                data = ai_buffer[channel_mask, : num_sample].T.copy()
+            else:
+                #some are not because not configured accordingly in "central"
+                data = np.zeros((num_sample, nb_channel), dtype='int16')
+                outbuffer_channel_mask = np.in1d(ai_channels, channels_in_buffer[channel_mask])
+                #~ print('outbuffer_channel_mask', outbuffer_channel_mask)
+                data[:, outbuffer_channel_mask] = ai_buffer[channel_mask, : num_sample].T
+                
+                
+            
             #~ print(ai_buffer.shape)
             
             #~ print(np.ctypeslib.as_array(trialcont.num_samples)[:10])
@@ -288,20 +326,22 @@ class BlackrockThread(QtCore.QThread):
             #~ data = ai_buffer.T.copy()
             #~ data = ai_buffer[:, :trialcont.num_samples[0]].T.astype('float32')
             #~ data = ai_buffer[:nb_channel, : trialcont.num_samples[0]].T.copy()
-            data = ai_buffer[:nb_channel, : num_sample].T.copy()
+            #~ data = ai_buffer[:nb_channel, : num_sample].T.copy()
             #~ data = ai_buffer[:nb_channel, :300].T.copy()
             #~ data = ai_buffer[: trialcont.num_samples[0], 0].reshape(-1, 1)
-            print('data.shape', data.shape)
+            #~ print('data.shape', data.shape)
             #~ print('data.sum', np.sum(data))
             n += data.shape[0]
             stream.send(data, index=n)
+            #~ print('n', n)
             
             if next_timestamp is not None:
-                print(next_timestamp, trialcont.time, next_timestamp==trialcont.time)
+                #~ print(next_timestamp, trialcont.time, next_timestamp==trialcont.time)
+                # next_timestamp==trialcont.time then no lost packet
                 pass
             next_timestamp = trialcont.time + num_sample
             
-            print('*'*5)
+            #~ print('*'*5)
             #~ cbSdk.InitTrialData(nInstance, 1, None, ctypes.byref(trialcont), None, None)
             time.sleep(0)
 
