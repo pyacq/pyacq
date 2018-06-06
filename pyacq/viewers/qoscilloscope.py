@@ -221,6 +221,7 @@ class OscilloscopeController(QtGui.QWidget):
             v.addWidget(self.qlist, 2)
             self.qlist.addItems(names)
             self.qlist.setSelectionMode(QtGui.QAbstractItemView.ExtendedSelection)
+            self.qlist.doubleClicked.connect(self.on_double_clicked)
             
             for i in range(len(names)):
                 self.qlist.item(i).setSelected(True)            
@@ -275,6 +276,17 @@ class OscilloscopeController(QtGui.QWidget):
         for i,param in enumerate(self.viewer.by_channel_params.children()):
             param['visible'] = visibles[i]
             if visibles[i]:
+                self.viewer.curves[i].show()
+            else:
+                self.viewer.curves[i].hide()
+        self.viewer.by_channel_params.blockSignals(False)
+        self.channel_visibility_changed.emit()
+    
+    def on_double_clicked(self, index):
+        self.viewer.by_channel_params.blockSignals(True)
+        for i, p in enumerate(self.viewer.by_channel_params.children()):
+            p['visible'] = (i==index.row())
+            if p['visible']:
                 self.viewer.curves[i].show()
             else:
                 self.viewer.curves[i].hide()
