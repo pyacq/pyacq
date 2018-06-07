@@ -31,6 +31,9 @@ def test_npbufferdevice():
         receiver.input.connect(dev.output)
         receiver.initialize()
     
+    channel_info = receivers[0].input.params['channel_info']
+    assert len(channel_info) == 7
+    
     nodegroup.start_all_nodes()
     
     #~ print(nodegroup.any_node_running())

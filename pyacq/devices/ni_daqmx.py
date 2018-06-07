@@ -114,13 +114,16 @@ class NIDAQmx(Node):
                 self._ai_gains.append(gain)
             self._ai_gains = np.array(self._ai_gains, dtype=self._ai_dt).reshape(1, -1)
         
-        
-        
     def check_input_specs(self):
         pass
     
     def check_output_specs(self):
         pass
+
+    def after_output_configure(self, outputname):
+        if outputname == 'aichannels':
+            channel_info = [ {'name': name} for name in self._conf['aichannels'] ]
+            self.outputs[outputname].params['channel_info'] = channel_info
 
     def _initialize(self):
         sr = self._conf['sample_rate']
@@ -160,6 +163,7 @@ class NIDAQmx(Node):
     def _stop(self):
         if self.aitask is not None:
             self.thread.stop()
+            self.thread.wait()
             self.aitask.stop()
 
     def _close(self):

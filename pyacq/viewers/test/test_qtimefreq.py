@@ -39,6 +39,7 @@ buffer = buffer.astype('float32')
 
 
 def lauch_qtimefreq(transfermode, axisorder, localworker):
+    # TODO test with other axis order
     
     #~ man = create_manager(auto_close_at_exit = True)
     man = create_manager(auto_close_at_exit=False)
@@ -91,20 +92,21 @@ def lauch_qtimefreq(transfermode, axisorder, localworker):
     
     man.close()
     
+# TODO test with other axis order
 
 @pytest.mark.skipif(not HAVE_SCIPY, reason='no HAVE_SCIPY')
 def test_qtimefreq_local_worker():
     lauch_qtimefreq('plaindata', [0,1], True)
-    lauch_qtimefreq('plaindata', [1,0], True)
+    #lauch_qtimefreq('plaindata', [1,0], True)
     lauch_qtimefreq('sharedmem', [0,1], True)
-    lauch_qtimefreq('sharedmem', [1,0], True)
+    #lauch_qtimefreq('sharedmem', [1,0], True)
 
 @pytest.mark.skipif(not HAVE_SCIPY, reason='no HAVE_SCIPY')
 def test_qtimefreq_distributed_worker():
     lauch_qtimefreq('plaindata', [0,1], False)
-    lauch_qtimefreq('plaindata', [1,0], False)
+    #lauch_qtimefreq('plaindata', [1,0], False)
     lauch_qtimefreq('sharedmem', [0,1], False)
-    lauch_qtimefreq('sharedmem', [1,0], False)
+    #lauch_qtimefreq('sharedmem', [1,0], False)
 
 
 

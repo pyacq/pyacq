@@ -166,6 +166,15 @@ class Emotiv(Node, QtCore.QObject):
             with open(path + "/serial", 'r') as f:
                 self.serial = f.readline().strip()
 
+    def after_output_configure(self, outputname):
+        if outputname == 'signals':
+            channel_info = [ {'name': ch_name} for ch_name in _channel_names ]
+        elif outputname == 'impedances':
+            channel_info = [ {'name': 'imp '+ch_name} for ch_name in _channel_names ]
+        elif outputname == 'gyro':
+            channel_info = [ {'name': 'gyro0'}, {'name': 'gyro1'}]
+        self.outputs[outputname].params['channel_info'] = channel_info
+
     def _initialize(self):
         self.values = np.zeros((1,len(_channel_names)), dtype=np.int16)
         self.imp = np.zeros((1,len(_channel_names)), dtype=np.float32)
