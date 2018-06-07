@@ -340,7 +340,7 @@ class ChunkResizer(Node):
     def after_input_connect(self, inputname):
         
         self.nb_channel = self.input.params['shape'][1]
-        for k in ['sample_rate', 'dtype',  'nb_channel', 'shape',]:
+        for k in ['sample_rate', 'dtype',  'shape',]:
             self.output.spec[k] = self.input.params[k]
         #~ 'shape',
     
