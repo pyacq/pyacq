@@ -14,7 +14,7 @@ import time
 from collections import OrderedDict
 
 from ..core import (WidgetNode, Node, register_node_type, InputStream, OutputStream,
-        ThreadPollInput, StreamConverter)
+        ThreadPollInput, ThreadPollOutput, StreamConverter)
 
 from .qoscilloscope import MyViewBox
 
@@ -32,6 +32,7 @@ default_params = [
         {'name': 'background_color', 'type': 'color', 'value': 'k'},
         #~ {'name': 'colormap', 'type': 'list', 'value': 'hot', 'values' : ['hot', 'coolwarm', 'ice', 'grays', ] },
         {'name': 'colormap', 'type': 'list', 'value': 'hot', 'values': list(vispy.color.get_colormaps().keys())},
+        {'name': 'scale_mode', 'type': 'list', 'value': 'by_channel', 'values':['same_for_all', 'by_channel'] },
         {'name': 'refresh_interval', 'type': 'int', 'value': 500, 'limits':[5, 1000]},
         {'name': 'mode', 'type': 'list', 'value': 'scroll', 'values': ['scan', 'scroll']},
         {'name': 'show_axis', 'type': 'bool', 'value': False},
@@ -136,6 +137,7 @@ class QTimeFreq(WidgetNode):
         if self.input.params['transfermode'] == 'sharedmem' and self.input.params['axisorder'] is not None \
                 and tuple(self.input.params['axisorder']) == (1,0):
             self.conv = None
+            # TODO raise here
         else:
             # if input is not transfermode creat a proxy
             if self.local_workers:
@@ -159,7 +161,8 @@ class QTimeFreq(WidgetNode):
         self.workers = []
         self.input_maps = []
 
-        self.global_poller = ThreadPollInput(input_stream=self.input, return_data=None)
+        #~ self.global_poller = ThreadPollInput(input_stream=self.input, return_data=None) # only valid when no conv
+        self.global_poller = ThreadPollOutput(output_stream=self.conv.output, return_data=False)
         self.global_timer = QtCore.QTimer(interval=500)
         self.global_timer.timeout.connect(self.compute_maps)
         
@@ -391,7 +394,9 @@ class QTimeFreq(WidgetNode):
                     if plot is not None:
                         plot.showAxis('left', data)
                         plot.showAxis('bottom', data)                        
-            
+            if param.name()=='scale_mode':
+                self.auto_scale()
+                
             # difered action delayed with timer
             with self.mutex_action:
                 if param.name()=='xsize':
@@ -462,8 +467,8 @@ class QTimeFreq(WidgetNode):
         if newsize>limits[0] and newsize<limits[1]:
             self.params['xsize'] = newsize    
     
-    def auto_clim(self, identic=True):
-        if identic:
+    def auto_clim(self):
+        if self.params['scale_mode'] == 'same_for_all':
             all = []
             for i, p in enumerate(self.by_channel_params.children()):
                 if p.param('visible').value():
@@ -472,11 +477,14 @@ class QTimeFreq(WidgetNode):
             for i, p in enumerate(self.by_channel_params.children()):
                 if p.param('visible').value():
                     p.param('clim').setValue(float(clim))
-        else:
+        elif self.params['scale_mode'] == 'by_channel':
             for i, p in enumerate(self.by_channel_params.children()):
                 if p.param('visible').value():
                     clim = np.max(self.images[i].image)*1.1
                     p.param('clim').setValue(float(clim))
+    
+    def auto_scale(self):
+        self.auto_clim()
 
 register_node_type(QTimeFreq)
 
@@ -621,6 +629,8 @@ class TimeFreqWorker(Node, QtCore.QObject):
         self.sample_rate = sr = self.input.params['sample_rate']
         self.input.set_buffer(size=self.input.params['buffer_size'], axisorder=self.input.params['axisorder'],
                 double=self.input.params['double'])#TODO this should be removed when automatic for sharedmem
+        assert not self.input._own_buffer, 'something bad in shared buffer'
+        
         self.thread = ComputeThread(self.input, self.output, self.channel, self.local)
         self.thread.finished.connect(self.on_thread_done)
 
@@ -702,11 +712,16 @@ class TimeFreqController(QtGui.QWidget):
 
         v = QtGui.QVBoxLayout()
         h.addLayout(v)
+
+        but = QtGui.QPushButton('Auto scale')
+        but.clicked.connect(self.viewer.auto_clim)
+        v.addWidget(but)
         
         if self.viewer.nb_channel>1:
             v.addWidget(QtGui.QLabel('<b>Select channel...</b>'))
             names = [p.name() for p in self.viewer.by_channel_params]
             self.qlist = QtGui.QListWidget()
+            self.qlist.doubleClicked.connect(self.on_double_clicked)
             v.addWidget(self.qlist, 2)
             self.qlist.addItems(names)
             self.qlist.setSelectionMode(QtGui.QAbstractItemView.ExtendedSelection)
@@ -719,13 +734,6 @@ class TimeFreqController(QtGui.QWidget):
         v.addWidget(but)
         but.clicked.connect(self.on_set_visible)
         
-        but = QtGui.QPushButton('Automatic clim (same for all)')
-        but.clicked.connect(lambda: self.auto_clim(identic=True))
-        v.addWidget(but)
-
-        but = QtGui.QPushButton('Automatic clim (independant)')
-        but.clicked.connect(lambda: self.auto_clim(identic=False))
-        v.addWidget(but)
         
         v.addWidget(QtGui.QLabel(self.tr('<b>Clim change (mouse wheel on graph):</b>'),self))
         h = QtGui.QHBoxLayout()
@@ -754,11 +762,11 @@ class TimeFreqController(QtGui.QWidget):
         for i,param in enumerate(self.viewer.by_channel_params.children()):
             param['visible'] = visibles[i]
 
-    def auto_clim(self, identic=True):
-        self.viewer.auto_clim(identic=identic)
-
     def clim_zoom(self):
         factor = self.sender().factor
         for i, p in enumerate(self.viewer.by_channel_params.children()):
             p.param('clim').setValue(p.param('clim').value()*factor)
-
+    
+    def on_double_clicked(self, index):
+        for i, p in enumerate(self.viewer.by_channel_params.children()):
+            p['visible'] = (i==index.row())
