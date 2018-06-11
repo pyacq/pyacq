@@ -109,6 +109,7 @@ class Blackrock(Node):
         # print(ctypes.sizeof(con)) this should be 28 when read .h but in factc it is 32
         conv = { 'default':0, 'central':1, 'udp': 2}
         con_type = ctypes.c_int32(conv.get(self.connection_type, 0))
+        
         cbSdk.Open(ctypes.c_uint32(self.nInstance),con_type, con)
 
         
@@ -202,7 +203,7 @@ class Blackrock(Node):
         self.thread.wait()
 
     def _close(self):
-        cbSdk.Close(self.nInstance)
+        self.cbSdk.Close(self.nInstance)
 
 class BlackrockThread(QtCore.QThread):
     def __init__(self, node, parent=None):
