@@ -163,9 +163,15 @@ class RingBuffer:
             self.buffer[i:i+dsize] = value
         else:
             n = self.buffer.shape[0]-i
-            self.buffer[i:] = value[:n]
-            self.buffer[:dsize-n] = value[n:]
-        
+            if hasattr(value, '__len__'):
+                # case array
+                self.buffer[i:] = value[:n]
+                self.buffer[:dsize-n] = value[n:]
+            else:
+                # case value is a scalar (when self._filler)
+                self.buffer[i:] = value
+                self.buffer[:dsize-n] = value
+
     def __getitem__(self, item):
         if isinstance(item, tuple):
             first = item[0]
