@@ -69,8 +69,9 @@ class RawRecorder(Node):
             thread.recv_start_index.connect(self.on_start_index)
             
             prop = {}
-            for k in ('streamtype', 'dtype', 'shape', 'sample_rate'):
-                prop[k] = input.params[k]
+            for k in ('streamtype', 'dtype', 'shape', 'sample_rate', 'channel_info'):
+                if k in input.params:
+                    prop[k] = input.params[k]
             self._stream_properties[name] = prop
         
         self._stream_properties['pyacq_version'] = pyacq_version
