@@ -13,6 +13,7 @@ from pyqtgraph.Qt import QtCore, QtGui
 import pytest
 
 
+@pytest.mark.skip(reason="need Device")
 def test_open_sbSdk_dll():
     #~ cbSdk = open_sbSdk_dll(dll_path='c:/')
     #~ assert cbSdk is None
@@ -34,7 +35,7 @@ def test_open_sbSdk_dll():
     
 
 
-#~ @pytest.mark.skipif()
+@pytest.mark.skip(reason="need Device")
 def test_blackrock():
     #~ ai_channels = [1, ]
     ai_channels = [1,2,3, 4, 10, 11, 12, 13]
@@ -51,15 +52,17 @@ def test_blackrock():
     # in main App
     app = QtGui.QApplication([])
     
+    # for testing in background
     #~ man = create_manager(auto_close_at_exit=True)
     #~ ng0 = man.create_nodegroup()
     #~ dev = ng0.create_node('Blackrock')
     
+    # tested in local Node
     dev = Blackrock()
     
-    #~ dev.configure(nInstance=0, ai_channels=ai_channels,  apply_config=True)
-    #~ dev.configure(nInstance=0,szInIP=b"192.168.137.1", ai_channels=ai_channels, apply_config=True)
+    # dev.configure(nInstance=0,szInIP=b"192.168.137.1", ai_channels=ai_channels, apply_config=True)
     dev.configure(nInstance=0, connection_type='central', ai_channels=ai_channels,  apply_config=False)
+    
     dev.outputs['aichannels'].configure(protocol='tcp', interface='127.0.0.1', transfertmode='plaindata')
     dev.initialize()
     
@@ -102,10 +105,11 @@ def test_blackrock():
     # start  and stop 3 times
     timer = QtCore.QTimer(singleShot=False, interval=1000)
     timer.timeout.connect(terminate)
-    #~ timer.start()
+    timer.start()
 
     app.exec_()
 
 if __name__ == '__main__':
-    #~ test_open_sbSdk_dll()
+    test_open_sbSdk_dll()
     test_blackrock()
+
