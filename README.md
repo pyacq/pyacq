@@ -22,6 +22,7 @@ Supported Hardware
 | BrainVision EEG                       |    X    |    X    |
 | Audio interfaces (via PyAudio)        |    X    |    X    |
 | Webcams (via imageio or libav)        |    X    |    X    |
+| Blackrock NSP        |        |    X    |
 
 
 Visualization Tools
