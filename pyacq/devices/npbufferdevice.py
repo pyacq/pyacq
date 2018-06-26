@@ -36,10 +36,15 @@ class NumpyDeviceBuffer(Node):
         """
         return Node.configure(self, *args, **kwargs)
 
-    def _configure(self, nb_channel=16, sample_interval=0.001, chunksize=256, buffer=None):
+    def _configure(self, nb_channel=16, sample_interval=0.001, chunksize=256,
+                    buffer=None, channel_names=None):
         self.nb_channel = nb_channel
         self.sample_interval = sample_interval
         self.chunksize = chunksize
+        
+        if channel_names is None:
+            channel_names = [ 'chan{}'.format(c) for c in range(self.nb_channel) ]
+        self.channel_names = channel_names
         
         self.output.spec['shape'] = (-1, nb_channel)
         self.output.spec['sample_rate'] = 1. / sample_interval
@@ -59,6 +64,11 @@ class NumpyDeviceBuffer(Node):
         
         self.output.spec['dtype'] = buffer.dtype.name
     
+    def after_output_configure(self, outputname):
+        if outputname == 'signals':
+            channel_info = [ {'name': self.channel_names[c]} for c in range(self.nb_channel) ]
+            self.outputs[outputname].params['channel_info'] = channel_info
+
     def _initialize(self):
         self.head = 0
         ival = int(self.chunksize * self.sample_interval * 1000)

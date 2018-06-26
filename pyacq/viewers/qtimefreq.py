@@ -30,13 +30,12 @@ default_params = [
         {'name': 'xsize', 'type': 'float', 'value': 10., 'step': 0.1, 'limits': (.1, 60)},
         {'name': 'nb_column', 'type': 'int', 'value': 1},
         {'name': 'background_color', 'type': 'color', 'value': 'k'},
-        #~ {'name': 'colormap', 'type': 'list', 'value': 'hot', 'values' : ['hot', 'coolwarm', 'ice', 'grays', ] },
-        {'name': 'colormap', 'type': 'list', 'value': 'hot', 'values': list(vispy.color.get_colormaps().keys())},
+        {'name': 'colormap', 'type': 'list', 'value': 'viridis', 'values': list(vispy.color.get_colormaps().keys())},
         {'name': 'scale_mode', 'type': 'list', 'value': 'by_channel', 'values':['same_for_all', 'by_channel'] },
         {'name': 'refresh_interval', 'type': 'int', 'value': 500, 'limits':[5, 1000]},
         {'name': 'mode', 'type': 'list', 'value': 'scroll', 'values': ['scan', 'scroll']},
         {'name': 'show_axis', 'type': 'bool', 'value': False},
-        # ~ {'name': 'display_labels', 'type': 'bool', 'value': False }, #TODO when title
+        {'name': 'display_labels', 'type': 'bool', 'value': True },
         {'name': 'timefreq', 'type': 'group', 'children': [
                         {'name': 'f_start', 'type': 'float', 'value': 3., 'step': 1.},
                         {'name': 'f_stop', 'type': 'float', 'value': 90., 'step': 1.},
@@ -102,8 +101,8 @@ class QTimeFreq(WidgetNode):
     
     """
     
-    #~ _input_specs = {'signal': dict(streamtype='signals', shape=(-1), )}
-    _input_specs = {'signal': dict(streamtype='signals', )}
+    #~ _input_specs = {'signals': dict(streamtype='signals', shape=(-1), )}
+    _input_specs = {'signals': dict(streamtype='signals', )}
     
     _default_params = default_params
     _default_by_channel_params = default_by_channel_params
@@ -132,6 +131,13 @@ class QTimeFreq(WidgetNode):
         self.sample_rate = sr = self.input.params['sample_rate']
         self.nb_channel = self.input.params['shape'][1]
         buf_size = int(self.input.params['sample_rate'] * self.max_xsize)
+        
+        # channel names
+        channel_info = self.inputs['signals'].params.get('channel_info', None)
+        if channel_info is None:
+            self.channel_names = ['ch{}'.format(c) for c in range(self.nb_channel)]
+        else:
+            self.channel_names = [ch_info['name'] for ch_info in channel_info]
         
         # create proxy input to ensure sharedarray with time axis 1
         if self.input.params['transfermode'] == 'sharedmem' and self.input.params['axisorder'] is not None \
@@ -221,8 +227,8 @@ class QTimeFreq(WidgetNode):
         # Create parameters
         all = []
         for i in range(self.nb_channel):
-            name = 'Signal{}'.format(i)
-            all.append({'name': name, 'type': 'group', 'children': self._default_by_channel_params})
+            by_chan_p = [{'name': 'label', 'type': 'str', 'value': self.channel_names[i], 'readonly':True}] + list(self._default_by_channel_params)
+            all.append({'name': 'ch{}'.format(i), 'type': 'group', 'children': by_chan_p})
         self.by_channel_params = pg.parametertree.Parameter.create(name='AnalogSignals', type='group', children=all)
         self.params = pg.parametertree.Parameter.create(name='Global options',
                                                     type='group', children=self._default_params)
@@ -301,6 +307,11 @@ class QTimeFreq(WidgetNode):
             plot.hideButtons()
             plot.showAxis('left', self.params['show_axis'])
             plot.showAxis('bottom', self.params['show_axis'])
+
+            if self.params['display_labels']:
+                plot.setTitle(self.channel_names[i])
+            else:
+                plot.setTitle(None)
 
             self.graphiclayout.ci.layout.addItem(plot, r, c)  # , rowspan, colspan)
             if r not in self.graphiclayout.ci.rows:
@@ -411,6 +422,9 @@ class QTimeFreq(WidgetNode):
                     self.actions[self.initialize_time_freq] = True
                     self.actions[self.initialize_plots] = True
                 if param.name()=='visible':
+                    self.actions[self.create_grid] = True
+                    self.actions[self.initialize_plots] = True
+                if param.name()=='display_labels':
                     self.actions[self.create_grid] = True
                     self.actions[self.initialize_plots] = True
         
@@ -608,7 +622,7 @@ class TimeFreqWorker(Node, QtCore.QObject):
 
     For visualization of this analysis, use QTimeFreq.
     """
-    _input_specs = {'signal': dict(streamtype='signals', transfermode='sharedmem', axisorder=[1,0], double=True)}
+    _input_specs = {'signals': dict(streamtype='signals', transfermode='sharedmem', axisorder=[1,0], double=True)}
     _output_specs = {'timefreq': dict(streamtype='image', dtype='float32')}
     
     wt_map_done = QtCore.pyqtSignal(int)
@@ -719,7 +733,7 @@ class TimeFreqController(QtGui.QWidget):
         
         if self.viewer.nb_channel>1:
             v.addWidget(QtGui.QLabel('<b>Select channel...</b>'))
-            names = [p.name() for p in self.viewer.by_channel_params]
+            names = [ '{}: {}'.format(c, name) for c, name in enumerate(self.viewer.channel_names)]
             self.qlist = QtGui.QListWidget()
             self.qlist.doubleClicked.connect(self.on_double_clicked)
             v.addWidget(self.qlist, 2)

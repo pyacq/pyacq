@@ -149,6 +149,11 @@ class BrainAmpSocket(Node):
         self._thread = BrainAmpThread(self.outputs, self.brainamp_host, self.brainamp_port,
                              self.nb_channel, parent=self)
 
+    def after_output_configure(self, outputname):
+        if outputname == 'signals':
+            channel_info = [ {'name': ch_name} for ch_name in self.channel_names ]
+            self.outputs[outputname].params['channel_info'] = channel_info
+
     def _start(self):
         self._thread.start()
 

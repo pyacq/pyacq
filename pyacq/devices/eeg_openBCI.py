@@ -149,6 +149,13 @@ class OpenBCI(Node):
         self.outputs['aux'].spec['sample_rate'] = 250
         self.outputs['aux'].spec['nb_channel'] = self.nb_aux
 
+    def after_output_configure(self, outputname):
+        if outputname == 'chan':
+            channel_info = [ {'name': 'ch{}'.format(c)} for c in range(self.nb_channel) ]
+        elif outputname == 'aux':
+            channel_info = [ {'name': 'aux{}'.format(c)} for c in range(self.nb_aux) ]
+        self.outputs[outputname].params['channel_info'] = channel_info
+
     def _initialize(self):
         self.serial_port = serial.Serial(port=self.device_handle, baudrate=self.device_baud)
         self.reset_port()
