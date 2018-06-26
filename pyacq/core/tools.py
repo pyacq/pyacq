@@ -276,3 +276,85 @@ class ChannelSplitter(Node):
         pass
 
 register_node_type(ChannelSplitter)
+
+
+
+class ThreadChunkResizer(ThreadPollInput):
+    def __init__(self, input_stream, output_stream, chunksize, timeout=200, parent=None):
+        ThreadPollInput.__init__(self, input_stream, timeout=timeout, return_data=True, parent=parent)
+        self.output_stream = weakref.ref(output_stream)
+        self.chunksize = chunksize
+        self.stack = []
+    
+    def process_data(self, pos, data):
+        if (data.shape[0] == self.chunksize) and (len(self.stack)==0):
+            self.output_stream().send(data)
+            return
+        
+        self.stack.append(data)
+        
+        cumsizes = np.cumsum([d.shape[0] for d in self.stack])
+        while (len(cumsizes)>0) and (cumsizes[-1]>=self.chunksize):
+            until = np.searchsorted(cumsizes, self.chunksize) + 1
+            data_conc = np.concatenate(self.stack[:until])
+            self.output_stream().send(data_conc[:self.chunksize])
+            _stack = []
+            if data_conc.shape[0]>self.chunksize:
+                self.stack = [data_conc[self.chunksize:]] + self.stack[until:]
+            else:
+                self.stack = self.stack[until:]
+            cumsizes = np.cumsum([d.shape[0] for d in self.stack])
+
+
+class ChunkResizer(Node):
+    """
+    ChunkResizer take a multi-channel input signal stream and ensure
+    that ouput is the same constant chunksize packet.
+    So it split too long buffer and wait for next buffer when it is too small.
+    
+    Usage::
+    
+        chunkresizer = ChunkResizer()
+        chunkresizer.configure(chunksize)
+        chunkresizer.input.connect(someinput)
+        chunkresizer.output.configure(...)
+        chunkresizer.initialize()
+        chunkresizer.start()
+
+    """
+    _input_specs = {'in': {}}
+    _output_specs = {'out':{}}
+    
+    def __init__(self, **kargs):
+        Node.__init__(self, **kargs)
+    
+    def _configure(self, chunksize=100):
+        """
+        Params
+        -----------
+        chunksize: int
+            output desired chunksize
+        """
+        self.chunksize = chunksize
+
+    def after_input_connect(self, inputname):
+        
+        self.nb_channel = self.input.params['shape'][1]
+        for k in ['sample_rate', 'dtype',  'nb_channel', 'shape',]:
+            self.output.spec[k] = self.input.params[k]
+        #~ 'shape',
+    
+    def _initialize(self):
+        self.thread = ThreadChunkResizer(self.input, self.output, self.chunksize)
+    
+    def _start(self):
+        self.thread.start()
+
+    def _stop(self):
+        self.thread.stop()
+        self.thread.wait()
+    
+    def _close(self):
+        pass
+
+register_node_type(ChunkResizer)
