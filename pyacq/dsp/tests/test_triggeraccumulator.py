@@ -23,7 +23,7 @@ length = int(sample_rate*20)
 t = np.arange(length)/sample_rate
 buffer = np.random.rand(length, nb_channel)*.3
 buffer[:, 0] = 0
-for i in range(1,20):
+for i in range(1,5):
     buffer[(t>i)&(t<i+.4), 0] = 2.
     if i%3==0:
         #add  rebounce every 3 triggers
@@ -80,11 +80,12 @@ def test_TriggerAccumulator():
         app.quit()
     
     # start for a while
-    timer = QtCore.QTimer(singleShot=True, interval=5000)
+    timer = QtCore.QTimer(singleShot=True, interval=6000)
     timer.timeout.connect(terminate)
     timer.start()
     
     app.exec_()
+
     assert triggeraccumulator.total_trig==6
 
 
