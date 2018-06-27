@@ -6,12 +6,12 @@ notifications:
   email: false
 
 env:
-    - PYTHON=3.4 TEST=extra
+    - PYTHON=3.6 TEST=extra
 
 
 before_install:
     # Use miniconda because it provides PyQt
-    - wget http://repo.continuum.io/miniconda/Miniconda3-3.5.5-Linux-x86_64.sh -O miniconda.sh
+    - wget http://repo.continuum.io/miniconda/Miniconda2-4.5.4-Linux-x86_64.sh -O miniconda.sh
     - chmod +x miniconda.sh
     - ./miniconda.sh -b -p /home/travis/mc
     - export PATH=/home/travis/mc/bin:$PATH
@@ -39,10 +39,10 @@ install:
     - conda update conda --yes
     - conda create -n test_env python=${PYTHON} --yes
     - source activate test_env
-    - conda install numpy pyqt flake8 scipy vispy --yes
+    - conda install numpy pyqt flake8 scipy vispy pyzmq msgpack-python python-blosc --yes
     
     # not provided by conda (or conda version is too old):
-    - pip install pyzmq pytest pytest-xdist pytest-cov blosc pyqtgraph msgpack-python
+    - pip install pytest pytest-xdist pytest-cov pyqtgraph 
 
 before_script:
     - which python
