@@ -12,9 +12,13 @@ from ..core import (Node, register_node_type, ThreadPollInput, StreamConverter)
 
 
 class TriggerThread(ThreadPollInput):
-    def __init__(self, input_stream, output_stream, timeout = 200, parent = None):
+    new_triggers = QtCore.pyqtSignal(object)
+    
+    def __init__(self, input_stream, output_stream, timeout = 200, parent = None, emit_qt_signal=False):
         ThreadPollInput.__init__(self, input_stream, timeout = timeout, return_data=None, parent = parent)
         self.output_stream = weakref.ref(output_stream)
+        
+        self.emit_qt_signal = emit_qt_signal
         
         self.sample_rate = input_stream.params['sample_rate']
         self.last_pos = None
@@ -83,6 +87,9 @@ class TriggerThread(ThreadPollInput):
             self.n += crossings.size
             crossings += self.last_pos
             self.output_stream().send(crossings.astype('int64'), index=self.n)
+            if self.emit_qt_signal:
+                self.new_triggers.emit(crossings)
+
         
         self.last_pos = pos-1
     
@@ -128,9 +135,10 @@ class TriggerBase(Node,  QtCore.QObject):
         self.params = pg.parametertree.Parameter.create( name='Trigger options',
                                                     type='group', children =self._default_params)
     
-    def _configure(self, max_size=2.):
+    def _configure(self, max_size=2., emit_qt_signal=False):
         self.max_size = max_size
         self.params.sigTreeStateChanged.connect(self.on_params_change)
+        self.emit_qt_signal = emit_qt_signal
 
     def after_input_connect(self, inputname):
         self.nb_channel = self.input.params['shape'][1]
@@ -140,7 +148,7 @@ class TriggerBase(Node,  QtCore.QObject):
         buf_size = int(self.input.params['sample_rate'] * self.max_size)
         self.input.set_buffer(size=buf_size, axisorder=[1,0], double=True)
         
-        self.thread = self._TriggerThread(self.input, self.output)
+        self.thread = self._TriggerThread(self.input, self.output, emit_qt_signal=self.emit_qt_signal)
         self.thread.change_params(self.params)
         self.new_params.connect(self.thread.change_params)
         
