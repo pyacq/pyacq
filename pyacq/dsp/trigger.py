@@ -153,6 +153,9 @@ class TriggerBase(Node,  QtCore.QObject):
         self.thread.stop()
         self.thread.wait()
     
+    def _close(self):
+        pass
+    
     def on_params_change(self):
         self.new_params.emit(self.params)
 
