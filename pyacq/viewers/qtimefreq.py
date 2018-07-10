@@ -347,15 +347,16 @@ class QTimeFreq(WidgetNode):
                             tfr_params['deltafreq'], self.sub_sample_rate, tfr_params['f0'], tfr_params['normalisation'])
         
         if self.downsample_factor>1:
-            self.filter_b = scipy.signal.firwin(9, 1. / self.downsample_factor, window='hamming')
-            self.filter_a = np.array([1.])
+            n = 8
+            q = self.downsample_factor
+            self.filter_sos = scipy.signal.cheby1(n, 0.05, 0.8 / q, output='sos')
         else:
-            self.filter_b = None
-            self.filter_a = None
+            self.filter_sos = None
         
         for worker in self.workers:
             worker.on_fly_change_wavelet(wavelet_fourrier=self.wavelet_fourrier, downsample_factor=self.downsample_factor,
-                        sig_chunk_size=self.sig_chunk_size, plot_length=self.plot_length, filter_a=self.filter_a, filter_b=self.filter_b)
+                        sig_chunk_size=self.sig_chunk_size, plot_length=self.plot_length, filter_sos=self.filter_sos)
+
         
         for input_map in self.input_maps:
             input_map.params['shape'] = (self.plot_length, self.wavelet_fourrier.shape[1])
@@ -571,8 +572,7 @@ class ComputeThread(QtCore.QThread):
         
         downsample_factor = self.worker_params['downsample_factor']
         sig_chunk_size = self.worker_params['sig_chunk_size']
-        filter_a = self.worker_params['filter_a']
-        filter_b = self.worker_params['filter_b']
+        filter_sos = self.worker_params['filter_sos']
         wavelet_fourrier = self.worker_params['wavelet_fourrier']
         plot_length = self.worker_params['plot_length']
         
@@ -590,7 +590,7 @@ class ComputeThread(QtCore.QThread):
         #~ t2 = time.time()
         
         if downsample_factor>1:
-            small_arr = scipy.signal.filtfilt(filter_b, filter_a, full_arr)
+            small_arr = scipy.signal.sosfiltfilt(filter_sos, full_arr)
             small_arr =small_arr[::downsample_factor].copy()  # to ensure continuity
         else:
             small_arr = full_arr
@@ -662,14 +662,14 @@ class TimeFreqWorker(Node, QtCore.QObject):
         pass
     
     #~ def on_fly_change_wavelet(self, wavelet_fourrier=None, downsample_factor=None, sig_chunk_size = None,
-            #~ plot_length=None, filter_a=None, filter_b=None):
+            #~ plot_length=None, filter_sos=None):
     def on_fly_change_wavelet(self, **worker_params):
         p = worker_params
         
         if not self.local:
             # with our RPC ndarray came from np.frombuffer
             # but scipy.signal.filtflt need b writtable so:
-            p['filter_b'] = p['filter_b'].copy()
+            p['filter_sos'] = p['filter_sos'].copy()
         
         p['out_shape'] = (p['plot_length'], p['wavelet_fourrier'].shape[1])
         self.output.params['shape'] = p['out_shape']
