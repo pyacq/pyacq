@@ -254,8 +254,10 @@ class RingBuffer:
                         return (a, b)
                 else:
                     data = np.empty(newshape, self.buffer.dtype).transpose(np.argsort(self.axisorder))
-                    data[:break_index-start] = a
-                    data[break_index-start:] = b
+                    #data[:break_index-start] = a #not robust if break_index==start
+                    #data[break_index-start:] = b
+                    data[:a.shape[0]] = a
+                    data[a.shape[0]:] = b
                     copied = True
         
         if copy and not copied:
