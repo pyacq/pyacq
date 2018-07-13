@@ -11,7 +11,7 @@ import weakref
 from .ringbuffer import RingBuffer
 from .streamhelpers import all_transfermodes
 from ..rpc import ObjectProxy
-from .arraytools import make_dtype
+from .arraytools import fix_struct_dtype, make_dtype
 
 
 default_stream = dict(
@@ -115,6 +115,9 @@ class OutputStream(object):
                 assert kargs[k]==self.spec[k], \
                     'Cannot configure {}={}; already in fixed in self.spec {}={}'.format(k, kargs[k], k, self.spec[k])
         self.params.update(kargs)
+        if 'dtype' in self.params:
+            # fix error in structred dtype with bad serilization
+            self.params['dtype'] = fix_struct_dtype(self.params['dtype'])
         
         shape = self.params['shape']
         assert shape[0] == -1 or shape[0] > 0, "First element in shape must be -1 or > 0."

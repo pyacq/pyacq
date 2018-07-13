@@ -20,6 +20,9 @@ class RingBuffer:
     def __init__(self, shape, dtype, double=True, shmem=None, fill=None, axisorder=None):
         self.double = double
         self.shape = shape
+        
+        dtype = make_dtype(dtype) # fix dtype serialization
+        
         # order of axes as written in memory. This does not affect the shape of the 
         # buffer as seen by the user, but can be used to make sure a specific axis
         # is contiguous in memory.
@@ -36,7 +39,7 @@ class RingBuffer:
         self._filler = fill
         
         if shmem is None:
-            self.buffer = np.empty(nativeshape, dtype=make_dtype(dtype)).transpose(np.argsort(axisorder))
+            self.buffer = np.empty(nativeshape, dtype=dtype).transpose(np.argsort(axisorder))
             self.buffer[:] = self._filler
             self._indexes = np.zeros((2,), dtype='int64')
             self._shmem = None
