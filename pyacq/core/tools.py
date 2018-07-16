@@ -14,6 +14,7 @@ from pyqtgraph.util.mutex import Mutex
 
 from .node import Node, register_node_type
 from .stream import OutputStream, InputStream
+from .stream.arraytools import make_dtype
 
 
 class ThreadPollInput(QtCore.QThread):
@@ -130,14 +131,16 @@ class ThreadStreamConverter(ThreadPollInput):
         ThreadPollInput.__init__(self, input_stream, timeout=timeout, return_data=True, parent=parent)
         self.output_stream = weakref.ref(output_stream)
         self.conversions = conversions
-    
+        
+        self.output_dtype = make_dtype(self.output_stream().params['dtype'])
+        
     def process_data(self, pos, data):
         #~ if 'transfermode' in self.conversions and self.conversions['transfermode'][0]=='sharedmem':
             #~ data = self.input_stream().get_array_slice(self, pos, None)
         #~ if 'timeaxis' in self.conversions:
             #~ data = data.swapaxes(*self.conversions['timeaxis'])
-        if data.dtype!=self.output_stream().params['dtype']:
-            data = data.astype(self.output_stream().params['dtype'])
+        if data.dtype!=self.output_dtype:
+            data = data.astype(self.output_dtype)
         self.output_stream().send(data, index=pos)
 
 
@@ -340,8 +343,9 @@ class ChunkResizer(Node):
     def after_input_connect(self, inputname):
         
         self.nb_channel = self.input.params['shape'][1]
-        for k in ['sample_rate', 'dtype',  'nb_channel', 'shape',]:
-            self.output.spec[k] = self.input.params[k]
+        for k in ['sample_rate', 'dtype',  'shape', 'channel_info']:
+            if k in self.input.params:
+                self.output.spec[k] = self.input.params[k]
         #~ 'shape',
     
     def _initialize(self):
