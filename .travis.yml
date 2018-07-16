@@ -40,7 +40,7 @@ install:
     - conda create -n test_env python=${PYTHON} --yes
     - source activate test_env
     - conda install numpy pyqt flake8 scipy vispy pyzmq msgpack-python python-blosc --yes
-    - conda install av -c conda-forge
+    - conda install av -c conda-forge --yes
     
     # not provided by conda (or conda version is too old):
     - pip install pytest pytest-xdist pytest-cov pyqtgraph 
