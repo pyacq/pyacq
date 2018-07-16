@@ -1,162 +1,82 @@
-from pyqtgraph.Qt import QtCore, QtGui
-from pyqtgraph.util.mutex import Mutex
+# -*- coding: utf-8 -*-
+# Copyright (c) 2016, French National Center for Scientific Research (CNRS)
+# Distributed under the (new) BSD License. See LICENSE for more info.
 
-from .rpc import RPCServer
-from .node import Node, WidgetNode, register_node_type
-from .nodelist import all_nodes
-
-import time
-import importlib
-import pickle
-import weakref
-import random
-import string
-import zmq
-import logging
-
-class RpcThreadSocket( QtCore.QThread):
-    new_message = QtCore.Signal(QtCore.QByteArray, QtCore.QByteArray)
-    def __init__(self, rpc_server, local_addr, parent = None):
-        QtCore.QThread.__init__(self, parent)
-        self.rpc_socket = weakref.ref(rpc_server._socket)
-        
-        context = zmq.Context.instance()
-        self.local_socket = context.socket(zmq.PAIR)
-        self.local_socket.connect(local_addr)
-        
-        self.poller = zmq.Poller()
-        self.poller.register(self.rpc_socket(), zmq.POLLIN)
-        self.poller.register(self.local_socket, zmq.POLLIN)
-        
-        
-        self.running = False
-        self.lock = Mutex()
-    
-    def run(self):
-        with self.lock:
-            self.running = True
-        
-        while True:
-            
-            with self.lock:
-                if not self.running:
-                    # do a last poll
-                    socks = dict(self.poller.poll(timeout = 500))
-                    if len(socks)==0:
-                        self.local_socket.close()
-                        break
-            
-            socks = dict(self.poller.poll(timeout = 100))
-            
-            if self.rpc_socket() in socks:
-                name, msg = self.rpc_socket().recv_multipart()
-                self.new_message.emit(name, msg)
-            
-            if self.local_socket in socks:
-                name, data = self.local_socket.recv_multipart()
-                self.rpc_socket().send_multipart([name, data])
-
-    def stop(self):
-        with self.lock:
-            self.running = False
+from .rpc import ProcessSpawner, RPCServer, RPCClient
+from . import nodelist
 
 
-class NodeGroup(RPCServer):
+class NodeGroup(object):
     """
-    This class:
-       * is a bunch of Node inside a process.
-       * lauched/stoped by Host
-       * able to create/delete Node (by rpc command)
-       * distribute the start/stop/initialize/configure to appropriate Node
+    NodeGroup is responsible for managing a collection of Nodes within a single
+    process.
+    
+    NodeGroups themselves are created and destroyed by Hosts, which manage all 
+    NodeGroups on a particular machine.
     """
-    
-    def __init__(self, name, addr):
-        RPCServer.__init__(self, name, addr)
-        self.app = QtGui.QApplication([])
-        self.nodes = {}
+    def __init__(self, host, manager):
+        self.host = host
+        self.manager = manager
+        self.nodes = set()
 
-    def run_forever(self):
-        # create a proxy socket between RpcThreadSocket and main
-        addr = 'inproc://'+''.join(random.SystemRandom().choice(string.ascii_uppercase + string.digits) for _ in range(16))
-        context = zmq.Context.instance()
-        self._local_socket = context.socket(zmq.PAIR)
-        self._local_socket.bind(addr)
+    def create_node(self, node_class, *args, **kwds):
+        """Create a new Node and add it to this NodeGroup.
         
-        self._rpcsocket_thread = RpcThreadSocket(self, addr,  parent = self.app)
-        self._rpcsocket_thread.new_message.connect(self._mainthread_process_one)
-        self._rpcsocket_thread.start()
+        Return the new Node.
+        """
+        assert isinstance(node_class, str)
+        cls = nodelist.all_nodes[node_class]
+        node = cls(*args, **kwds)
+        self.add_node(node)
+        return node
+
+    def list_node_types(self):
+        """Return a list of the class names for all registered node types.
+        """
+        return list(nodelist.all_nodes.keys())
+
+    def register_node_type_from_module(self, modname, classname):
+        """Register a Node subclass with this NodeGroup.
         
-        self.app.setQuitOnLastWindowClosed(False)
-        self.app.exec_()
-    
-    def _mainthread_process_one(self, name, msg):
-        self._process_one(bytes(name), bytes(msg))
+        This allows custom Node subclasses to be instantiated in this NodeGroup
+        using :func:`NodeGroup.create_node`.
+        """
+        nodelist.register_node_type_from_module(modname, classname)
 
-        if  not self.running():
-            # stop the RPC
-            self._rpcsocket_thread.stop()
-            self._rpcsocket_thread.wait()
-
-            # stop/close all Nodes
-            for node in self.nodes.values():
-                if node.running():
-                    try:
-                        node.stop()
-                    except:
-                        logging.info("Error Node.stop: %s ", node.name)
-            for node in self.nodes.values():
-                try:
-                    node.close()
-                except:
-                    logging.info("Error Node.close: %s", node.name)
-            
-            # Quit QApp
-            self.app.quit()
-            del self.app
-   
-    def _send_result(self, name, data):
-        # over writte RPCServer._send_result to avoid send back the result in main thread
-        self._local_socket.send_multipart([name, data])
-
-    def create_node(self, name, classname, **kargs):
-        assert name not in self.nodes, 'This node already exists'
-        assert classname in all_nodes, 'The node {} is not registered'.format(classname)
-        class_ = all_nodes[classname] 
-        node = class_(name = name, **kargs)
-        self.nodes[name] = node
+    def add_node(self, node):
+        """Add a Node to this NodeGroup.
+        """
+        self.nodes.add(node)
+        
+    def remove_node(self, node):
+        """Remove a Node from this NodeGroup.
+        """
+        if node.running():
+            raise RuntimeError("Refusing to remove Node while it is running.")
+        self.nodes.remove(node)
+        
+    def list_nodes(self):
+        return list(self.nodes)
     
-    def delete_node(self, name):
-        node = self.nodes[name]
-        assert not node.running(), 'The node {} is running'.format(name)
-        node.close()
-        self.nodes.pop(name)
-    
-    def control_node(self, nodename, method, *args, **kargs):
-        return getattr(self.nodes[nodename], method)(*args, **kargs)
-    
-    def set_node_attr(self, nodename, attr, value):
-        return setattr(self.nodes[nodename], attr, value)
-    
-    def get_node_attr(self, nodename, attr):
-        return getattr(self.nodes[nodename], attr)
-    
-    def register_node_type_from_module(self, module, classname):
-        mod = importlib.import_module(module)
-        class_= getattr(mod, classname)
-        register_node_type(class_,classname = classname)
-    
-    def register_node_type_with_pickle(self, picklizedclass, classname):
-        # this is not working at the moment, so bad....
-        class_ = pickle.loads(picklizedclass)
-        register_node_type(class_,classname = classname)
-
     def start_all_nodes(self):
-        for node in self.nodes.values():
+        """Call `Node.start()` for all Nodes in this group.
+        """
+        for node in self.nodes:
             node.start()
         
     def stop_all_nodes(self):
-        for node in self.nodes.values():
-            node.stop()
+        """Call `Node.stop()` for all Nodes in this group.
+        """
+        for node in self.nodes:
+            if node.running():
+                node.stop()
 
     def any_node_running(self):
-        return any(node.running() for node in self.nodes.values())
+        """Return True if any of the Nodes in this group are running.
+        """
+        return any(node.running() for node in self.nodes)
+
+    def close(self):
+        self.stop_all_nodes()
+        cli = RPCServer.local_client()
+        cli.close_server(sync='off')

@@ -1,3 +1,7 @@
+# -*- coding: utf-8 -*-
+# Copyright (c) 2016, French National Center for Scientific Research (CNRS)
+# Distributed under the (new) BSD License. See LICENSE for more info.
+
 """
 av is python binding to libav or ffmpeg and this is so great (except the poor doc for the moment)
 http://mikeboers.github.io/PyAV/index.html
@@ -41,21 +45,23 @@ class AVThread(QtCore.QThread):
             for frame in packet.decode():
                 arr = frame.to_rgb().to_nd_array()
                 n += 1
-                self.out_stream.send(n, arr)
+                self.out_stream.send(arr, index=n)
 
     def stop(self):
         with self.lock:
             self.running = False
 
+
 class WebCamAV(Node):
     """
-    Simple webcam device that use the av python module.
+    Simple webcam device using the `av` python module, which is a wrapper around
+    ffmpeg or libav.
+    
     See http://mikeboers.github.io/PyAV/index.html.
-    It is a wrapper on top ffmpeg or libav.
     """
-    _output_specs = {'video' : dict(streamtype = 'video',dtype = 'uint8',
-                                                shape = (4800, 6400, 3), compression ='',
-                                                sampling_rate = 1.)
+    _output_specs = {'video': dict(streamtype='video',dtype='uint8',
+                                                shape=(4800, 6400, 3), compression ='',
+                                                sample_rate = 1.)
                                 }
     def __init__(self, **kargs):
         Node.__init__(self, **kargs)
@@ -69,7 +75,7 @@ class WebCamAV(Node):
         container = av.open('/dev/video{}'.format(self.camera_num), 'r','video4linux2', self.options)
         stream = next(s for s in container.streams if s.type == 'video')
         self.output.spec['shape'] = (stream.format.height, stream.format.width, 3)
-        self.output.spec['sampling_rate'] = float(stream.average_rate)
+        self.output.spec['sample_rate'] = float(stream.average_rate)
     
     def _initialize(self):
         pass

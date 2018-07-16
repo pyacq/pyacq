@@ -10,18 +10,33 @@ from pyqtgraph.Qt import QtCore, QtGui
 from ..core import Node, register_node_type
 from  . import ULconstants as UL
 
+"""
+Note:
+this should was written to wrap cbw dll with ctypes.
+Now measurement computing provide an official python
+wrapper (also based on ctypes) here https://github.com/mccdaq
 
+This should be maybe rewritten using it but at the same time
+measurement computing also provide another libray uldaq
+(https://github.com/mccdaq/uldaq) for linux with another
+python wrapper.
+
+Waiting for MC unifing something crossplatform I prefer
+to keep this old but tested code.
+
+"""
 
 
 
 try:
     _cbw = ctypes.windll.cbw32
     HAVE_MC = True
-    #~ print 'cbw32'
+    #~ print('cbw32')
 except WindowsError:
     try:
         _cbw = ctypes.windll.cbw64
         HAVE_MC = True
+        #~ print('cbw64')
     except:
         HAVE_MC = False
 
@@ -123,9 +138,13 @@ class MeasurementComputing(Node):
         if self.mode_daq_scan == 'cbAInScan':
             low_chan = int(min(self.ai_channel_index))
             high_chan = int(max(self.ai_channel_index))
-            cbw.cbAInScan(self.board_num, low_chan, high_chan, int(self.raw_arr.size),
-                  ctypes.byref(self.real_sr), int(self.gain_array[0]),
-                    self.raw_arr.ctypes.data, self.options)
+            #~ print(self.raw_arr.ctypes.data)
+            #~ print(self.raw_arr.__array_interface__['data'])
+            
+
+            cbw.cbAInScan(self.board_num, low_chan, high_chan, ctypes.c_long(self.raw_arr.size),
+                  ctypes.byref(self.real_sr), ctypes.c_int(self.gain_array[0]),
+                    ctypes.c_void_p(self.raw_arr.ctypes.data), self.options)
             self.function = UL.AIFUNCTION
         elif self.mode_daq_scan == 'cbDaqInScan':
             cbw.cbDaqInScan(self.board_num, self.chan_array.ctypes.data,
@@ -151,7 +170,9 @@ class MeasurementComputing(Node):
         board_name = ctypes.create_string_buffer(UL.BOARDNAMELEN)
         cbw.cbGetBoardName(board_num, byref(board_name))
         info['board_name'] = board_name.value
-        l = [ ('nb_ai_channel', UL.BOARDINFO, UL.BINUMADCHANS),
+        l = [ 
+                ('board_type', UL.BOARDINFO, UL.BIBOARDTYPE),
+                ('nb_ai_channel', UL.BOARDINFO, UL.BINUMADCHANS),
                 ('nb_ao_channel', UL.BOARDINFO, UL.BINUMDACHANS),
                 #~ ('BINUMIOPORTS', UL.BOARDINFO, UL.BINUMIOPORTS),
                 ('nb_di_port', UL.BOARDINFO, UL.BIDINUMDEVS),
@@ -162,6 +183,18 @@ class MeasurementComputing(Node):
             cbw.cbGetConfig(info_type, board_num, 0, config_item,
                     byref(config_val))
             info[key] = config_val.value
+        
+        
+        #~ (b'USB-1616FS', b'USB-1208LS', b'USB-1608FS', b'USB-1608FS-Plus'
+        
+        #~ if info['board_type'] in [122, 125]:
+        if info['board_name'] in [b'USB-1208LS']:
+            info['packet_size'] = 64
+        #~ elif info['board_type'] in [130, 161, 240, 125]:
+        elif info['board_name'] in [b'USB-1208FS', b'USB-1408FS', b'USB-7204',  b'USB-1608FS']:
+            info['packet_size'] = 31
+        else:
+            info['packet_size'] = 1
 
         info['device_params'] = { 'board_num': board_num, 
                                     'sampling_rate' : 1000.,}
@@ -228,15 +261,12 @@ class MeasurementComputing(Node):
         self.real_sr = ctypes.c_long(int(self.sampling_rate))
 
         self.internal_size = int(10.*self.sampling_rate) # buffer of 10S
-        #~ internal_size = internal_size- internal_size%packet_size
-        
-        ##TODO
-        #~ self.internal_size = internal_size- internal_size%(device_info['device_packet_size'])
+        self.internal_size = self.internal_size - self.internal_size%(self.info['packet_size'])
 
         self.raw_arr = np.zeros(( self.internal_size, self.nb_total_channel), dtype = 'uint16')
         self.pretrig_count = ctypes.c_long(0)
         self.total_count = ctypes.c_long(int(self.raw_arr.size))
-        self.options = UL.BACKGROUND  + UL.CONTINUOUS + UL.CONVERTDATA
+        self.options = ctypes.c_int(UL.BACKGROUND  + UL.CONTINUOUS + UL.CONVERTDATA)
         
         # TODO get the real sampling_rate here : maybe a start/stop
         self.real_sampling_rate = self.sampling_rate
@@ -262,10 +292,11 @@ class MeasurementComputing(Node):
         if cur_index.value==-1: 
             return
         
-        index = cur_index.value/self.nb_total_channel
+        index = cur_index.value // self.nb_total_channel
         
         if index == self.last_index :
             return
+        
         
         if index<self.last_index:
             #end of internal ring

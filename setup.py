@@ -1,21 +1,28 @@
 # -*- coding: utf-8 -*-
 
-from setuptools import setup
+from setuptools import setup, find_packages
 import os
-
-long_description = open("README.rst").read()
 import pyacq
+
+
+long_description = """
+Pyacq is a simple, pure-Python framework for distributed data acquisition and
+stream processing. Its primary use cases are for analog signals, digital
+signals, video, and events. Pyacq uses ZeroMQ to stream data between
+distributed threads, processes, and machines to build more complex and
+scalable acquisition systems.
+"""
+
 
 setup(
     name = "pyacq",
     version = pyacq.__version__,
-    packages = ['pyacq', 'pyacq.core', 'pyacq.viewers', 'pyacq.devices'],
+    packages = [pkg for pkg in find_packages() if pkg.startswith('pyacq')],
     install_requires=[
                     'numpy',
                     'pyzmq',
                     'pyqtgraph',
-                    'blosc',
-                    
+                    #'blosc',  # optional; causes install failure on appveyor
                     #'msgpack-python',
                     ],
     author = "S.Garcia",

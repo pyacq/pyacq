@@ -1,15 +1,20 @@
+# -*- coding: utf-8 -*-
+# Copyright (c) 2016, French National Center for Scientific Research (CNRS)
+# Distributed under the (new) BSD License. See LICENSE for more info.
+
 from ..core import WidgetNode, register_node_type
 from pyqtgraph.Qt import QtCore, QtGui
 
 import numpy as np
 import pyqtgraph as pg
 
+
 class ImageViewer(WidgetNode):
     """
-    This simple Viewer with pyqtgraph waiting for for the vispy one.
+    A simple image viewer using pyqtgraph.
     """
-    _input_specs = {'video' : dict(streamtype = 'video',dtype = 'uint8',
-                                                shape = (-1, -1, 3), compression ='',
+    _input_specs = {'video': dict(streamtype='video',dtype='uint8',
+                                                shape=(-1, -1, 3), compression ='',
                                                 ),
                                 }
     def __init__(self, **kargs):
@@ -18,7 +23,7 @@ class ImageViewer(WidgetNode):
         self.layout = QtGui.QHBoxLayout()
         self.setLayout(self.layout)
         
-        self.graphicsview  = pg.GraphicsView()
+        self.graphicsview = pg.GraphicsView()
         self.layout.addWidget(self.graphicsview)
         
         self.plot = pg.PlotItem()
@@ -27,8 +32,7 @@ class ImageViewer(WidgetNode):
         self.plot.hideButtons()
         self.plot.showAxis('left', False)
         self.plot.showAxis('bottom', False)
-        
-        
+                
         self.image = pg.ImageItem()
         self.plot.addItem(self.image)
     
@@ -38,7 +42,7 @@ class ImageViewer(WidgetNode):
     def _initialize(self):
         in_params = self.input.params
         self.timer = QtCore.QTimer(singleShot=False)
-        self.timer.setInterval(int(1./in_params['sampling_rate']*1000))
+        self.timer.setInterval(int(1./in_params['sample_rate']*1000))
         self.timer.timeout.connect(self.poll_socket)
 
     def _start(self):
@@ -49,15 +53,15 @@ class ImageViewer(WidgetNode):
     
     def _close(self):
         pass
-
     
     def poll_socket(self):
-        event =  self.input.socket.poll(0)
+        event = self.input.socket.poll(0)
         if event != 0:
             index, data = self.input.recv()
             data = data[::-1,:,:]
             data = data.swapaxes(0,1)
             self.image.setImage(data)
+
 
 register_node_type(ImageViewer)
 
@@ -103,7 +107,7 @@ class ImageViewer(WidgetNode):
         self.view.camera.rect = (0,0) + tuple(in_params['shape'][:2])
         
         self.timer = QtCore.QTimer(singleShot=False)
-        self.timer.setInterval(int(1./in_params['sampling_rate']*1000))
+        self.timer.setInterval(int(1./in_params['sample_rate']*1000))
         self.timer.timeout.connect(self.poll_socket)
 
     def configure(self, **kargs):

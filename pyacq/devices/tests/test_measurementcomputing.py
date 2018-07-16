@@ -13,7 +13,9 @@ from pyacq.core.tests.fakenodes import ReceiverWidget
 
 def test_measurementcomputing_infodevice():
     dev = MeasurementComputing()
-    print(dev.scan_device_info(1))
+    for k, v in dev.scan_device_info(0).items():
+        print(k, ':', v)
+    #~ print(dev.scan_device_info(0))
 
 
 def test_measurementcomputing_USB1608_FS_PLUS():
@@ -95,7 +97,7 @@ def test_measurementcomputing_USB2533():
 
 if __name__ == '__main__':
     #~ test_measurementcomputing_infodevice()
-    #~ test_measurementcomputing_USB1608_FS_PLUS()
-    test_measurementcomputing_USB2533()
+    test_measurementcomputing_USB1608_FS_PLUS()
+    #~ test_measurementcomputing_USB2533()
 
  
