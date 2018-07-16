@@ -116,12 +116,8 @@ class AviRecorder(Node):
         
         # flush stream  = encode empty frame until empty packet
         for i, av_stream in enumerate(self.av_streams):
-            while True:
-                packet = av_stream.encode()
-                if packet is not None:
-                    self.av_containers[i].mux(packet)
-                else:
-                    break
+            for packet in av_stream.encode():
+                self.av_containers[i].mux(packet)
         
         # Close files
         for i, av_container in enumerate(self.av_containers):
@@ -169,9 +165,7 @@ class ThreadRec(ThreadPollInput):
         
         frame = av.VideoFrame.from_ndarray(data, format='rgb24')
         
-        packet = self.av_stream.encode(frame)
-        if packet is not None:
+        for packet in self.av_stream.encode(frame):
             self.av_container.mux(packet)
-        
         
 register_node_type(AviRecorder)

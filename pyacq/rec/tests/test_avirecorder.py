@@ -19,9 +19,9 @@ import shutil
 import datetime
 
 
-
+@pytest.mark.skipif(not HAVE_AV, reason='no have av')
 def test_AviRecorder():
-    app = QtGui.QApplication([])
+    app = pg.mkQApp()
     
     dev = WebCamAV(name='cam')
     dev.configure(camera_num=0)
@@ -49,11 +49,14 @@ def test_AviRecorder():
     
     def terminate():
         viewer.stop()
-        dev.stop()
-        viewer.close()
-        dev.close()
         rec.stop()
+        dev.stop()
+        
+        
+        viewer.close()
         rec.close()
+        dev.close()
+        
         app.quit()
     
     # start for a while
