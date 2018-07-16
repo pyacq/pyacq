@@ -69,12 +69,8 @@ if HAVE_MC:
 class MeasurementComputing(Node):
     """
     """
-    _output_specs = {'signals' : dict(streamtype = 'analogsignal',
-                    dtype = 'uint16', shape = (-1, 16), compression ='',
-                    time_axis=0, sampling_rate =30.),
-                    'digital' : dict(streamtype = 'digitalsignal',
-                    dtype = 'uint16', shape = (-1, 8), compression ='',
-                    time_axis=0, sampling_rate =30.),
+    _output_specs = {'signals' : dict(streamtype = 'analogsignal'),
+                    'digital' : dict(streamtype = 'digitalsignal'),
                     }
 
     def __init__(self, **kargs):
@@ -94,7 +90,8 @@ class MeasurementComputing(Node):
         self.prepare_device()
         
         self.outputs['signals'].spec['shape'] = (-1, self.nb_ai_channel)
-        self.outputs['signals'].spec['dtype = '] = 'uint16'
+        self.outputs['signals'].spec['dtype'] = 'uint16'
+        #~ self.outputs['signals'].spec['dtype'] = 'float32'
         self.outputs['signals'].spec['sampling_rate'] = self.real_sampling_rate
         
         #TODO gain by channels
@@ -102,7 +99,7 @@ class MeasurementComputing(Node):
         self.outputs['signals'].spec['offset'] = 0.
 
         self.outputs['digital'].spec['shape'] = (-1, self.info['nb_di_port'])
-        self.outputs['digital'].spec['dtype = '] = 'uint16'
+        self.outputs['digital'].spec['dtype'] = 'uint16'
         self.outputs['digital'].spec['sampling_rate'] = self.real_sampling_rate
         self.outputs['digital'].spec['gain'] = 1
         self.outputs['digital'].spec['offset'] = 0
@@ -134,14 +131,16 @@ class MeasurementComputing(Node):
                 #~ raise()
         self.timer.start()
 
+    
+    def _stop(self):
+        self.timer.stop()
+        self._stop_daq_scan()
+
+
     def _start_daq_scan(self):
         if self.mode_daq_scan == 'cbAInScan':
             low_chan = int(min(self.ai_channel_index))
             high_chan = int(max(self.ai_channel_index))
-            #~ print(self.raw_arr.ctypes.data)
-            #~ print(self.raw_arr.__array_interface__['data'])
-            
-
             cbw.cbAInScan(self.board_num, low_chan, high_chan, ctypes.c_long(self.raw_arr.size),
                   ctypes.byref(self.real_sr), ctypes.c_int(self.gain_array[0]),
                     ctypes.c_void_p(self.raw_arr.ctypes.data), self.options)
@@ -152,9 +151,9 @@ class MeasurementComputing(Node):
                 self.nb_total_channel, byref(self.real_sr), byref(self.pretrig_count),
                 byref(self.total_count), self.raw_arr.ctypes.data, self.options)
             self.function = UL.DAQIFUNCTION
-
-    def _stop(self):
-        self.timer.stop()
+    
+    def _stop_daq_scan(self):
+    
         if self.mode_daq_scan == 'cbAInScan':
             cbw.cbStopBackground(ctypes.c_int(self.board_num))
         elif self.mode_daq_scan == 'cbDaqInScan':
@@ -185,12 +184,8 @@ class MeasurementComputing(Node):
             info[key] = config_val.value
         
         
-        #~ (b'USB-1616FS', b'USB-1208LS', b'USB-1608FS', b'USB-1608FS-Plus'
-        
-        #~ if info['board_type'] in [122, 125]:
         if info['board_name'] in [b'USB-1208LS']:
             info['packet_size'] = 64
-        #~ elif info['board_type'] in [130, 161, 240, 125]:
         elif info['board_name'] in [b'USB-1208FS', b'USB-1408FS', b'USB-7204',  b'USB-1608FS']:
             info['packet_size'] = 31
         else:
@@ -263,13 +258,11 @@ class MeasurementComputing(Node):
         self.internal_size = int(10.*self.sampling_rate) # buffer of 10S
         self.internal_size = self.internal_size - self.internal_size%(self.info['packet_size'])
 
-        self.raw_arr = np.zeros(( self.internal_size, self.nb_total_channel), dtype = 'uint16')
+        self.raw_arr = np.zeros(( self.internal_size, self.nb_total_channel), dtype='uint16')
         self.pretrig_count = ctypes.c_long(0)
         self.total_count = ctypes.c_long(int(self.raw_arr.size))
         self.options = ctypes.c_int(UL.BACKGROUND  + UL.CONTINUOUS + UL.CONVERTDATA)
         
-        # TODO get the real sampling_rate here : maybe a start/stop
-        self.real_sampling_rate = self.sampling_rate
         
         if self.info['board_name'] in (b'USB-1616FS', b'USB-1208LS', b'USB-1608FS', b'USB-1608FS-Plus'):
             #for some old card the scanning mode is limited
@@ -279,8 +272,15 @@ class MeasurementComputing(Node):
             assert np.all(self.gain_array[0]==self.gain_array), 'For this card gain must be identical'
         else:
             self.mode_daq_scan = 'cbDaqInScan'
+
+        # get the real sampling_rate here :  a start/stop and read self.real_sr
+        self._start_daq_scan()
+        self._stop_daq_scan()
+        self.real_sampling_rate = float(self.real_sr.value)
     
     def periodic_poll(self):
+        print('periodic_poll')
+        #~ return
         status = ctypes.c_int(0)
         cur_count = ctypes.c_long(0)
         cur_index = ctypes.c_long(0)
@@ -293,6 +293,8 @@ class MeasurementComputing(Node):
             return
         
         index = cur_index.value // self.nb_total_channel
+        #~ print('index', index)
+        #~ return
         
         if index == self.last_index :
             return
@@ -302,16 +304,25 @@ class MeasurementComputing(Node):
             #end of internal ring
             new_samp = self.internal_size - self.last_index
             self.head += new_samp
-            self.outputs['signals'].send(self.head, self.raw_arr[self.last_index:, self.ai_mask])
+            self.outputs['signals'].send(self.raw_arr[self.last_index:, self.ai_mask], index=self.head)
+            
             if self.info['nb_di_port']>0:
-                self.outputs['digital'].send(self.head, self.raw_arr[self.last_index:, self.di_mask])
+                self.outputs['digital'].send(self.raw_arr[self.last_index:, self.di_mask], index=self.head)
             self.last_index = 0
         
         new_samp = index - self.last_index
+        print('new_samp', new_samp)
         self.head += new_samp
-        self.outputs['signals'].send(self.head, self.raw_arr[ self.last_index:index, self.ai_mask])
+        
+        #~ self.outputs['signals'].send(self.raw_arr[ self.last_index:index, self.ai_mask], index=self.head)
+        arr = self.raw_arr[ self.last_index:index, self.ai_mask]
+        arr = arr.copy()
+        print(arr.flags)
+        print(self.head)
+        self.outputs['signals'].send(arr, index=self.head)
+        
         if self.info['nb_di_port']>0:
-            self.outputs['digital'].send(self.head, self.raw_arr[ self.last_index:index, self.di_mask])
+            self.outputs['digital'].send(self.raw_arr[ self.last_index:index, self.di_mask], index=self.head)
         
         self.last_index = index%self.internal_size
         

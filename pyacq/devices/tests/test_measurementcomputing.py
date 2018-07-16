@@ -4,8 +4,8 @@ from pyqtgraph.Qt import QtCore, QtGui
 
 from pyacq import create_manager
 from pyacq import MeasurementComputing
-from pyacq.core.tests.fakenodes import ReceiverWidget
-
+#~ from pyacq.core.tests.fakenodes import ReceiverWidget
+from pyacq.viewers import QOscilloscope
 
 #~ import logging
 #~ logging.getLogger().level=logging.INFO
@@ -23,14 +23,20 @@ def test_measurementcomputing_USB1608_FS_PLUS():
     app = pg.mkQApp()    
     dev = MeasurementComputing()
     
-    dev.configure(board_num = 0, sampling_rate = 1000.)
+    dev.configure(board_num = 0, sampling_rate = 1000.5)
     dev.outputs['signals'].configure(protocol = 'tcp', interface = '127.0.0.1', transfertmode = 'plaindata')
     dev.initialize()
     
-    viewer = ReceiverWidget()
-    viewer.configure()
+    #~ return
+    
+    viewer = QOscilloscope()
+    viewer.configure(with_user_dialog=True)
     viewer.input.connect(dev.outputs['signals'])
     viewer.initialize()
+    #~ viewer.params['scale_mode'] = 'by_channel'
+    #~ viewer.params['xsize'] = 1
+    #~ viewer.params['refresh_interval'] = 100
+
     
     dev.start()
     viewer.start()
