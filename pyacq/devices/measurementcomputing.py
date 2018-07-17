@@ -1,6 +1,7 @@
 import numpy as np
 import time
 import logging
+import sys
 
 import ctypes
 from ctypes import byref
@@ -19,18 +20,20 @@ from ..core import Node, register_node_type
 """
 
 
-
-try:
-    _cbw = ctypes.windll.cbw32
-    HAVE_MC = True
-    #~ print('cbw32')
-except WindowsError:
+if sys.platform.startswith('win'):
     try:
-        _cbw = ctypes.windll.cbw64
+        _cbw = ctypes.windll.cbw32
         HAVE_MC = True
-        #~ print('cbw64')
-    except:
-        HAVE_MC = False
+        #~ print('cbw32')
+    except WindowsError:
+        try:
+            _cbw = ctypes.windll.cbw64
+            HAVE_MC = True
+            #~ print('cbw64')
+        except:
+            HAVE_MC = False
+else:
+    HAVE_MC = False
 
 class ULError( Exception ):
     def __init__(self, errno):
