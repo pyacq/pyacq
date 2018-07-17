@@ -6,23 +6,15 @@ import ctypes
 from ctypes import byref
 
 from pyqtgraph.Qt import QtCore, QtGui
+from pyqtgraph.util.mutex import Mutex
 
 from ..core import Node, register_node_type
-from  . import ULconstants as UL
 
 """
-Note:
-this should was written to wrap cbw dll with ctypes.
-Now measurement computing provide an official python
-wrapper (also based on ctypes) here https://github.com/mccdaq
 
-This should be maybe rewritten using it but at the same time
-measurement computing also provide another libray uldaq
-(https://github.com/mccdaq/uldaq) for linux with another
-python wrapper.
 
-Waiting for MC unifing something crossplatform I prefer
-to keep this old but tested code.
+# TODO:
+  * range output to float32
 
 """
 
@@ -43,7 +35,7 @@ except WindowsError:
 class ULError( Exception ):
     def __init__(self, errno):
         self.errno = errno
-        err_msg = ctypes.create_string_buffer(UL.ERRSTRLEN)
+        err_msg = ctypes.create_string_buffer(ULConst.ERRSTRLEN)
         errno2 = _cbw.cbGetErrMsg(errno,err_msg)
         assert errno2==0, Exception('_cbw.cbGetErrMsg do not work')
         errstr = 'ULError %d: %s'%(errno,err_msg.value)                
@@ -52,7 +44,7 @@ class ULError( Exception ):
 def decorate_with_error(f):
     def func_with_error(*args):
         errno = f(*args)
-        if errno!=UL.NOERRORS:
+        if errno!=ULConst.NOERRORS:
             raise ULError(errno)
         return errno
     return func_with_error
@@ -65,58 +57,113 @@ class CBW:
 if HAVE_MC:
     cbw = CBW()    
 
+# some board are limited and do not have scan of digital port
+board_not_support_cbDaqInScan = (b'USB-1616FS', b'USB-1208LS', b'USB-1608FS', b'USB-1608FS-Plus')
+
 
 class MeasurementComputing(Node):
+    """Simple wrapper around universal library (cbw) for measurement computing card.
+    
+    Note:
+        this should was written to wrap cbw dll with ctypes.
+        Now measurement computing provide an official python
+        wrapper (also based on ctypes) here https://github.com/mccdaq
+
+        This should be maybe rewritten using it but at the same time
+        measurement computing also provide another libray uldaq
+        (https://github.com/mccdaq/uldaq) for linux with another
+        python wrapper.
+
+        Waiting for MC unifing something crossplatform I prefer
+        to keep this old but tested code.
+    
+    This Node grab both analog channels and digital when possible.
+    Some device (USB-1608FS, USB-1616FS, ..) do not support scan of digital
+    port. In that case they are ignored.
+    
+    
+    Parameters for configure
+    ----------
+    sample_rate : float
+        Sample rate for analog input clock.
+    ai_channel_index : list of int
+        List of analog channel.
+    ai_ranges: list of tuples or tuples
+        List of range for  analog channels expromed in Volts
+        Example ai_ranges = [(-5, 5), (-10, 10)]
+        If only one tuple then it is apllied to all channels.
+    ai_mode: str or None
+        Some card can be configured with an ai mode in ('differential', 'single-ended', 'grounded')
+        None by default because not all card can deal with this.
+    
     """
-    """
-    _output_specs = {'signals' : dict(streamtype = 'analogsignal'),
-                    'digital' : dict(streamtype = 'digitalsignal'),
+    _output_specs = {'aichannels' : dict(streamtype = 'analogsignal'),
+                    #~ 'dichannels' : dict(streamtype = 'digitalsignal'),
                     }
 
     def __init__(self, **kargs):
         Node.__init__(self, **kargs)
         assert HAVE_MC, "MeasurementComputing depend on MeasurementComputing DLL"
 
-    def _configure(self, board_num = 0, sampling_rate = 1000., 
-            timer_interval = 100, subdevices_params = None):
+    def _configure(self, board_num=0, sample_rate=1000., ai_channel_index=None,
+                ai_ranges=(-5, 5), ai_mode=None):
+        
+        self.board_info = self.scan_device_info(board_num)
+        
+        if ai_channel_index is None:
+            ai_channel_index = np.arange(self.board_info['nb_ai_channel'])
+        
         self.board_num = int(board_num)
-        self.sampling_rate = sampling_rate
-        self.timer_interval = timer_interval
-        if subdevices_params is None:
-            # scan_device_info give the default params
-            subdevices_params = self.scan_device_info(board_num)['subdevices']
-        self.subdevices_params = subdevices_params
+        self.sample_rate = sample_rate
+        self.ai_channel_index = ai_channel_index
+        
+        self.nb_ai_channel = len(ai_channel_index)
+        if isinstance(ai_ranges, tuple):
+            ai_ranges = [ai_ranges] * self.nb_ai_channel
+        self.ai_ranges = ai_ranges
+        assert len(self.ai_ranges) == self.nb_ai_channel, 'length error for ai_ranges'
+        assert all(ai_range in range_convertion for ai_range in ai_ranges), 'Range not supported {}'.format(ai_ranges)
+        
+        self.ai_mode = ai_mode
+        if ai_mode is not None:
+            assert ai_mode in mode_convertion, 'Unknown ai mode. Not in {}'.format(mode_convertion.keys())
+        
+        self.di_dtype = None
+        if self.board_info['nb_di_port']>0:
+            bit_by_port = self.board_info['bit_by_port']
+            
+            # some internal limitation
+            assert np.all(bit_by_port[0] == bit_by_port), 'Unsupported port with different bits {}'.format(bit_by_port)
+            assert bit_by_port[0] in (8, 16), 'Unsupported port with bits {}'.format(bit_by_port)
+            
+            if bit_by_port[0] == 8:
+                self.di_dtype = 'uint8'
+            else:
+                self.di_dtype = 'uint16'
+
         
         self.prepare_device()
         
-        self.outputs['signals'].spec['shape'] = (-1, self.nb_ai_channel)
-        self.outputs['signals'].spec['dtype'] = 'uint16'
-        #~ self.outputs['signals'].spec['dtype'] = 'float32'
-        self.outputs['signals'].spec['sampling_rate'] = self.real_sampling_rate
+        self.outputs['aichannels'].spec['shape'] = (-1, self.nb_ai_channel)
+        self.outputs['aichannels'].spec['dtype'] = 'uint16'
+        self.outputs['aichannels'].spec['sample_rate'] = self.real_sample_rate
+        self.outputs['aichannels'].spec['nb_channel'] = self.nb_ai_channel
         
-        #TODO gain by channels
-        self.outputs['signals'].spec['gain'] = 1.
-        self.outputs['signals'].spec['offset'] = 0.
+        if self.board_info['nb_di_port']>0:    
+            self.outputs['dichannels'].spec['shape'] = (-1, self.board_info['nb_di_port'])
+            self.outputs['dichannels'].spec['dtype'] = self.di_dtype
+            self.outputs['dichannels'].spec['sample_rate'] = self.real_sample_rate
 
-        self.outputs['digital'].spec['shape'] = (-1, self.info['nb_di_port'])
-        self.outputs['digital'].spec['dtype'] = 'uint16'
-        self.outputs['digital'].spec['sampling_rate'] = self.real_sampling_rate
-        self.outputs['digital'].spec['gain'] = 1
-        self.outputs['digital'].spec['offset'] = 0
+    def after_output_configure(self, outputname):
+        if outputname == 'aichannels':
+            channel_info = [ {'name': 'ai{}'.format(c)} for c in self.ai_channel_index ]
+        elif outputname == 'dichannels':
+            channel_info = [ {'name': 'di{}'.format(c)} for c in self.board_info['nb_di_channel'] ]
+        self.outputs[outputname].params['channel_info'] = channel_info
 
     def _initialize(self):
-        
-        self.timer = QtCore.QTimer(singleShot = False, interval = self.timer_interval)
-        self.timer.timeout.connect(self.periodic_poll)
+        self.thread = MeasurementComputingThread(self, parent=None)
 
-        self.head = 0
-        self.last_index = 0
-
-        self.ai_mask = np.zeros(self.nb_total_channel, dtype = bool)
-        self.ai_mask[:self.nb_ai_channel] = True
-        self.di_mask = ~self.ai_mask
-        
-    
     def _start(self):
         self._start_daq_scan()
         #~ try:
@@ -126,16 +173,16 @@ class MeasurementComputing(Node):
                 #~ #do not known why sometimes just a second try and it is OK
                 #~ time.sleep(1.)
                 #~ self._start_daq_scan()
-            #~ elif e.errno == UL.BADBOARDTYPE :
-                #~ logging.info(self.info['board_name'], 'do not support cbDaqInScan')
+            #~ elif e.errno == ULConst.BADBOARDTYPE :
+                #~ logging.info(self.board_info['board_name'], 'do not support cbDaqInScan')
                 #~ raise()
-        self.timer.start()
+        #~ self.timer.start()
+        self.thread.start()
 
-    
     def _stop(self):
-        self.timer.stop()
+        self.thread.stop()
+        self.thread.wait()
         self._stop_daq_scan()
-
 
     def _start_daq_scan(self):
         if self.mode_daq_scan == 'cbAInScan':
@@ -144,13 +191,13 @@ class MeasurementComputing(Node):
             cbw.cbAInScan(self.board_num, low_chan, high_chan, ctypes.c_long(self.raw_arr.size),
                   ctypes.byref(self.real_sr), ctypes.c_int(self.gain_array[0]),
                     ctypes.c_void_p(self.raw_arr.ctypes.data), self.options)
-            self.function = UL.AIFUNCTION
+            self.function = ULConst.AIFUNCTION
         elif self.mode_daq_scan == 'cbDaqInScan':
             cbw.cbDaqInScan(self.board_num, self.chan_array.ctypes.data,
                 self.chan_array_type.ctypes.data, self.gain_array.ctypes.data,
                 self.nb_total_channel, byref(self.real_sr), byref(self.pretrig_count),
                 byref(self.total_count), self.raw_arr.ctypes.data, self.options)
-            self.function = UL.DAQIFUNCTION
+            self.function = ULConst.DAQIFUNCTION
     
     def _stop_daq_scan(self):
     
@@ -163,228 +210,301 @@ class MeasurementComputing(Node):
         del self.raw_arr
 
     def scan_device_info(self, board_num):
-        info = { }
+        board_info = { }
         
         config_val = ctypes.c_int(0)
-        board_name = ctypes.create_string_buffer(UL.BOARDNAMELEN)
+        board_name = ctypes.create_string_buffer(ULConst.BOARDNAMELEN)
         cbw.cbGetBoardName(board_num, byref(board_name))
-        info['board_name'] = board_name.value
+        board_info['board_name'] = board_name.value
         l = [ 
-                ('board_type', UL.BOARDINFO, UL.BIBOARDTYPE),
-                ('nb_ai_channel', UL.BOARDINFO, UL.BINUMADCHANS),
-                ('nb_ao_channel', UL.BOARDINFO, UL.BINUMDACHANS),
-                #~ ('BINUMIOPORTS', UL.BOARDINFO, UL.BINUMIOPORTS),
-                ('nb_di_port', UL.BOARDINFO, UL.BIDINUMDEVS),
-                ('serial_num', UL.BOARDINFO, UL.BISERIALNUM),
-                ('factory_id', UL.BOARDINFO, UL.BIFACTORYID),
+                ('board_type', ULConst.BOARDINFO, ULConst.BIBOARDTYPE),
+                ('nb_ai_channel', ULConst.BOARDINFO, ULConst.BINUMADCHANS),
+                ('nb_ao_channel', ULConst.BOARDINFO, ULConst.BINUMDACHANS),
+                #~ ('BINUMIOPORTS', ULConst.BOARDINFO, ULConst.BINUMIOPORTS),
+                ('nb_di_port', ULConst.BOARDINFO, ULConst.BIDINUMDEVS),
+                ('serial_num', ULConst.BOARDINFO, ULConst.BISERIALNUM),
+                ('factory_id', ULConst.BOARDINFO, ULConst.BIFACTORYID),
                 ]
         for key, info_type, config_item in l:
             cbw.cbGetConfig(info_type, board_num, 0, config_item,
                     byref(config_val))
-            info[key] = config_val.value
+            board_info[key] = config_val.value
         
-        
-        if info['board_name'] in [b'USB-1208LS']:
-            info['packet_size'] = 64
-        elif info['board_name'] in [b'USB-1208FS', b'USB-1408FS', b'USB-7204',  b'USB-1608FS']:
-            info['packet_size'] = 31
+        # packet size
+        if board_info['board_name'] in [b'USB-1208LS']:
+            board_info['packet_size'] = 64
+        elif board_info['board_name'] in [b'USB-1208FS', b'USB-1408FS', b'USB-7204',  b'USB-1608FS']:
+            board_info['packet_size'] = 31
         else:
-            info['packet_size'] = 1
-
-        info['device_params'] = { 'board_num': board_num, 
-                                    'sampling_rate' : 1000.,}
+            board_info['packet_size'] = 1
         
-        info['subdevices'] = [ ]
-        if info['nb_ai_channel']>0:
-            n = info['nb_ai_channel']
-            info_sub = {'type' : 'AnalogInput', 'nb_channel' : n,
-                    'subdevice_params' :{}, 
-                        'by_channel_params' : [ {'channel_index' : i,
-                        'selected' : True, } for i in range(n)] }
-            info['subdevices'].append(info_sub)
-        
-        info['list_di_port'] = []
-        if info['nb_di_port']>0:
-            n = 0
-            for num_dev in range(info['nb_di_port']):
-                cbw.cbGetConfig(UL.DIGITALINFO, board_num, num_dev,
-                                        UL.DIDEVTYPE, byref(config_val))
-                didevtype =   config_val.value
-                cbw.cbGetConfig(UL.DIGITALINFO, board_num, num_dev,
-                                        UL.DINUMBITS, byref(config_val))
-                nbits = config_val.value
-                
-                # FIXME deal only with 8 bits at the moment
-                if didevtype==UL.AUXPORT or nbits!=8: 
-                    info['nb_di_port'] -= 1
-                else:
-                    n += nbits
-                    info['list_di_port'].append(didevtype)
+        if board_info['board_name'] in board_not_support_cbDaqInScan:
+            # can not do cbAInScan and so no digital port
+            board_info['nb_di_port'] = 0 
             
-            if n>0:
-                info_sub = {'type' : 'DigitalInput', 'nb_channel' : n,
-                    'subdevice_params' :{}, 
-                    'by_channel_params' : [ {'channel_index' : i }
-                         for i in range(n)] }
-                info['subdevices'].append(info_sub)
+        board_info['list_di_port'] = []
+        board_info['bit_by_port'] = []
+        if board_info['nb_di_port']>0:
+            for num_dev in range(board_info['nb_di_port']):
+                cbw.cbGetConfig(ULConst.DIGITALINFO, board_num, num_dev,
+                                        ULConst.DIDEVTYPE, byref(config_val))
+                didevtype = config_val.value
+                cbw.cbGetConfig(ULConst.DIGITALINFO, board_num, num_dev,
+                                        ULConst.DINUMBITS, byref(config_val))
+                nbits = config_val.value
+                if didevtype==ULConst.AUXPORT:
+                    # This port is not stremable
+                    board_info['nb_di_port'] -= 1
+                else:
+                    board_info['bit_by_port'].append(nbits)
+                    board_info['list_di_port'].append(didevtype)
+                
+        board_info['nb_di_channel'] = sum(board_info['bit_by_port'])
         
-        return info
+        return board_info
     
     def prepare_device(self):
-        self.info = self.scan_device_info(self.board_num)
-        
-        #analog input
-        ai_info = self.subdevices_params[0]
-        self.ai_channel_index = [ p['channel_index'] for p in\
-                    ai_info['by_channel_params'] if p['selected'] ]
-        self.nb_ai_channel = len(self.ai_channel_index)
         
         #digital input
-        if self.info['nb_di_port']>0:
+        if self.board_info['nb_di_port']>0:
             di_info = self.subdevices_params[1]
-            self.nb_di_port = self.info['nb_di_port']
+            self.nb_di_port = self.board_info['nb_di_port']
             self.nb_di_channel = di_info['nb_channel']
         
-        self.nb_total_channel = self.nb_ai_channel + self.info['nb_di_port']
-
+        self.nb_total_channel = self.nb_ai_channel + self.board_info['nb_di_port']
+        
         self.chan_array = np.array(self.ai_channel_index +\
-                    self.info['list_di_port'], dtype = 'int16')
-        self.chan_array_type = np.array( [UL.ANALOG] * self.nb_ai_channel +\
-                    [ UL.DIGITAL8] * self.info['nb_di_port'], dtype = np.int16)
-        self.gain_array = np.array( [UL.BIP10VOLTS] *self.nb_ai_channel +\
-                    [0] * self.info['nb_di_port'], dtype = np.int16)
-        self.real_sr = ctypes.c_long(int(self.sampling_rate))
+                    self.board_info['list_di_port'], dtype = 'uint16')
+        
+        array_types = [ULConst.ANALOG] * self.nb_ai_channel
+        if self.di_dtype == 'uint8':
+            array_types += [ULConst.DIGITAL8] * self.board_info['nb_di_port']
+        elif self.di_dtype == 'uint16':
+            array_types += [ULConst.DIGITAL16] * self.board_info['nb_di_port']
+        self.chan_array_type = np.array(array_types, dtype='int16')
+        
+        self.gain_array = np.array([ range_convertion[ai_range] for ai_range in self.ai_ranges] +\
+                    [0] * self.board_info['nb_di_port'], dtype = np.int16)
+        
+        if self.ai_mode is not None:
+            cbw.cbAInputMode(ctypes.c_int(self.board_num), ctypes.c_int(mode_convertion[self.ai_mode]))
+        #~ for c in self.ai_channel_index:
+            #~ cbw.cbAChanInputMode(ctypes.c_int(self.board_num), ctypes.c_int(c),
+                                #~ ctypes.c_int(mode_convertion[self.ai_mode]))
+        
 
-        self.internal_size = int(10.*self.sampling_rate) # buffer of 10S
-        self.internal_size = self.internal_size - self.internal_size%(self.info['packet_size'])
+        
+        self.real_sr = ctypes.c_long(int(self.sample_rate))
+        
+         # buffer of 10S rounded to packetsize
+        self.internal_size = int(10.*self.sample_rate)
+        self.internal_size = self.internal_size - self.internal_size%(self.board_info['packet_size'])
 
-        self.raw_arr = np.zeros(( self.internal_size, self.nb_total_channel), dtype='uint16')
+        self.raw_arr = np.zeros((self.internal_size, self.nb_total_channel), dtype='uint16')
         self.pretrig_count = ctypes.c_long(0)
         self.total_count = ctypes.c_long(int(self.raw_arr.size))
-        self.options = ctypes.c_int(UL.BACKGROUND  + UL.CONTINUOUS + UL.CONVERTDATA)
+        self.options = ctypes.c_int(ULConst.BACKGROUND  + ULConst.CONTINUOUS + ULConst.CONVERTDATA)
         
-        
-        if self.info['board_name'] in (b'USB-1616FS', b'USB-1208LS', b'USB-1608FS', b'USB-1608FS-Plus'):
+        if self.board_info['board_name'] in board_not_support_cbDaqInScan:
             #for some old card the scanning mode is limited
             self.mode_daq_scan = 'cbAInScan'
             assert np.all(np.diff(self.ai_channel_index) == 1), 'For this card you must select continuous cannel indexes'
-            assert self.info['nb_di_port'] ==0, 'You can not sample digital ports'
+            assert self.board_info['nb_di_port'] ==0, 'You can not sample digital ports'
             assert np.all(self.gain_array[0]==self.gain_array), 'For this card gain must be identical'
         else:
             self.mode_daq_scan = 'cbDaqInScan'
 
-        # get the real sampling_rate here :  a start/stop and read self.real_sr
+        # get the real sample_rate here :  a start/stop and read self.real_sr
         self._start_daq_scan()
         self._stop_daq_scan()
-        self.real_sampling_rate = float(self.real_sr.value)
+        self.real_sample_rate = float(self.real_sr.value)
+
+        self.ai_mask = np.zeros(self.nb_total_channel, dtype = bool)
+        self.ai_mask[:self.nb_ai_channel] = True
+        self.di_mask = ~self.ai_mask
     
-    def periodic_poll(self):
-        print('periodic_poll')
-        #~ return
-        status = ctypes.c_int(0)
-        cur_count = ctypes.c_long(0)
-        cur_index = ctypes.c_long(0)
-        
-        cbw.cbGetIOStatus( ctypes.c_int(self.board_num), byref(status),
-            byref(cur_count), byref(cur_index), ctypes.c_int(self.function))
-        
-        
-        if cur_index.value==-1: 
-            return
-        
-        index = cur_index.value // self.nb_total_channel
-        #~ print('index', index)
-        #~ return
-        
-        if index == self.last_index :
-            return
-        
-        
-        if index<self.last_index:
-            #end of internal ring
-            new_samp = self.internal_size - self.last_index
-            self.head += new_samp
-            self.outputs['signals'].send(self.raw_arr[self.last_index:, self.ai_mask], index=self.head)
-            
-            if self.info['nb_di_port']>0:
-                self.outputs['digital'].send(self.raw_arr[self.last_index:, self.di_mask], index=self.head)
-            self.last_index = 0
-        
-        new_samp = index - self.last_index
-        print('new_samp', new_samp)
-        self.head += new_samp
-        
-        #~ self.outputs['signals'].send(self.raw_arr[ self.last_index:index, self.ai_mask], index=self.head)
-        arr = self.raw_arr[ self.last_index:index, self.ai_mask]
-        arr = arr.copy()
-        print(arr.flags)
-        print(self.head)
-        self.outputs['signals'].send(arr, index=self.head)
-        
-        if self.info['nb_di_port']>0:
-            self.outputs['digital'].send(self.raw_arr[ self.last_index:index, self.di_mask], index=self.head)
-        
-        self.last_index = index%self.internal_size
-        
 
 register_node_type(MeasurementComputing)
 
 
-def generate_ULconstants():
-    # very old hoem made parser, need to be rewritten
-    print('generate_ULconstants')
-    print(__file__)
-    print(os.path.dirname(__file__))
-    target = os.path.join(os.path.dirname(__file__), 'ULconstants.py')
-    source = os.path.join(os.path.dirname(__file__), 'cbw.h')
-    assert os.path.exists(source), 'Put cbw.h file in the pyacq/core/device'
-
-    import re
-
-    fid = open(target,'w')
-    fid.write('# this file is generated : do not modify\n')
-    for line in open(source,'r').readlines():
-        #~ if 'cb' in line:
-            #~ continue
-        if '#define cbGetStatus cbGetIOStatus' in line :
-            continue
-        if '#define cbStopBackground cbStopIOBackground' in line :
-            continue
-        if 'float' in line or 'int' in line or 'char' in line or 'long' in line or 'short' in line \
-                or 'HGLOBAL' in line \
-                or 'USHORT' in line or 'LONG' in line  \
-                or '#endif' in line or  '#undef' in line or  '#endif' in line \
-                or 'EXTCCONV' in line :
-            continue
+class MeasurementComputingThread(QtCore.QThread):
+    """
+    MeasurementComputing thread that grab continuous data.
+    """
+    def __init__(self, node, parent=None):
+        QtCore.QThread.__init__(self, parent=parent)
         
-        r = re.findall('#define[ \t]*(\S*)[ \t]*(\S*)[ \t]*/\* ([ \S]+) \*/',line)
-        if len(r) >0:
-            fid.write('%s    =    %s    # %s \n'%r[0])
-            continue
+        self.node = node
 
-        r = re.findall('#define[ \t]*(\S*)[ \t]*(\S*)[ \t]*',line)
-        if len(r) >0:
-            fid.write('%s    =    %s    \n'%r[0])
-            continue
-
-        r = re.findall('/\* ([ \S]+) \*/',line)
-        if len(r) >0:
-            comments = r[0]
-            fid.write('# %s \n'%comments)
-            continue
+        self.lock = Mutex()
+        self.running = False
         
-        if line == '\r\n':
-            fid.write('\n')
-            continue
+    def run(self):
         
-        if '(' in line and ')' in line :
-            continue
-        #~ print len(line),line
-    fid.close()
+        board_num = self.node.board_num
+        function= self.node.function
+        nb_total_channel = self.node.nb_total_channel
+        internal_size = self.node.internal_size
+        outputs = self.node.outputs
+        raw_arr = self.node.raw_arr
+        ai_mask = self.node.ai_mask
+        di_mask = self.node.di_mask
+        board_info = self.node.board_info
+        
+        
+        status = ctypes.c_int(0)
+        cur_count = ctypes.c_long(0)
+        cur_index = ctypes.c_long(0)
+        
+        
+        last_index = 0
+        head = 0
+        
+        with self.lock:
+            self.running = True
+        
+        while True:
+            with self.lock:
+                if not self.running:
+                    break
+            
+            cbw.cbGetIOStatus( ctypes.c_int(board_num), byref(status),
+                byref(cur_count), byref(cur_index), ctypes.c_int(function))
+            
+            if cur_index.value==-1: 
+                continue
+            
+            index = cur_index.value // nb_total_channel
+            #~ print('index', index)
+            
+            if index == last_index :
+                time.sleep(.01)
+                continue
+            
+            
+            if index<last_index:
+                #end of internal ring buffer
+                new_samp = internal_size - last_index
+                head += new_samp
+                outputs['aichannels'].send(raw_arr[last_index:, ai_mask], index=head)
+                
+                if board_info['nb_di_port']>0:
+                    outputs['dichannels'].send(raw_arr[last_index:, di_mask].astype(self.di_dtype), index=head)
+                
+                last_index = 0
+                
+            new_samp = index - last_index
+            head += new_samp
+            outputs['aichannels'].send(raw_arr[last_index:index, ai_mask], index=head)
+            
+            if board_info['nb_di_port']>0:
+                outputs['dichannels'].send(raw_arr[last_index:index, di_mask].astype(self.di_dtype), index=head)
+            
+            last_index = index%internal_size
+            
+            # be nice
+            time.sleep(.01)
+            
+
+    def stop(self):
+        with self.lock:
+            self.running = False
 
 
-if __name__ == '__main__':
-    #generate_ULconstants()
-    pass
+class ULConst:
+    ERRSTRLEN    =    256    
+    NOERRORS    =    0
+
+    AIFUNCTION    =    1    # Analog Input Function
+    DAQIFUNCTION    =    6    # Daq Input Function       
+    BOARDNAMELEN    =    25    
+
+    BOARDINFO    =    2    
+    
+    BINUMDACHANS    =    13    # Number of D/A channels 
+
+    BIBOARDTYPE    =    1    # Board Type (0x101 - 0x7FFF) 
+    BINUMADCHANS    =    7    # Number of A/D channels 
+    BINUMIOPORTS    =    15    # I/O address space used by board 
+    BIDINUMDEVS    =    9    # Number of digital devices 
+    BISERIALNUM    =    214    # Serial Number for USB boards 
+    BIFACTORYID    =    272    
+
+    DIGITALINFO    =    3    
+
+    DIDEVTYPE    =    2    # AUXPORT or xPORTA - CH 
+
+    DINUMBITS    =    6    # Number of bits in port 
+
+    AUXPORT    =    1    
+
+    ANALOG    =    0    
+    DIGITAL8    =    1    
+    DIGITAL16    =    2
 
 
+    BACKGROUND    =    0x0001    # Run in background, return immediately 
+
+    CONTINUOUS    =    0x0002    # Run continuously until cbstop() called 
+
+    NOCONVERTDATA    =    0x0000    # Return raw data 
+    CONVERTDATA    =    0x0008    # Return converted A/D data 
+
+    DIFFERENTIAL = 0
+    SINGLE_ENDED = 1
+    GROUNDED = 16    
+
+    BIP60VOLTS    =    20    # -60 to 60 Volts 
+    BIP30VOLTS    =    23    
+    BIP20VOLTS    =    15    # -20 to +20 Volts 
+    BIP15VOLTS    =    21    # -15 to +15 Volts 
+    BIP10VOLTS    =    1    # -10 to +10 Volts 
+    BIP5VOLTS    =    0    # -5 to +5 Volts 
+    BIP4VOLTS    =    16    # -4 to + 4 Volts 
+    BIP2PT5VOLTS    =    2    # -2.5 to +2.5 Volts 
+    BIP2VOLTS    =    14    # -2.0 to +2.0 Volts 
+    BIP1PT25VOLTS    =    3    # -1.25 to +1.25 Volts 
+    BIP1VOLTS    =    4    # -1 to +1 Volts 
+    BIPPT625VOLTS    =    5    # -.625 to +.625 Volts 
+    BIPPT5VOLTS    =    6    # -.5 to +.5 Volts 
+    BIPPT25VOLTS    =    12    # -0.25 to +0.25 Volts 
+    BIPPT2VOLTS    =    13    # -0.2 to +0.2 Volts 
+    BIPPT1VOLTS    =    7    # -.1 to +.1 Volts 
+    BIPPT05VOLTS    =    8    # -.05 to +.05 Volts 
+    BIPPT01VOLTS    =    9    # -.01 to +.01 Volts 
+    BIPPT005VOLTS    =    10    # -.005 to +.005 Volts 
+    BIP1PT67VOLTS    =    11    # -1.67 to +1.67 Volts 
+    BIPPT312VOLTS    =    17    # -0.312 to +0.312 Volts 
+    BIPPT156VOLTS    =    18    # -0.156 to +0.156 Volts 
+    BIPPT125VOLTS    =    22    # -0.125 to +0.125 Volts 
+    BIPPT078VOLTS    =    19    # -0.078 to +0.078 Volts 
+    UNI10VOLTS    =    100    
+    UNI5VOLTS    =    101    # 0 to 5 Volts 
+    UNI4VOLTS    =    114    # 0 to 4 Volts 
+    UNI2PT5VOLTS    =    102    # 0 to 2.5 Volts 
+    UNI2VOLTS    =    103    # 0 to 2 Volts 
+    UNI1PT67VOLTS    =    109    # 0 to 1.67 Volts 
+    UNI1PT25VOLTS    =    104    # 0 to 1.25 Volts 
+    UNI1VOLTS    =    105    # 0 to 1 Volt 
+    UNIPT5VOLTS    =    110    # 0 to .5 Volt 
+    UNIPT25VOLTS    =    111    # 0 to 0.25 Volt 
+    UNIPT2VOLTS    =    112    # 0 to .2 Volt 
+    UNIPT1VOLTS    =    106    # 0 to .1 Volt 
+    UNIPT05VOLTS    =    113    # 0 to .05 Volt 
+    UNIPT02VOLTS    =    108    
+    UNIPT01VOLTS    =    107
+
+    
+
+range_convertion = {
+    (-10, 10) : ULConst.BIP10VOLTS,
+    (-5, 5) : ULConst.BIP5VOLTS,
+    (-1, 1) : ULConst.BIP1VOLTS,
+    (-0.1, 0.1) : ULConst.BIPPT1VOLTS,
+}
+
+mode_convertion = {
+    'differential' : ULConst.DIFFERENTIAL,
+    'single-ended' : ULConst.SINGLE_ENDED,
+    'grounded' : ULConst.GROUNDED,
+}
