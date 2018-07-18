@@ -12,7 +12,7 @@ from pyqtgraph.Qt import QtCore, QtGui
 
 import pytest
 
-
+@pytest.mark.skip(reason="need Device")
 @pytest.mark.skipif(not HAVE_AV, reason='no have av')
 def test_webcam_opencv():
     # in main App
