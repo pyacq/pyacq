@@ -34,11 +34,18 @@ class QTriggeredOscilloscope(BaseOscilloscope):
     _input_specs = {'signals': dict(streamtype='signals')}
     
     _default_params =  [
+                    {'name': 'xsize', 'type': 'float', 'value': 3., 'step': 0.1},
                     {'name': 'ylim_max', 'type': 'float', 'value': 10.},
                     {'name': 'ylim_min', 'type': 'float', 'value': -10.},
                     {'name': 'background_color', 'type': 'color', 'value': 'k' },
                     {'name': 'refresh_interval', 'type': 'int', 'value': 100 , 'limits':[5, 1000]},
+                    {'name': 'auto_decimate', 'type': 'bool', 'value': True},
+                    {'name': 'decimate', 'type': 'int', 'value': 1, 'limits': [1, None], },
+                    {'name': 'decimation_method', 'type': 'list', 'value': 'pure_decimate', 'values': ['pure_decimate', 'min_max', 'mean']},
                     {'name': 'display_labels', 'type': 'bool', 'value': False},
+                    {'name': 'scale_mode', 'type': 'list', 'value': 'real_scale', 
+                        'values':['real_scale', 'same_for_all', 'by_channel'] },
+                    
                 ]
     
     _default_by_channel_params =  [ 
@@ -232,48 +239,58 @@ class QTriggeredOscilloscope(BaseOscilloscope):
                 p['offset'] = p['offset'] + self.all_mean[i]*p['gain'] - self.all_mean[i]*p['gain']*factor
             p['gain'] = p['gain']*factor
     
-    def estimate_decimate(self, nb_point=4000):
-        pass
-
-    def autoestimate_scales(self):
-        self.all_sd = np.array([np.std(self.triggeraccumulator.stack[:,i,:]) for i in range(self.nb_channel)])
-        self.all_mean = np.array([np.median(self.triggeraccumulator.stack[:,i,:]) for i in range(self.nb_channel)])
-        return self.all_mean, self.all_sd
+    def get_visible_chunk(self):
+        stack_size = self.triggeraccumulator.params['stack_size'] 
+        pos = self.plotted_trig%stack_size
+        sigs = self.triggeraccumulator.stack[pos, :, :].T
+        return sigs
+        
+    def auto_scale(self, spacing_factor=9.):
+        self.params_controller.compute_rescale(spacing_factor=spacing_factor)
+        self.refresh()
     
-    def auto_gain_and_offset(self, mode=0, visibles=None):
-        """
-        mode = 0, 1, 2
-        """
-        if visibles is None:
-            visibles = np.ones(self.nb_channel, dtype=bool)
+    #~ def estimate_decimate(self, nb_point=4000):
+        #~ pass
+
+    #~ def autoestimate_scales(self):
+        #~ self.all_sd = np.array([np.std(self.triggeraccumulator.stack[:,i,:]) for i in range(self.nb_channel)])
+        #~ self.all_mean = np.array([np.median(self.triggeraccumulator.stack[:,i,:]) for i in range(self.nb_channel)])
+        #~ return self.all_mean, self.all_sd
+    
+    #~ def auto_gain_and_offset(self, mode=0, visibles=None):
+        #~ """
+        #~ mode = 0, 1, 2
+        #~ """
+        #~ if visibles is None:
+            #~ visibles = np.ones(self.nb_channel, dtype=bool)
         
-        n = np.sum(visibles)
-        if n==0: return
+        #~ n = np.sum(visibles)
+        #~ if n==0: return
         
-        av, sd = self.autoestimate_scales()
-        if av is None: return
+        #~ av, sd = self.autoestimate_scales()
+        #~ if av is None: return
         
-        if mode==0:
-            ylim_min, ylim_max = np.min(av[visibles]-3*sd[visibles]), np.max(av[visibles]+3*sd[visibles]) 
-            gains = np.ones(self.nb_channel, dtype=float)
-            offsets = np.zeros(self.nb_channel, dtype=float)
-        elif mode in [1, 2]:
-            ylim_min, ylim_max = -.5, n-.5 
-            gains = np.ones(self.nb_channel, dtype=float)
-            if mode==1 and max(sd[visibles])!=0:
-                gains = np.ones(self.nb_channel, dtype=float) * 1./(6.*max(sd[visibles]))
-            elif mode==2:
-                gains[sd!=0] = 1./(6.*sd[sd!=0])
-            offsets = np.zeros(self.nb_channel, dtype=float)
-            offsets[visibles] = range(n)[::-1] - av[visibles]*gains[visibles]
+        #~ if mode==0:
+            #~ ylim_min, ylim_max = np.min(av[visibles]-3*sd[visibles]), np.max(av[visibles]+3*sd[visibles]) 
+            #~ gains = np.ones(self.nb_channel, dtype=float)
+            #~ offsets = np.zeros(self.nb_channel, dtype=float)
+        #~ elif mode in [1, 2]:
+            #~ ylim_min, ylim_max = -.5, n-.5 
+            #~ gains = np.ones(self.nb_channel, dtype=float)
+            #~ if mode==1 and max(sd[visibles])!=0:
+                #~ gains = np.ones(self.nb_channel, dtype=float) * 1./(6.*max(sd[visibles]))
+            #~ elif mode==2:
+                #~ gains[sd!=0] = 1./(6.*sd[sd!=0])
+            #~ offsets = np.zeros(self.nb_channel, dtype=float)
+            #~ offsets[visibles] = range(n)[::-1] - av[visibles]*gains[visibles]
         
-        # apply
-        for i,param in enumerate(self.by_channel_params.children()):
-            param['gain'] = gains[i]
-            param['offset'] = offsets[i]
-            param['visible'] = visibles[i]
-        self.params['ylim_min'] = ylim_min
-        self.params['ylim_max'] = ylim_max
+        #~ # apply
+        #~ for i,param in enumerate(self.by_channel_params.children()):
+            #~ param['gain'] = gains[i]
+            #~ param['offset'] = offsets[i]
+            #~ param['visible'] = visibles[i]
+        #~ self.params['ylim_min'] = ylim_min
+        #~ self.params['ylim_max'] = ylim_max
 
 
 register_node_type(QTriggeredOscilloscope)

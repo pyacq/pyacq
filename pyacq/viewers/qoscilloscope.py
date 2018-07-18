@@ -26,7 +26,7 @@ class MyViewBox(pg.ViewBox):
         ev.accept()
     def mouseDragEvent(self, ev):
         ev.ignore()
-    def wheelEvent(self, ev):
+    def wheelEvent(self, ev, axis=None):
         if ev.modifiers() == QtCore.Qt.ControlModifier:
             z = 10 if ev.delta()>0 else 1/10.
         else:
@@ -36,7 +36,6 @@ class MyViewBox(pg.ViewBox):
     def mouseDragEvent(self, ev):
         ev.accept()
         self.xsize_zoom.emit((ev.pos()-ev.lastPos()).x())
-
 
 class BaseOscilloscope(WidgetNode):
     """
@@ -91,12 +90,18 @@ class BaseOscilloscope(WidgetNode):
         self.inputs['signals'].set_buffer(size=buf_size, axisorder=[1,0], double=True)
         #TODO : check that this not lead 
         
+        # channel names
+        channel_info = self.inputs['signals'].params.get('channel_info', None)
+        if channel_info is None:
+            self.channel_names = ['ch{}'.format(c) for c in range(self.nb_channel)]
+        else:
+            self.channel_names = [ch_info['name'] for ch_info in channel_info]
 
         # Create parameters
         all = []
         for i in range(self.nb_channel):
-            name = 'ch{}'.format(i)
-            all.append({'name': name, 'type': 'group', 'children': self._default_by_channel_params})
+            by_chan_p = [{'name': 'label', 'type': 'str', 'value': self.channel_names[i], 'readonly':True}] + list(self._default_by_channel_params)
+            all.append({'name': 'ch{}'.format(i), 'type': 'group', 'children': by_chan_p})
         self.by_channel_params = pg.parametertree.Parameter.create(name='AnalogSignals', type='group', children=all)
         self.params = pg.parametertree.Parameter.create(name='Global options',
                                                     type='group', children=self._default_params)
@@ -202,14 +207,21 @@ class OscilloscopeController(QtGui.QWidget):
         h.addLayout(v)
         
         self.channel_visibility_changed.connect(self.on_channel_visibility_changed)
+
+        but = QtGui.QPushButton('Auto scale')
+        v.addWidget(but)
+        #~ but.clicked.connect(self.compute_rescale)
+        but.clicked.connect(self.on_channel_visibility_changed)
+        
         
         if self.viewer.nb_channel>1:
             v.addWidget(QtGui.QLabel('<b>Select channel...</b>'))
-            names = [p.name() for p in self.viewer.by_channel_params]
+            names = [ '{}: {}'.format(c, name) for c, name in enumerate(self.viewer.channel_names)]
             self.qlist = QtGui.QListWidget()
             v.addWidget(self.qlist, 2)
             self.qlist.addItems(names)
             self.qlist.setSelectionMode(QtGui.QAbstractItemView.ExtendedSelection)
+            self.qlist.doubleClicked.connect(self.on_double_clicked)
             
             for i in range(len(names)):
                 self.qlist.item(i).setSelected(True)            
@@ -269,9 +281,19 @@ class OscilloscopeController(QtGui.QWidget):
                 self.viewer.curves[i].hide()
         self.viewer.by_channel_params.blockSignals(False)
         self.channel_visibility_changed.emit()
+    
+    def on_double_clicked(self, index):
+        self.viewer.by_channel_params.blockSignals(True)
+        for i, p in enumerate(self.viewer.by_channel_params.children()):
+            p['visible'] = (i==index.row())
+            if p['visible']:
+                self.viewer.curves[i].show()
+            else:
+                self.viewer.curves[i].hide()
+        self.viewer.by_channel_params.blockSignals(False)
+        self.channel_visibility_changed.emit()
 
     def on_channel_visibility_changed(self):
-        print('on_channel_visibility_changed')
         self.compute_rescale()
         self.viewer.refresh()
 
@@ -279,10 +301,10 @@ class OscilloscopeController(QtGui.QWidget):
         sigs = self.viewer.get_visible_chunk()
         self.signals_med = med = np.nanmedian(sigs, axis=0)
         self.signals_mad = np.nanmedian(np.abs(sigs-med),axis=0)*1.4826
-        self.signals_min = np.min(sigs)
-        self.signals_max = np.max(sigs)
+        self.signals_min = np.min(sigs, axis=0)
+        self.signals_max = np.max(sigs, axis=0)
     
-    def compute_rescale(self):
+    def compute_rescale(self, spacing_factor=9.):
         scale_mode = self.viewer.params['scale_mode']
         
         self.viewer.by_channel_params.blockSignals(True)
@@ -293,17 +315,21 @@ class OscilloscopeController(QtGui.QWidget):
         self.estimate_median_mad()
         
         if scale_mode=='real_scale':
-            self.viewer.params['ylim_min'] = np.nanmin(self.signals_min)
-            self.viewer.params['ylim_max'] = np.nanmax(self.signals_max)
+            self.viewer.params['ylim_min'] = np.nanmin(self.signals_min[self.visible_channels])
+            self.viewer.params['ylim_max'] = np.nanmax(self.signals_max[self.visible_channels])
         else:
             if scale_mode=='same_for_all':
-                gains[self.visible_channels] = np.ones(nb_visible, dtype=float) / max(self.signals_mad[self.visible_channels]) / 9.
+                inv_scale =  max(self.signals_mad[self.visible_channels]) * spacing_factor
+                if inv_scale == 0:
+                    inv_scale = 1.
             elif scale_mode=='by_channel':
-                gains[self.visible_channels] = np.ones(nb_visible, dtype=float) / self.signals_mad[self.visible_channels] / 9.
+                inv_scale = self.signals_mad[self.visible_channels] * spacing_factor
+                inv_scale[inv_scale==0.] = 1.
+            gains[self.visible_channels] = np.ones(nb_visible, dtype=float) / inv_scale
             offsets[self.visible_channels] = np.arange(nb_visible)[::-1] - self.signals_med[self.visible_channels]*gains[self.visible_channels]
             self.viewer.params['ylim_min'] = -0.5
             self.viewer.params['ylim_max'] = nb_visible-0.5
-            
+        
         self.gains = gains
         self.offsets = offsets
         self.viewer.by_channel_params.blockSignals(False)
@@ -314,13 +340,17 @@ class OscilloscopeController(QtGui.QWidget):
         
         self.viewer.all_params.blockSignals(True)
         if scale_mode=='real_scale':
-            self.viewer.params['ylim_max'] = self.viewer.params['ylim_max']*factor_ratio
-            self.viewer.params['ylim_min'] = self.viewer.params['ylim_min']*factor_ratio
+            ymin, ymax = self.viewer.params['ylim_min'], self.viewer.params['ylim_max']
+            d = (ymax-ymin) * factor_ratio / 2.
+            self.viewer.params['ylim_max'] = (ymin+ymax)/2. + d
+            self.viewer.params['ylim_min'] = (ymin+ymax)/2. - d
         else :
             if not hasattr(self, 'self.signals_med'):
                 self.estimate_median_mad()
+            vis_offset = self.offsets + self.signals_med*self.gains
             self.gains = self.gains * factor_ratio
-            self.offsets = self.offsets + self.signals_med*self.gains * (1-factor_ratio)
+            #~ self.offsets = self.offsets + self.signals_med*self.gains * (1-factor_ratio)
+            self.offsets = vis_offset - self.signals_med*self.gains
         self.viewer.all_params.blockSignals(False)
         
         self.viewer.refresh()
@@ -341,7 +371,7 @@ default_params = [
         'values':['real_scale', 'same_for_all', 'by_channel'] },
     {'name': 'background_color', 'type': 'color', 'value': 'k'},
     {'name': 'refresh_interval', 'type': 'int', 'value': 100, 'limits':[5, 1000]},
-    {'name': 'mode', 'type': 'list', 'value': 'scroll', 'values': ['scan', 'scroll']},
+    {'name': 'mode', 'type': 'list', 'value': 'scan', 'values': ['scan', 'scroll']},
     {'name': 'auto_decimate', 'type': 'bool', 'value': True},
     {'name': 'decimate', 'type': 'int', 'value': 1, 'limits': [1, None], },
     {'name': 'decimation_method', 'type': 'list', 'value': 'pure_decimate', 'values': ['pure_decimate', 'min_max', 'mean']},
@@ -391,7 +421,8 @@ class QOscilloscope(BaseOscilloscope):
             curve = pg.PlotCurveItem(pen=color)
             self.plot.addItem(curve)
             self.curves.append(curve)
-            label = pg.TextItem('TODO name{}'.format(i), color=color, anchor=(0.5, 0.5), border=None, fill=pg.mkColor((128,128,128, 200)))
+            txt = '{}: {}'.format(i, self.channel_names[i])
+            label = pg.TextItem(txt, color=color, anchor=(0.5, 0.5), border=None, fill=pg.mkColor((128,128,128, 200)))
             self.plot.addItem(label)
             self.channel_labels.append(label)
         
@@ -509,11 +540,11 @@ class QOscilloscope(BaseOscilloscope):
     def get_visible_chunk(self, head=None):
         if head is None:
             head = self._head
-        sigs = self.inputs['signals'].get_data(head-self.full_size, head, copy=False, join=True)
+        sigs = self.inputs['signals'].get_data(max(-1, head-self.full_size), head, copy=False, join=True) # this ensure having at least one sample
         return sigs
         
-    def auto_scale(self):
-        self.params_controller.compute_rescale()
+    def auto_scale(self, spacing_factor=9.):
+        self.params_controller.compute_rescale(spacing_factor=spacing_factor)
         self.refresh()
 
 register_node_type(QOscilloscope)

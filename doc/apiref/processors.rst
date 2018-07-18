@@ -17,10 +17,14 @@ Triggering Nodes
    :members:
 
 
+.. _filtering_nodes:
+
 Filtering nodes
 ---------------
 
-.. _filtering_node:
-
 .. autoclass::  pyacq.dsp.OverlapFiltfilt
    :members:
+
+.. autoclass::  pyacq.dsp.SosFilter
+   :members:
+

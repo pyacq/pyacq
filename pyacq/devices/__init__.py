@@ -8,3 +8,5 @@ from .webcam_av import WebCamAV
 from .audio_pyaudio import PyAudio
 from .eeg_emotiv import Emotiv
 from .eeg_openBCI import OpenBCI
+from .ni_daqmx import NIDAQmx
+from .blackrock import Blackrock

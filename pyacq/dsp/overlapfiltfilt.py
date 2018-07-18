@@ -15,7 +15,7 @@ try:
     import scipy.signal
     HAVE_SCIPY = True
     # scpy.signal.sosfilt was introduced in scipy 0.16
-    assert distutils.version.LooseVersion(scipy.__version__)>'0.16'
+    assert distutils.version.LooseVersion(scipy.__version__) > '0.16'
 except ImportError:
     HAVE_SCIPY = False
 
@@ -71,6 +71,7 @@ class SosFiltfilt_Base:
     
     def compute_backward(self, chunk):
         raise NotImplementedError
+
 
 class SosFiltfilt_Scipy(SosFiltfilt_Base):
     """
@@ -365,13 +366,11 @@ class SosFilfilt_OpenCL_V3(SosFiltfilt_OpenCl_Base):
 sosfiltfilt_engines = { 'scipy' : SosFiltfilt_Scipy, 'opencl' : SosFilfilt_OpenCL_V1, 'opencl3' : SosFilfilt_OpenCL_V3 }
 
 
-
 class SosFiltfiltThread(ThreadPollInput):
     def __init__(self, input_stream, output_stream, timeout = 200, parent = None):
         ThreadPollInput.__init__(self, input_stream, timeout = timeout, return_data=True, parent = parent)
         self.output_stream = output_stream
         self.mutex = Mutex()
-
 
     def process_data(self, pos, data):
         with self.mutex:
@@ -390,37 +389,38 @@ class SosFiltfiltThread(ThreadPollInput):
 
 class OverlapFiltfilt(Node,  QtCore.QObject):
     """
-    Node for filtering with forward-backward method (filtfilt).
-    This use sliding overlap technics.
+    Node for filtering with forward-backward method (filtfilt) using second order
+    (sos) coefficient and a sliding, overlapping window.
     
-    The chunksize and the overlapsize are important for the accuracy of filtering.
-    You need to study them carfully, otherwise the result should be the same as a
-    real filtfilt ona long term signal. You must check the residual between real offline filtfitl
-    and this online OverlapFiltfilt.
-    Note that the chunksize have a strong effect on low frequency.
-    
-    This uses Second Order (sos) coeeficient.
-    It internally use scipy.signal.sosfilt which is available only on scipy >0.16    
+    Because the signal is filtered piecewise, the result will differ slightly
+    from the ideal case, in which the entire signal would be filtered over all
+    time at once. To ensure accurate results, the chunksize and overlapsize
+    parameters must be chosen carefully: a small chunksize will affect low
+    frequencies, and a small overlapsize may result in transients at the border
+    between chunks. We recommend comparing the output of this node to an ideal
+    offline filter to ensure that the residuals are acceptably small.
+
     
     The chunksize need to be fixed.
     For overlapsize there are 2 cases:
       
-    1. ``overlapsize < chunksize/2`` : natural case. each chunk partailly overlap. 
-       The overlap are on sides, the central part come from one chunk.
-    2. ``overlapsize>chunksize/2`` : chunk are fully overlapping. There is no
-       central part.
+    1. ``overlapsize < chunksize/2`` : natural case; each chunk partially overlaps. 
+       The overlapping regions are on the ends of each chunk, whereas the central
+       part of the chunk has no overlap.
+    2. ``overlapsize>chunksize/2`` : chunks are fully overlapping; there is no central part.
     
-    In the 2 cases, for each arrival of new chunk at ``[-chunksize:]``, 
+    In the 2 cases, for each arrival of a new chunk at ``[-chunksize:]``, 
     the computed chunk at ``[-(chunksize+overlapsize):-overlapsize]`` is released.
 
-    The coefficients.shape must be ``(nb_section, 6)``.
+    The ``coefficients.shape`` must be (nb_section, 6).
     
-    If pyopencl is avaible you can do ``SosFilter.configure(engine='opencl')``
-    In that cases the coefficients.shape can also be ``(nb_channel, nb_section, 6)``
-    this help for having different filter on each channels.
+    If pyopencl is avaible you can use ``SosFilter.configure(engine='opencl')``.
+    In that case the coefficients.shape can also be (nb_channel, nb_section, 6)
+    this helps for having different filters on each channel.
     
-    The opencl engine prefer inernally (channel, sample) ordered.
-    In case not a copy is done. So the input ordering do impact performences.
+    The opencl engine inernally requires data to be in (channel, sample) order.
+    If the input data does not have this order, then it must be copied and
+    performance will be affected.
     """
     
     _input_specs = {'signals' : dict(streamtype = 'signals')}
@@ -431,7 +431,7 @@ class OverlapFiltfilt(Node,  QtCore.QObject):
         Node.__init__(self, **kargs)
         assert HAVE_SCIPY, "SosFilter need scipy>0.16"
     
-    def _configure(self, chunksize=1024, overlapsize=512, coefficients = None, engine='scipy'):
+    def _configure(self, chunksize=1024, overlapsize=512, coefficients=None, engine='scipy'):
         """
         Set the coefficient of the filter.
         See http://scipy.github.io/devdocs/generated/scipy.signal.sosfilt.html for details.
@@ -450,7 +450,6 @@ class OverlapFiltfilt(Node,  QtCore.QObject):
         self.thread = SosFiltfiltThread(self.input, self.output)
         self.thread.set_params(self.engine, self.coefficients, self.nb_channel,
                             self.output.params['dtype'], self.chunksize, self.overlapsize)
-        
     
     def _start(self):
         self.thread.last_pos = None
@@ -465,5 +464,6 @@ class OverlapFiltfilt(Node,  QtCore.QObject):
         if self.initialized():
             self.thread.set_params(self.engine, self.coefficients, self.nb_channel,
                     self.output.params['dtype'], self.chunksize, self.overlapsize)
+
 
 register_node_type(OverlapFiltfilt)
