@@ -153,9 +153,15 @@ class QTriggeredOscilloscope(BaseOscilloscope):
     def _refresh(self):
         stack_size = self.triggeraccumulator.params['stack_size'] 
         
-        gains = np.array([p['gain'] for p in self.by_channel_params.children()])
-        offsets = np.array([p['offset'] for p in self.by_channel_params.children()])
-        visibles = np.array([p['visible'] for p in self.by_channel_params.children()], dtype=bool)
+        #~ gains = np.array([p['gain'] for p in self.by_channel_params.children()])
+        #~ offsets = np.array([p['offset'] for p in self.by_channel_params.children()])
+        #~ visibles = np.array([p['visible'] for p in self.by_channel_params.children()], dtype=bool)
+        
+        gains = self.params_controller.gains
+        offsets = self.params_controller.offsets
+        visibles = self.params_controller.visible_channels
+
+        
         
         if self.plotted_trig<self.triggeraccumulator.total_trig-stack_size:
             self.plotted_trig = self.triggeraccumulator.total_trig-stack_size

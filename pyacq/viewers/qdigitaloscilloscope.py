@@ -8,80 +8,92 @@ import pyqtgraph as pg
 import numpy as np
 
 
-from .qoscilloscope import BaseOscilloscope, OscilloscopeController
+from .qoscilloscope import BaseOscilloscope, QOscilloscope, OscilloscopeController
 
 
-class DigitalOscilloscope
 
-class QDigitalOscilloscope(BaseOscilloscope):
+class DigitalOscilloscopeController(OscilloscopeController):
+    @property
+    def visible_channels(self):
+        visible = [self.viewer.by_channel_params['ch{}'.format(i), 'visible'] for i in range(self.viewer.nb_channel)]
+        return np.array(visible, dtype='bool')
+
+    @property
+    def gains(self):
+        return np.ones(self.viewer.nb_channel) * 0.8
+
+    @property
+    def offsets(self):
+        visible_channels = self.visible_channels
+        n = np.sum(visible_channels)
+        offsets = np.zeros(self.viewer.nb_channel)
+        for i, ind in enumerate(np.nonzero(visible_channels)[0]):
+            offsets[ind] = n -1 - i
+        return offsets
+
+    def estimate_median_mad(self):
+        pass
+    
+    def compute_rescale(self, spacing_factor=9.):
+        self.viewer.by_channel_params.blockSignals(True)
+        visible_channels = self.visible_channels
+        n = np.sum(visible_channels)
+        self.viewer.params['ylim_min']  = -.5
+        self.viewer.params['ylim_max'] = n + .3
+        self.viewer.by_channel_params.blockSignals(False)
+
+    def apply_ygain_zoom(self, factor_ratio):
+        pass
+
+
+class QDigitalOscilloscope(QOscilloscope):
     _input_specs = {'signals': dict(streamtype='signals')}
     
     _default_params =  [
-                    {'name': 'ylim_max', 'type': 'float', 'value': 10.},
-                    {'name': 'ylim_min', 'type': 'float', 'value': -10.},
-                    {'name': 'background_color', 'type': 'color', 'value': 'k' },
-                    {'name': 'refresh_interval', 'type': 'int', 'value': 100 , 'limits':[5, 1000]},
-                    {'name': 'display_labels', 'type': 'bool', 'value': False},
-                ]
+        {'name': 'xsize', 'type': 'float', 'value': 3., 'step': 0.1},
+        {'name': 'ylim_max', 'type': 'float', 'value': 10.},
+        {'name': 'ylim_min', 'type': 'float', 'value': -10.},
+        {'name': 'background_color', 'type': 'color', 'value': 'k'},
+        {'name': 'refresh_interval', 'type': 'int', 'value': 100, 'limits':[5, 1000]},
+        {'name': 'mode', 'type': 'list', 'value': 'scan', 'values': ['scan', 'scroll']},
+        {'name': 'auto_decimate', 'type': 'bool', 'value': True},
+        {'name': 'decimate', 'type': 'int', 'value': 1, 'limits': [1, None], },
+        {'name': 'decimation_method', 'type': 'list', 'value': 'pure_decimate', 'values': ['pure_decimate', 'min_max', 'mean']},
+        {'name': 'display_labels', 'type': 'bool', 'value': True},
+        {'name': 'show_bottom_axis', 'type': 'bool', 'value': False},
+        {'name': 'show_left_axis', 'type': 'bool', 'value': False},
+    ]
     
-    _default_by_channel_params =  [ 
-                    {'name': 'visible', 'type': 'bool', 'value': True},
-                ]
+    _default_by_channel_params =  [
+            {'name': 'visible', 'type': 'bool', 'value': True},
+     ]
     
-    #~ _ControllerClass = TriggeredOscilloscopeController
+    _ControllerClass = DigitalOscilloscopeController
     
-    def __init__(self, **kargs):
-        BaseOscilloscope.__init__(self, **kargs)
+
+    def _check_nb_channel(self):
+        shape1 = self.inputs['signals'].params['shape'][1]
+        itemsize = np.dtype(self.inputs['signals'].params['dtype']).itemsize
+        self.nb_channel = shape1 * itemsize * 8
 
     def _initialize(self):
-        BaseOscilloscope._initialize(self)
-
-    def _start(self):
-        BaseOscilloscope._start(self)
-        
-    def _stop(self):
-        BaseOscilloscope._stop(self)
-    
-    def _refresh(self):
-        pass
-
-    def on_param_change(self, params, changes):
-        for param, change, data in changes:
-            if change != 'value': continue
-            #~ print param.name()
-            #~ if param.name() in ['gain', 'offset']: 
-                #~ self.redraw_stack()
-            #~ if param.name()=='ylims':
-                #~ continue
-            #~ if param.name()=='visible':
-                #~ c = self.by_channel_params.children().index(param.parent())
-                #~ for curve in self.list_curves[c]:
-                    #~ if data:
-                        #~ curve.show()
-                    #~ else:
-                        #~ curve.hide()
-            #~ if param.name()=='background_color':
-                #~ self.graphicsview.setBackground(data)
-            #~ if param.name()=='refresh_interval':
-                #~ self.timer.setInterval(data)
-            #~ if param.name() in ['left_sweep', 'right_sweep', 'stack_size']:
-                #~ self.plotted_trig = -1
-                #~ self.reset_curves_data()
-            #~ if param.name() in [ 'channel','threshold','debounce_time','debounce_mode', 'front']:
-                #~ continue
-
-    def gain_zoom(self, factor, selected=None):
-        for i, p in enumerate(self.by_channel_params.children()):
-            if selected is not None and not selected[i]: continue
-            if self.all_mean is not None:
-                p['offset'] = p['offset'] + self.all_mean[i]*p['gain'] - self.all_mean[i]*p['gain']*factor
-            p['gain'] = p['gain']*factor
-    
-    def get_visible_chunk(self):
-        head = self._head
-        sigs = self.inputs['signals'].get_data(head-self.full_size, head)
-        return sigs
-        
-    def auto_scale(self):
+        QOscilloscope._initialize(self)
         self.params_controller.compute_rescale()
-        self.refresh()
+
+    def get_visible_chunk(self, head=None, limit_to_head_0=True):
+        if head is None:
+            head = self._head
+        if limit_to_head_0:
+            raw_bits = self.inputs['signals'].get_data(max(-1, head-self.full_size), head, copy=False, join=True) # this ensure having at least one sample
+        else:
+            # get signal even before head=0
+            raw_bits = self.inputs['signals'].get_data(head-self.full_size, head, copy=False, join=True)
+        
+        # treansform one bit to one uint8
+        sigs = np.zeros((raw_bits.shape[0], self.nb_channel), dtype='uint8')
+        for chan in range(self.nb_channel):
+            b = chan//8
+            mask = 1<<(chan%8)
+            sigs[:, chan] =  (raw_bits[:,b] & mask)>0
+        
+        return sigs

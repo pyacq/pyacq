@@ -14,15 +14,16 @@ from pyqtgraph.Qt import QtCore, QtGui
 import pyqtgraph as pg
 
 
-sample_rate = 1000.
-chunksize = 20
-
+sample_rate = 10000.
+chunksize = int(sample_rate//100)
+#~ print(chunksize)
+#~ exit()
 
 def test_QDigitalOscilloscope():
     
     app = pg.mkQApp()
     
-    length = int(sample_rate*20)
+    length = int(sample_rate*200)
     t = np.arange(length)/sample_rate
     buffer = np.zeros((length, 3), dtype='uint8')
     nb_channel = buffer.shape[1]*8
@@ -30,13 +31,19 @@ def test_QDigitalOscilloscope():
         b = i//8
         mask =  1 << i%8
         cycle_size = int((i+1)*sample_rate/2)
-        period = np.concatenate([np.ones(cycle_size, dtype='uint8'), np.zeros(cycle_size, dtype='uint8')] * int(1+length/cycle_size/2))[:length]
+        period = np.concatenate([np.zeros(cycle_size, dtype='uint8'), np.ones(cycle_size, dtype='uint8')] * int(1+length/cycle_size/2))[:length]
         buffer[:, b] += period*mask
 
-
+    #~ print(buffer.shape, buffer.dtype)
+    #~ exit()
+    
+    channel_info = [ {'name': 'di{}'.format(c)} for c in range(nb_channel) ]
+    
     dev =NumpyDeviceBuffer()
     dev.configure(nb_channel=buffer.shape[1], sample_interval=1./sample_rate, chunksize=chunksize, buffer=buffer)
     dev.output.configure(protocol='tcp', interface='127.0.0.1', transfermode='plaindata')
+    # hack for channel names
+    dev.output.params['channel_info'] = channel_info
     dev.initialize()
 
     
