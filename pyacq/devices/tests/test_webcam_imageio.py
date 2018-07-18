@@ -12,7 +12,7 @@ from pyqtgraph.Qt import QtCore, QtGui
 
 import pytest
 
-
+@pytest.mark.skip(reason="need Device")
 @pytest.mark.skipif(not HAVE_IMAGEIO, reason='no have imageio')
 def test_webcam_imageio():
     # in main App
