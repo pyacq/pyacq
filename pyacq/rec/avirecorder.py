@@ -14,18 +14,19 @@ from pyqtgraph.util.mutex import Mutex
 
 from ..version import version as pyacq_version
 
+try:
+    import av
+    HAVE_AV = True
+except ImportError:
+    HAVE_AV = False
 
-class RawRecorder(Node):
+
+class AviRecorder(Node):
     """
-    Simple recorder Node of multiple streams in raw data format.
+    Node to record AVI file.
+    This Node aim to be use in conjonction with pyacq.device.WebCamAV
     
-    Implementation is simple, this launch one thread by stream.
-    Each one pull data and write it directly into a file in binary format.
     
-    Usage:
-    list_of_stream_to_record = [...]
-    rec = RawRecorder()
-    rec.configure(streams=list_of_stream_to_record, autoconnect=True, dirname=path_of_record)
     
     """
 
@@ -34,12 +35,11 @@ class RawRecorder(Node):
     
     def __init__(self, **kargs):
         Node.__init__(self, **kargs)
+        assert HAVE_AV, "AviRecorder node depends on the `av` package, but it could not be imported."
     
     def _configure(self, streams=[], autoconnect=True, dirname=None):
         self.streams = streams
         self.dirname = dirname
-        
-        assert not os.path.exists(dirname), 'dirname already exists'
         
         #make inputs
         self.inputs = collections.OrderedDict()
@@ -52,7 +52,9 @@ class RawRecorder(Node):
                 
     def _initialize(self):
         os.mkdir(self.dirname)
-        self.files = []
+        #~ self.files = []
+        self.av_containers = []
+        self.av_streams = []
         self.threads = []
         
         self.mutex = Mutex()
@@ -60,18 +62,29 @@ class RawRecorder(Node):
         self._stream_properties = collections.OrderedDict()
         
         for name, input in self.inputs.items():
-            filename = os.path.join(self.dirname, name+'.raw')
-            fid = open(filename, mode='wb')
-            self.files.append(fid)
+            filename = os.path.join(self.dirname, name+'.avi')
             
-            thread = ThreadRec(name, input, fid)
+            sr = input.params['sample_rate']
+            print('sr', sr)
+            av_container = av.open(filename, mode='w')
+            av_stream = av_container.add_stream('h264', rate=sr)
+            av_stream.width = input.params['shape'][1]
+            av_stream.height = input.params['shape'][0]
+            av_stream.pix_fmt = 'yuv420p'
+            
+            self.av_containers.append(av_container)
+            self.av_streams.append(av_stream)
+            
+            #~ fid = open(filename, mode='wb')
+            #~ self.files.append(fid)
+            
+            thread = ThreadRec(name, input, av_container, av_stream)
             self.threads.append(thread)
             thread.recv_start_index.connect(self.on_start_index)
             
             prop = {}
-            for k in ('streamtype', 'dtype', 'shape', 'sample_rate', 'channel_info'):
-                if k in input.params:
-                    prop[k] = input.params[k]
+            for k in ('streamtype', 'dtype', 'shape', 'sample_rate'):
+                prop[k] = input.params[k]
             self._stream_properties[name] = prop
         
         self._stream_properties['pyacq_version'] = pyacq_version
@@ -88,17 +101,28 @@ class RawRecorder(Node):
         for thread in self.threads:
             thread.stop()
             thread.wait()
-        
+
         #test in any pending data in streams
         for i, (name, input) in enumerate(self.inputs.items()):
             ev = input.poll(timeout=0.2)
             if ev>0:
                 pos, data = input.recv(return_data=True)
-                self.files[i].write(data.tobytes())
+                
+                #  TODO take format from stream params need change WebCamAV
+                frame = av.VideoFrame.from_ndarray(data, format='rgb24') 
+                packet = self.av_streams[i].encode(frame)
+                if packet is not None:
+                    self.av_containers[i].mux(packet)
         
-        for f in self.files:
-            f.close()
-
+        # flush stream  = encode empty frame until empty packet
+        for i, av_stream in enumerate(self.av_streams):
+            for packet in av_stream.encode():
+                self.av_containers[i].mux(packet)
+        
+        # Close files
+        for i, av_container in enumerate(self.av_containers):
+            av_container.close()
+    
     def _close(self):
         pass
     
@@ -127,19 +151,21 @@ def _flush_dict(filename, d):
 
 class ThreadRec(ThreadPollInput):
     recv_start_index = QtCore.Signal(str, int)
-    def __init__(self, name, input_stream,fid, timeout = 200, parent = None):
+    def __init__(self, name, input_stream, av_container, av_stream, timeout = 200, parent = None):
         ThreadPollInput.__init__(self, input_stream, timeout=timeout, return_data=True, parent=parent)
         self.name = name
-        self.fid = fid
+        self.av_container = av_container
+        self.av_stream = av_stream
         self._start_index = None
         
     def process_data(self, pos, data):
         if self._start_index is None:
-            self._start_index = int(pos - data.shape[0])
+            self._start_index = int(pos - 1)
             self.recv_start_index.emit(self.name, self._start_index)
         
-        #~ print(self.input_stream().name, 'pos', pos, 'data.shape', data.shape)
-        self.fid.write(data.tobytes())
-    
+        frame = av.VideoFrame.from_ndarray(data, format='rgb24')
         
-register_node_type(RawRecorder)
+        for packet in self.av_stream.encode(frame):
+            self.av_container.mux(packet)
+        
+register_node_type(AviRecorder)

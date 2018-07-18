@@ -20,6 +20,9 @@ class RingBuffer:
     def __init__(self, shape, dtype, double=True, shmem=None, fill=None, axisorder=None):
         self.double = double
         self.shape = shape
+        
+        dtype = make_dtype(dtype) # fix dtype serialization
+        
         # order of axes as written in memory. This does not affect the shape of the 
         # buffer as seen by the user, but can be used to make sure a specific axis
         # is contiguous in memory.
@@ -36,7 +39,7 @@ class RingBuffer:
         self._filler = fill
         
         if shmem is None:
-            self.buffer = np.empty(nativeshape, dtype=make_dtype(dtype)).transpose(np.argsort(axisorder))
+            self.buffer = np.empty(nativeshape, dtype=dtype).transpose(np.argsort(axisorder))
             self.buffer[:] = self._filler
             self._indexes = np.zeros((2,), dtype='int64')
             self._shmem = None
@@ -163,9 +166,15 @@ class RingBuffer:
             self.buffer[i:i+dsize] = value
         else:
             n = self.buffer.shape[0]-i
-            self.buffer[i:] = value[:n]
-            self.buffer[:dsize-n] = value[n:]
-        
+            if hasattr(value, '__len__'):
+                # case array
+                self.buffer[i:] = value[:n]
+                self.buffer[:dsize-n] = value[n:]
+            else:
+                # case value is a scalar (when self._filler)
+                self.buffer[i:] = value
+                self.buffer[:dsize-n] = value
+
     def __getitem__(self, item):
         if isinstance(item, tuple):
             first = item[0]
@@ -248,8 +257,10 @@ class RingBuffer:
                         return (a, b)
                 else:
                     data = np.empty(newshape, self.buffer.dtype).transpose(np.argsort(self.axisorder))
-                    data[:break_index-start] = a
-                    data[break_index-start:] = b
+                    #data[:break_index-start] = a #not robust if break_index==start
+                    #data[break_index-start:] = b
+                    data[:a.shape[0]] = a
+                    data[a.shape[0]:] = b
                     copied = True
         
         if copy and not copied:

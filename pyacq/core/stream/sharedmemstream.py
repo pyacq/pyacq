@@ -7,6 +7,7 @@ import numpy as np
 
 from .streamhelpers import DataSender, DataReceiver, register_transfermode
 from .ringbuffer import RingBuffer
+from .arraytools import make_dtype
 
 class SharedMemSender(DataSender):
     """Stream sender that uses shared memory for efficient interprocess
@@ -32,7 +33,7 @@ class SharedMemSender(DataSender):
         DataSender.__init__(self, socket, params)
         self.size = self.params['buffer_size']
         shape = (self.size,) + tuple(self.params['shape'][1:])
-        self._buffer = RingBuffer(shape=shape, dtype=self.params['dtype'],
+        self._buffer = RingBuffer(shape=shape, dtype=make_dtype(self.params['dtype']),
                                   shmem=True, axisorder=self.params['axisorder'],
                                   double=self.params['double'], fill=self.params['fill'])
         self.params['shm_id'] = self._buffer.shm_id

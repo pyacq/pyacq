@@ -14,6 +14,7 @@ from pyqtgraph.util.mutex import Mutex
 
 from .node import Node, register_node_type
 from .stream import OutputStream, InputStream
+from .stream.arraytools import make_dtype
 
 
 class ThreadPollInput(QtCore.QThread):
@@ -130,14 +131,16 @@ class ThreadStreamConverter(ThreadPollInput):
         ThreadPollInput.__init__(self, input_stream, timeout=timeout, return_data=True, parent=parent)
         self.output_stream = weakref.ref(output_stream)
         self.conversions = conversions
-    
+        
+        self.output_dtype = make_dtype(self.output_stream().params['dtype'])
+        
     def process_data(self, pos, data):
         #~ if 'transfermode' in self.conversions and self.conversions['transfermode'][0]=='sharedmem':
             #~ data = self.input_stream().get_array_slice(self, pos, None)
         #~ if 'timeaxis' in self.conversions:
             #~ data = data.swapaxes(*self.conversions['timeaxis'])
-        if data.dtype!=self.output_stream().params['dtype']:
-            data = data.astype(self.output_stream().params['dtype'])
+        if data.dtype!=self.output_dtype:
+            data = data.astype(self.output_dtype)
         self.output_stream().send(data, index=pos)
 
 
@@ -276,3 +279,86 @@ class ChannelSplitter(Node):
         pass
 
 register_node_type(ChannelSplitter)
+
+
+
+class ThreadChunkResizer(ThreadPollInput):
+    def __init__(self, input_stream, output_stream, chunksize, timeout=200, parent=None):
+        ThreadPollInput.__init__(self, input_stream, timeout=timeout, return_data=True, parent=parent)
+        self.output_stream = weakref.ref(output_stream)
+        self.chunksize = chunksize
+        self.stack = []
+    
+    def process_data(self, pos, data):
+        if (data.shape[0] == self.chunksize) and (len(self.stack)==0):
+            self.output_stream().send(data)
+            return
+        
+        self.stack.append(data)
+        
+        cumsizes = np.cumsum([d.shape[0] for d in self.stack])
+        while (len(cumsizes)>0) and (cumsizes[-1]>=self.chunksize):
+            until = np.searchsorted(cumsizes, self.chunksize) + 1
+            data_conc = np.concatenate(self.stack[:until])
+            self.output_stream().send(data_conc[:self.chunksize])
+            _stack = []
+            if data_conc.shape[0]>self.chunksize:
+                self.stack = [data_conc[self.chunksize:]] + self.stack[until:]
+            else:
+                self.stack = self.stack[until:]
+            cumsizes = np.cumsum([d.shape[0] for d in self.stack])
+
+
+class ChunkResizer(Node):
+    """
+    ChunkResizer take a multi-channel input signal stream and ensure
+    that ouput is the same constant chunksize packet.
+    So it split too long buffer and wait for next buffer when it is too small.
+    
+    Usage::
+    
+        chunkresizer = ChunkResizer()
+        chunkresizer.configure(chunksize)
+        chunkresizer.input.connect(someinput)
+        chunkresizer.output.configure(...)
+        chunkresizer.initialize()
+        chunkresizer.start()
+
+    """
+    _input_specs = {'in': {}}
+    _output_specs = {'out':{}}
+    
+    def __init__(self, **kargs):
+        Node.__init__(self, **kargs)
+    
+    def _configure(self, chunksize=100):
+        """
+        Params
+        -----------
+        chunksize: int
+            output desired chunksize
+        """
+        self.chunksize = chunksize
+
+    def after_input_connect(self, inputname):
+        
+        self.nb_channel = self.input.params['shape'][1]
+        for k in ['sample_rate', 'dtype',  'shape', 'channel_info']:
+            if k in self.input.params:
+                self.output.spec[k] = self.input.params[k]
+        #~ 'shape',
+    
+    def _initialize(self):
+        self.thread = ThreadChunkResizer(self.input, self.output, self.chunksize)
+    
+    def _start(self):
+        self.thread.start()
+
+    def _stop(self):
+        self.thread.stop()
+        self.thread.wait()
+    
+    def _close(self):
+        pass
+
+register_node_type(ChunkResizer)
