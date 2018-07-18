@@ -17,6 +17,7 @@ Supported Hardware
 |                                       |  Linux  | Windows |
 |:--------------------------------------|:-------:|:-------:|
 | National Instruments devices (DAQmx)  |    ?    |    X    |
+| Measurement Computing  |        |    X    |
 | Scientific cameras (via MicroManager) |    X    |    X    |
 | Emotiv EEG system                     |    X    |    X    |
 | BrainVision EEG                       |    X    |    X    |
