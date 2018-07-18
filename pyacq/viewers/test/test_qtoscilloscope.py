@@ -91,7 +91,7 @@ def test_qoscilloscope4():
 
 if __name__ == '__main__':
     test_qoscilloscope1()
-    #~ test_qoscilloscope2()
-    #~ test_qoscilloscope3()
-    #~ test_qoscilloscope4()
+    test_qoscilloscope2()
+    test_qoscilloscope3()
+    test_qoscilloscope4()
 
