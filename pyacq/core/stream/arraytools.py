@@ -90,6 +90,20 @@ def normalized_array(data):
     return data[ind]
 
 
+def fix_struct_dtype(dt):
+    """
+      fix when due to serialization dtype 
+        [('index', 'int64'), ('label', 'int64'), ('jitter', 'float64')]
+        become
+        [['index', 'int64'], ['label', 'int64'], ['jitter', 'float64']]
+    
+    """
+    if isinstance(dt, list):
+        dt = [ (k,v) for k,v in dt]
+        return dt
+    else:
+        return dt
+
 def make_dtype(dt):
     """
     To be used where np.dtype is dangerous.
