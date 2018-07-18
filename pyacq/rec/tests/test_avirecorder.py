@@ -19,6 +19,9 @@ import shutil
 import datetime
 
 
+# TODO make this test able to run without device
+
+@pytest.mark.skip(reason="need Device")
 @pytest.mark.skipif(not HAVE_AV, reason='no have av')
 def test_AviRecorder():
     app = pg.mkQApp()
