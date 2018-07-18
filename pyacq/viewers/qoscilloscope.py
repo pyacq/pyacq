@@ -400,9 +400,12 @@ class QOscilloscope(BaseOscilloscope):
     def _refresh(self):
         mode = self.params['mode']
         decimate = int(self.params['decimate'])
-        gains = np.array([p['gain'] for p in self.by_channel_params.children()])
-        offsets = np.array([p['offset'] for p in self.by_channel_params.children()])
-        visibles = np.array([p['visible'] for p in self.by_channel_params.children()], dtype=bool)
+        #~ gains = np.array([p['gain'] for p in self.by_channel_params.children()])
+        gains = self.params_controller.gains
+        #~ offsets = np.array([p['offset'] for p in self.by_channel_params.children()])
+        offsets = self.params_controller.offsets
+        #~ visibles = np.array([p['visible'] for p in self.by_channel_params.children()], dtype=bool)
+        visibles = self.params_controller.visible_channels
         xsize = self.params['xsize'] 
         
         head = self._head
@@ -412,7 +415,8 @@ class QOscilloscope(BaseOscilloscope):
             else:
                 head = head - head%decimate
         
-        full_arr = self.inputs['signals'].get_data(head-self.full_size, head, copy=False, join=True).T
+        #~ full_arr = self.inputs['signals'].get_data(head-self.full_size, head, copy=False, join=True).T
+        full_arr = self.get_visible_chunk(head=head).T
         
         full_arr = full_arr.astype(float)
         
@@ -502,9 +506,10 @@ class QOscilloscope(BaseOscilloscope):
                 p['offset'] = p['offset'] + self.all_mean[i]*p['gain'] - self.all_mean[i]*p['gain']*factor
             p['gain'] = p['gain']*factor
     
-    def get_visible_chunk(self):
-        head = self._head
-        sigs = self.inputs['signals'].get_data(head-self.full_size, head)
+    def get_visible_chunk(self, head=None):
+        if head is None:
+            head = self._head
+        sigs = self.inputs['signals'].get_data(head-self.full_size, head, copy=False, join=True)
         return sigs
         
     def auto_scale(self):
