@@ -82,9 +82,14 @@ class BaseOscilloscope(WidgetNode):
         self.with_user_dialog = with_user_dialog
         self.max_xsize = max_xsize
     
-    def _initialize(self):
-        assert len(self.inputs['signals'].params['shape']) == 2, 'Are you joking ?'
+
+    def _check_nb_channel(self):
         self.nb_channel = self.inputs['signals'].params['shape'][1]
+    
+    def _initialize(self):
+        self._check_nb_channel()
+        assert len(self.inputs['signals'].params['shape']) == 2, 'Are you joking ?'
+        
         self.sample_rate = self.inputs['signals'].params['sample_rate']
         buf_size = int(self.sample_rate * self.max_xsize)
         self.inputs['signals'].set_buffer(size=buf_size, axisorder=[1,0], double=True)
@@ -96,7 +101,7 @@ class BaseOscilloscope(WidgetNode):
             self.channel_names = ['ch{}'.format(c) for c in range(self.nb_channel)]
         else:
             self.channel_names = [ch_info['name'] for ch_info in channel_info]
-
+    
         # Create parameters
         all = []
         for i in range(self.nb_channel):
@@ -406,6 +411,7 @@ class QOscilloscope(BaseOscilloscope):
         BaseOscilloscope._configure(self, with_user_dialog=with_user_dialog, max_xsize = max_xsize)
 
     def _initialize(self):
+        
         BaseOscilloscope._initialize(self)
         
         if self.params_controller is not None:
@@ -431,9 +437,9 @@ class QOscilloscope(BaseOscilloscope):
     def _refresh(self):
         mode = self.params['mode']
         decimate = int(self.params['decimate'])
-        gains = np.array([p['gain'] for p in self.by_channel_params.children()])
-        offsets = np.array([p['offset'] for p in self.by_channel_params.children()])
-        visibles = np.array([p['visible'] for p in self.by_channel_params.children()], dtype=bool)
+        gains = self.params_controller.gains
+        offsets = self.params_controller.offsets
+        visibles = self.params_controller.visible_channels
         xsize = self.params['xsize'] 
         
         head = self._head
@@ -443,9 +449,11 @@ class QOscilloscope(BaseOscilloscope):
             else:
                 head = head - head%decimate
         
-        full_arr = self.inputs['signals'].get_data(head-self.full_size, head, copy=False, join=True).T
+        full_arr = self.get_visible_chunk(head=head, limit_to_head_0=False).T
         
         full_arr = full_arr.astype(float)
+
+
         
         if decimate>1:
             if self.params['decimation_method'] == 'pure_decimate':
@@ -467,6 +475,9 @@ class QOscilloscope(BaseOscilloscope):
         small_arr[visibles, :] *= gains[visibles, None]
         small_arr[visibles, :] += offsets[visibles, None]
         
+        
+        
+        
         if mode=='scroll':
             for c, visible in enumerate(visibles):
                 if visible:
@@ -476,10 +487,11 @@ class QOscilloscope(BaseOscilloscope):
             for c, visible in enumerate(visibles):
                 if visible:
                     self.curves_data[c] = np.concatenate((small_arr[c,-ind:], small_arr[c,:-ind]))
-
+        
         for c, visible in enumerate(visibles):
             if visible:
                self.curves[c].setData(self.t_vect, self.curves_data[c], antialias=False)
+        
             
         self.plot.setXRange(self.t_vect[0], self.t_vect[-1])
         self.plot.setYRange(self.params['ylim_min'], self.params['ylim_max'])
@@ -533,9 +545,14 @@ class QOscilloscope(BaseOscilloscope):
                 p['offset'] = p['offset'] + self.all_mean[i]*p['gain'] - self.all_mean[i]*p['gain']*factor
             p['gain'] = p['gain']*factor
     
-    def get_visible_chunk(self):
-        head = self._head
-        sigs = self.inputs['signals'].get_data(max(-1, head-self.full_size), head) # this ensure having at least one sample
+    def get_visible_chunk(self, head=None, limit_to_head_0=True):
+        if head is None:
+            head = self._head
+        if limit_to_head_0:
+            sigs = self.inputs['signals'].get_data(max(-1, head-self.full_size), head, copy=False, join=True) # this ensure having at least one sample
+        else:
+            # get signal even before head=0
+            sigs = self.inputs['signals'].get_data(head-self.full_size, head, copy=False, join=True)
         return sigs
         
     def auto_scale(self, spacing_factor=9.):
