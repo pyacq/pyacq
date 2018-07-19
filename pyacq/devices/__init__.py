@@ -5,6 +5,7 @@
 from .npbufferdevice import NumpyDeviceBuffer
 from .webcam_imageio import WebCamImageIO
 from .webcam_av import WebCamAV
+from .measurementcomputing import MeasurementComputing
 from .audio_pyaudio import PyAudio
 from .eeg_emotiv import Emotiv
 from .eeg_openBCI import OpenBCI
