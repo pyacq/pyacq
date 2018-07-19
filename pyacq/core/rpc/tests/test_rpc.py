@@ -392,7 +392,7 @@ def test_disconnect():
 
 
 if __name__ == '__main__':
-    test_rpc()
+    #~ test_rpc()
     test_qt_rpc()
-    test_disconnect()
+    #~ test_disconnect()
     

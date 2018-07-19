@@ -43,7 +43,8 @@ def test_npbufferdevice():
     #~ print(nodegroup.any_node_running())
     
     man.close()
-    
+
+
 if __name__ == '__main__':
     test_npbufferdevice()
 
