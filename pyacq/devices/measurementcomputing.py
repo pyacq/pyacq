@@ -11,13 +11,6 @@ from pyqtgraph.util.mutex import Mutex
 
 from ..core import Node, register_node_type
 
-"""
-
-
-# TODO:
-  * range output to float32
-
-"""
 
 
 if sys.platform.startswith('win'):
@@ -101,7 +94,7 @@ class MeasurementComputing(Node):
     
     """
     _output_specs = {'aichannels' : dict(streamtype = 'analogsignal'),
-                    #~ 'dichannels' : dict(streamtype = 'digitalsignal'),
+                    'dichannels' : dict(streamtype = 'digitalsignal'),
                     }
 
     def __init__(self, **kargs):
@@ -133,10 +126,10 @@ class MeasurementComputing(Node):
         
         self.di_dtype = None
         if self.board_info['nb_di_port']>0:
-            bit_by_port = self.board_info['bit_by_port']
+            bit_by_port = np.array(self.board_info['bit_by_port'])
             
             # some internal limitation
-            assert np.all(bit_by_port[0] == bit_by_port), 'Unsupported port with different bits {}'.format(bit_by_port)
+            assert np.all(bit_by_port == bit_by_port[0]), 'Unsupported port with different bits {}'.format(bit_by_port)
             assert bit_by_port[0] in (8, 16), 'Unsupported port with bits {}'.format(bit_by_port)
             
             if bit_by_port[0] == 8:
@@ -148,7 +141,7 @@ class MeasurementComputing(Node):
         self.prepare_device()
         
         self.outputs['aichannels'].spec['shape'] = (-1, self.nb_ai_channel)
-        self.outputs['aichannels'].spec['dtype'] = 'uint16'
+        self.outputs['aichannels'].spec['dtype'] = 'float32'
         self.outputs['aichannels'].spec['sample_rate'] = self.real_sample_rate
         self.outputs['aichannels'].spec['nb_channel'] = self.nb_ai_channel
         
@@ -161,7 +154,7 @@ class MeasurementComputing(Node):
         if outputname == 'aichannels':
             channel_info = [ {'name': 'ai{}'.format(c)} for c in self.ai_channel_index ]
         elif outputname == 'dichannels':
-            channel_info = [ {'name': 'di{}'.format(c)} for c in self.board_info['nb_di_channel'] ]
+            channel_info = [ {'name': 'di{}'.format(c)} for c in range(self.board_info['nb_di_channel']) ]
         self.outputs[outputname].params['channel_info'] = channel_info
 
     def _initialize(self):
@@ -192,14 +185,15 @@ class MeasurementComputing(Node):
             low_chan = int(min(self.ai_channel_index))
             high_chan = int(max(self.ai_channel_index))
             cbw.cbAInScan(self.board_num, low_chan, high_chan, ctypes.c_long(self.raw_arr.size),
-                  ctypes.byref(self.real_sr), ctypes.c_int(self.gain_array[0]),
+                    ctypes.byref(self.real_sr), ctypes.c_int(self.gain_array[0]),
                     ctypes.c_void_p(self.raw_arr.ctypes.data), self.options)
             self.function = ULConst.AIFUNCTION
         elif self.mode_daq_scan == 'cbDaqInScan':
-            cbw.cbDaqInScan(self.board_num, self.chan_array.ctypes.data,
-                self.chan_array_type.ctypes.data, self.gain_array.ctypes.data,
+            cbw.cbDaqInScan(self.board_num,  ctypes.c_void_p(self.chan_array.ctypes.data),
+                ctypes.c_void_p(self.chan_array_type.ctypes.data),
+                ctypes.c_void_p(self.gain_array.ctypes.data),
                 self.nb_total_channel, byref(self.real_sr), byref(self.pretrig_count),
-                byref(self.total_count), self.raw_arr.ctypes.data, self.options)
+                byref(self.total_count), ctypes.c_void_p(self.raw_arr.ctypes.data), self.options)
             self.function = ULConst.DAQIFUNCTION
     
     def _stop_daq_scan(self):
@@ -267,13 +261,15 @@ class MeasurementComputing(Node):
         return board_info
     
     def prepare_device(self):
+
+        if self.ai_mode is not None:
+            cbw.cbAInputMode(ctypes.c_int(self.board_num), ctypes.c_int(mode_convertion[self.ai_mode]))
+            #~ for c in self.ai_channel_index:
+                #~ cbw.cbAChanInputMode(ctypes.c_int(self.board_num), ctypes.c_int(c),
+                                    #~ ctypes.c_int(mode_convertion[self.ai_mode]))
+
         
         #digital input
-        if self.board_info['nb_di_port']>0:
-            di_info = self.subdevices_params[1]
-            self.nb_di_port = self.board_info['nb_di_port']
-            self.nb_di_channel = di_info['nb_channel']
-        
         self.nb_total_channel = self.nb_ai_channel + self.board_info['nb_di_port']
         
         self.chan_array = np.array(self.ai_channel_index +\
@@ -286,20 +282,23 @@ class MeasurementComputing(Node):
             array_types += [ULConst.DIGITAL16] * self.board_info['nb_di_port']
         self.chan_array_type = np.array(array_types, dtype='int16')
         
+        # this is for cbDaqInScan
         self.gain_array = np.array([ range_convertion[ai_range] for ai_range in self.ai_ranges] +\
                     [0] * self.board_info['nb_di_port'], dtype = np.int16)
-        
-        if self.ai_mode is not None:
-            cbw.cbAInputMode(ctypes.c_int(self.board_num), ctypes.c_int(mode_convertion[self.ai_mode]))
-        #~ for c in self.ai_channel_index:
-            #~ cbw.cbAChanInputMode(ctypes.c_int(self.board_num), ctypes.c_int(c),
-                                #~ ctypes.c_int(mode_convertion[self.ai_mode]))
-        
-
-        
         self.real_sr = ctypes.c_long(int(self.sample_rate))
         
-         # buffer of 10S rounded to packetsize
+        # prepare gain/ offset by analog channel
+        self.channel_gains = np.zeros(self.nb_ai_channel, dtype='float32')
+        self.channel_offsets = np.zeros(self.nb_ai_channel, dtype='float32')
+        for c, chan in enumerate(self.ai_channel_index):
+            ai_range =  self.ai_ranges[c]
+            self.channel_gains[c] = (ai_range[1] - ai_range[0]) / 2**16
+            if ai_range[0]==-ai_range[1]:
+                self.channel_offsets[c]= -self.channel_gains[c]*2**15
+        self.channel_gains = self.channel_gains.reshape(1,-1)
+        self.channel_offsets = self.channel_offsets.reshape(1,-1)
+        
+        # buffer of 10S rounded to packetsize
         self.internal_size = int(10.*self.sample_rate)
         self.internal_size = self.internal_size - self.internal_size%(self.board_info['packet_size'])
 
@@ -353,7 +352,9 @@ class MeasurementComputingThread(QtCore.QThread):
         ai_mask = self.node.ai_mask
         di_mask = self.node.di_mask
         board_info = self.node.board_info
-        
+        di_dtype = self.node.di_dtype
+        channel_gains = self.node.channel_gains
+        channel_offsets = self.node.channel_offsets
         
         status = ctypes.c_int(0)
         cur_count = ctypes.c_long(0)
@@ -389,19 +390,25 @@ class MeasurementComputingThread(QtCore.QThread):
                 #end of internal ring buffer
                 new_samp = internal_size - last_index
                 head += new_samp
-                outputs['aichannels'].send(raw_arr[last_index:, ai_mask], index=head)
+                ai_arr = raw_arr[last_index:, ai_mask].astype('float32')
+                ai_arr *= channel_gains
+                ai_arr += channel_offsets
+                outputs['aichannels'].send(ai_arr, index=head)
                 
                 if board_info['nb_di_port']>0:
-                    outputs['dichannels'].send(raw_arr[last_index:, di_mask].astype(self.di_dtype), index=head)
+                    outputs['dichannels'].send(raw_arr[last_index:, di_mask].astype(di_dtype), index=head)
                 
                 last_index = 0
                 
             new_samp = index - last_index
             head += new_samp
-            outputs['aichannels'].send(raw_arr[last_index:index, ai_mask], index=head)
+            ai_arr = raw_arr[last_index:index, ai_mask].astype('float32')
+            ai_arr *= channel_gains
+            ai_arr += channel_offsets
+            outputs['aichannels'].send(ai_arr, index=head)
             
             if board_info['nb_di_port']>0:
-                outputs['dichannels'].send(raw_arr[last_index:index, di_mask].astype(self.di_dtype), index=head)
+                outputs['dichannels'].send(raw_arr[last_index:index, di_mask].astype(di_dtype), index=head)
             
             last_index = index%internal_size
             

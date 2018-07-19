@@ -5,7 +5,7 @@ from pyqtgraph.Qt import QtCore, QtGui
 from pyacq import create_manager
 from pyacq import MeasurementComputing
 from pyacq.core.tests.fakenodes import ReceiverWidget
-from pyacq.viewers import QOscilloscope
+from pyacq.viewers import QOscilloscope, QDigitalOscilloscope
 
 import pytest
 
@@ -75,21 +75,32 @@ def test_measurementcomputing_USB2533():
     dev = MeasurementComputing()
     
     # ai_channel_index = None
-    ai_channel_index = [0, 10, 50, ]
+    ai_channel_index = [0, 10, 47, ]
     ai_ranges = (-10, 10)
+    #~ ai_ranges = (-5, 5)
+    #~ ai_ranges = (-1, 1)
     ai_mode = 'single-ended'
+    #~ ai_mode = 'differential'  # this should bug whith channel>32
     
-    dev.configure(board_num=1, sample_rate=10000., ai_channel_index=ai_channel_index, ai_ranges=ai_ranges, ai_mode=ai_mode)
+    dev.configure(board_num=0, sample_rate=10000., ai_channel_index=ai_channel_index, ai_ranges=ai_ranges, ai_mode=ai_mode)
     dev.outputs['aichannels'].configure(protocol = 'tcp', interface = '127.0.0.1', transfertmode = 'plaindata')
     dev.outputs['dichannels'].configure(protocol = 'tcp', interface = '127.0.0.1', transfertmode = 'plaindata')
     dev.initialize()
     
-    viewer0 = ReceiverWidget()
+    viewer0 = QOscilloscope()
     viewer0.configure()
-    viewer0.input.connect(dev.outputs['ai_channel_index'])
+    viewer0.input.connect(dev.outputs['aichannels'])
     viewer0.initialize()
+    viewer0.params['scale_mode'] = 'real_scale'
+    viewer0.params['xsize'] = 5
+    viewer0.params['ylim_min'] = -1.5
+    viewer0.params['ylim_max'] = 1.5
+    viewer0.params['refresh_interval'] = 100
+    viewer0.params['show_left_axis'] = True
+    
 
-    viewer1 = ReceiverWidget()
+
+    viewer1 = QDigitalOscilloscope()
     viewer1.configure()
     viewer1.input.connect(dev.outputs['dichannels'])
     viewer1.initialize()
@@ -113,14 +124,14 @@ def test_measurementcomputing_USB2533():
     # start for a while
     timer = QtCore.QTimer(singleShot = True, interval = 10000)
     timer.timeout.connect(terminate)
-    timer.start()
+    #~ timer.start()
     
     app.exec_()
 
 
 if __name__ == '__main__':
     #~ test_measurementcomputing_infodevice()
-    test_measurementcomputing_USB1608_FS_PLUS()
-    #~ test_measurementcomputing_USB2533()
+    #~ test_measurementcomputing_USB1608_FS_PLUS()
+    test_measurementcomputing_USB2533()
 
  
