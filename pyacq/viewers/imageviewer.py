@@ -41,8 +41,8 @@ class ImageViewer(WidgetNode):
     
     def _initialize(self):
         in_params = self.input.params
-        self.timer = QtCore.QTimer(singleShot=False)
-        self.timer.setInterval(int(1./in_params['sample_rate']*1000))
+        self.timer = QtCore.QTimer()
+        self.timer.setInterval(16)
         self.timer.timeout.connect(self.poll_socket)
 
     def _start(self):
@@ -55,12 +55,18 @@ class ImageViewer(WidgetNode):
         pass
     
     def poll_socket(self):
-        event = self.input.socket.poll(0)
-        if event != 0:
+        data = None
+        while self.input.poll(0) == 1:
+            # read all frames until socket is clear
+            # (discard all but the most recent)
             index, data = self.input.recv()
-            data = data[::-1,:,:]
-            data = data.swapaxes(0,1)
-            self.image.setImage(data)
+        
+        if data is None:
+            return
+        
+        data = data[::-1].swapaxes(0,1)
+        self.image.setImage(data)
+
 
 
 register_node_type(ImageViewer)

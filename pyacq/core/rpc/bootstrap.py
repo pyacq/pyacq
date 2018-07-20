@@ -3,6 +3,7 @@
 import zmq
 import time
 import sys
+import signal
 import json
 import traceback
 import faulthandler
@@ -24,6 +25,12 @@ logger.level = conf['loglevel']
 
 import pyacq
 from pyacq.core.rpc import log
+
+
+# Ignore SIGINT -- we don't want keyboard interrupts to propagate to spawned
+# processes.
+signal.signal(signal.SIGINT, signal.SIG_IGN)
+
 
 # Start QApplication if requested
 if conf['qt']:
