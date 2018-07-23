@@ -306,8 +306,8 @@ class OscilloscopeController(QtGui.QWidget):
         sigs = self.viewer.get_visible_chunk()
         self.signals_med = med = np.nanmedian(sigs, axis=0)
         self.signals_mad = np.nanmedian(np.abs(sigs-med),axis=0)*1.4826
-        self.signals_min = np.min(sigs, axis=0)
-        self.signals_max = np.max(sigs, axis=0)
+        self.signals_min = np.nanmin(sigs, axis=0)
+        self.signals_max = np.nanmax(sigs, axis=0)
     
     def compute_rescale(self, spacing_factor=9.):
         scale_mode = self.viewer.params['scale_mode']
