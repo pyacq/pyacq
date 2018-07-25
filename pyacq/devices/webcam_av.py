@@ -3,10 +3,11 @@
 # Distributed under the (new) BSD License. See LICENSE for more info.
 
 """
-av is python binding to libav or ffmpeg and this is so great (except the poor doc for the moment)
+av is python binding to libav or ffmpeg and this is so great.
 http://mikeboers.github.io/PyAV/index.html
 """
-
+import time
+import sys
 
 import numpy as np
 
@@ -20,7 +21,6 @@ try:
 except ImportError:
     HAVE_AV = False
 
-import time
 
 
 class AVThread(QtCore.QThread):
@@ -71,8 +71,13 @@ class WebCamAV(Node):
     def _configure(self, camera_num=0, **options):
         self.camera_num = camera_num
         self.options = options
-
-        container = av.open('/dev/video{}'.format(self.camera_num), 'r','video4linux2', self.options)
+        
+        # todo 'dshow' under windows
+        if sys.platform.startswith('win'):
+            format = 'dshow'
+        else:
+            format = 'video4linux2'
+        container = av.open('/dev/video{}'.format(self.camera_num), 'r',format , self.options)
         stream = next(s for s in container.streams if s.type == 'video')
         self.output.spec['shape'] = (stream.format.height, stream.format.width, 3)
         self.output.spec['sample_rate'] = float(stream.average_rate)
@@ -90,8 +95,11 @@ class WebCamAV(Node):
         self._thread.stop()
         self._thread.wait()
         self._running = False
+        
+        # this delete container (+thread) to close the device
         del(self.container)
-    
+        del(self._thread)
+
     def _close(self):
         pass
 
