@@ -8,6 +8,9 @@ http://mikeboers.github.io/PyAV/index.html
 """
 import time
 import sys
+import subprocess
+import os
+import re
 
 import numpy as np
 
@@ -75,10 +78,12 @@ class WebCamAV(Node):
         # todo 'dshow' under windows
         if sys.platform.startswith('win'):
             self.format = 'dshow'
-            self.filepath = str(self.camera_num)
+            dev_names = get_device_list_dshow()
+            self.filepath = "video={}".format(dev_names[camera_num])
         else:
             self.filepath = '/dev/video{}'.format(self.camera_num)
             self.format = 'video4linux2'
+            
             
         container = av.open(self.filepath, 'r', self.format , self.options)
         stream = next(s for s in container.streams if s.type == 'video')
@@ -107,3 +112,17 @@ class WebCamAV(Node):
         pass
 
 register_node_type(WebCamAV)
+
+
+def get_device_list_dshow():
+    """
+    Some uggly code to get get device name list under windows directshow
+    """
+    cmd = "ffmpeg -list_devices true -f dshow -i dummy"
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    txt = proc.stdout.read().decode('ascii')
+    txt = txt.split("DirectShow video devices")[1].split("DirectShow audio devices")[0]
+    pattern = '"([^"]*)"'
+    l = re.findall(pattern, txt, )
+    l = [e for e in l if not e.startswith('@')]
+    return l

@@ -5,7 +5,7 @@
 import time
 
 from pyacq import create_manager
-from pyacq.devices.webcam_av import WebCamAV, HAVE_AV
+from pyacq.devices.webcam_av import WebCamAV, HAVE_AV, get_device_list_dshow
 from pyacq.viewers.imageviewer import ImageViewer
 
 from pyqtgraph.Qt import QtCore, QtGui
@@ -46,5 +46,12 @@ def test_webcam_opencv():
     #~ timer.start()
     app.exec_()
 
+def test_get_device_list_dshow():
+    device_names = get_device_list_dshow()
+    print(device_names)
+
 if __name__ == '__main__':
     test_webcam_opencv()
+    
+    #~ test_get_device_list_dshow()
+    

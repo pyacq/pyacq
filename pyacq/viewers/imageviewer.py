@@ -57,7 +57,8 @@ class ImageViewer(WidgetNode):
     def poll_socket(self):
         event = self.input.socket.poll(0)
         if event != 0:
-            index, data = self.input.recv()
+            while self.input.socket.poll(0)>0:
+                index, data = self.input.recv()
             data = data[::-1,:,:]
             data = data.swapaxes(0,1)
             self.image.setImage(data)
