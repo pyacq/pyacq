@@ -74,20 +74,23 @@ class WebCamAV(Node):
         
         # todo 'dshow' under windows
         if sys.platform.startswith('win'):
-            format = 'dshow'
+            self.format = 'dshow'
+            self.filepath = str(self.camera_num)
         else:
-            format = 'video4linux2'
-        container = av.open('/dev/video{}'.format(self.camera_num), 'r',format , self.options)
+            self.filepath = '/dev/video{}'.format(self.camera_num)
+            self.format = 'video4linux2'
+            
+        container = av.open(self.filepath, 'r', self.format , self.options)
         stream = next(s for s in container.streams if s.type == 'video')
         self.output.spec['shape'] = (stream.format.height, stream.format.width, 3)
         self.output.spec['sample_rate'] = float(stream.average_rate)
     
     def _initialize(self):
         pass
+
     
     def _start(self):
-        self.container = av.open('/dev/video{}'.format(self.camera_num), 'r','video4linux2', self.options)
-
+        self.container = av.open(self.filepath, 'r', self.format , self.options)
         self._thread = AVThread(self.output, self.container)
         self._thread.start()
 
