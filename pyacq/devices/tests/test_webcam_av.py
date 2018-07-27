@@ -46,12 +46,14 @@ def test_webcam_opencv():
     #~ timer.start()
     app.exec_()
 
+@pytest.mark.skip(reason="need Device")
+@pytest.mark.skipif(not HAVE_AV, reason='no have av')
 def test_get_device_list_dshow():
     device_names = get_device_list_dshow()
     print(device_names)
 
 if __name__ == '__main__':
-    test_webcam_opencv()
+    #~ test_webcam_opencv()
     
-    #~ test_get_device_list_dshow()
+    test_get_device_list_dshow()
     
