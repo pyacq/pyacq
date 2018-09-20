@@ -3,3 +3,4 @@
 # Distributed under the (new) BSD License. See LICENSE for more info.
 
 from .rawrecorder import RawRecorder
+from .avirecorder import AviRecorder

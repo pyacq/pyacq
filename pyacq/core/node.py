@@ -268,19 +268,21 @@ class Node(object):
 class WidgetNode(QtGui.QWidget, Node):
     """Base class for Nodes that implement a QWidget user interface.
     """
-    def __init__(self, parent=None, **kargs):
+    def __init__(self, parent=None, close_node_on_widget_closed=True, **kargs):
         QtGui.QWidget.__init__(self, parent=parent)
         Node.__init__(self, **kargs)
+        self._close_node_on_widget_closed = close_node_on_widget_closed
     
     def close(self):
         Node.close(self)
         QtGui.QWidget.close(self)
 
     def closeEvent(self,event):
-        if self.running():
-            self.stop()
-        if not self.closed():
-            Node.close(self)
+        if self._close_node_on_widget_closed:
+            if self.running():
+                self.stop()
+            if not self.closed():
+                Node.close(self)
         event.accept()
 
         

@@ -3,10 +3,14 @@
 # Distributed under the (new) BSD License. See LICENSE for more info.
 
 """
-av is python binding to libav or ffmpeg and this is so great (except the poor doc for the moment)
+av is python binding to libav or ffmpeg and this is so great.
 http://mikeboers.github.io/PyAV/index.html
 """
-
+import time
+import sys
+import subprocess
+import os
+import re
 
 import numpy as np
 
@@ -20,7 +24,6 @@ try:
 except ImportError:
     HAVE_AV = False
 
-import time
 
 
 class AVThread(QtCore.QThread):
@@ -71,18 +74,28 @@ class WebCamAV(Node):
     def _configure(self, camera_num=0, **options):
         self.camera_num = camera_num
         self.options = options
-
-        container = av.open('/dev/video{}'.format(self.camera_num), 'r','video4linux2', self.options)
+        
+        # todo 'dshow' under windows
+        if sys.platform.startswith('win'):
+            self.format = 'dshow'
+            dev_names = get_device_list_dshow()
+            self.filepath = "video={}".format(dev_names[camera_num])
+        else:
+            self.filepath = '/dev/video{}'.format(self.camera_num)
+            self.format = 'video4linux2'
+            
+            
+        container = av.open(self.filepath, 'r', self.format , self.options)
         stream = next(s for s in container.streams if s.type == 'video')
         self.output.spec['shape'] = (stream.format.height, stream.format.width, 3)
         self.output.spec['sample_rate'] = float(stream.average_rate)
     
     def _initialize(self):
         pass
+
     
     def _start(self):
-        self.container = av.open('/dev/video{}'.format(self.camera_num), 'r','video4linux2', self.options)
-
+        self.container = av.open(self.filepath, 'r', self.format , self.options)
         self._thread = AVThread(self.output, self.container)
         self._thread.start()
 
@@ -90,9 +103,26 @@ class WebCamAV(Node):
         self._thread.stop()
         self._thread.wait()
         self._running = False
+        
+        # this delete container (+thread) to close the device
         del(self.container)
-    
+        del(self._thread)
+
     def _close(self):
         pass
 
 register_node_type(WebCamAV)
+
+
+def get_device_list_dshow():
+    """
+    Some uggly code to get get device name list under windows directshow
+    """
+    cmd = "ffmpeg -list_devices true -f dshow -i dummy"
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    txt = proc.stdout.read().decode('ascii')
+    txt = txt.split("DirectShow video devices")[1].split("DirectShow audio devices")[0]
+    pattern = '"([^"]*)"'
+    l = re.findall(pattern, txt, )
+    l = [e for e in l if not e.startswith('@')]
+    return l

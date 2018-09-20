@@ -41,10 +41,16 @@ class RawRecorder(Node):
         
         assert not os.path.exists(dirname), 'dirname already exists'
         
+        if isinstance(streams, list):
+            names = ['input{}'.format(i) for i in range(len(streams))]
+        elif isinstance(streams, dict):
+            names = list(streams.keys())
+            streams = list(streams.values())
+        
         #make inputs
         self.inputs = collections.OrderedDict()
         for i, stream in enumerate(streams):
-            name = 'input{}'.format(i)
+            name = names[i]
             input = InputStream(spec={}, node=self, name=name)
             self.inputs[name] = input
             if autoconnect:
@@ -81,6 +87,9 @@ class RawRecorder(Node):
         self._annotations = {}
     
     def _start(self):
+        for name, input in self.inputs.items():
+            input.empty_queue()
+        
         for thread in self.threads:
             thread.start()
 
@@ -136,6 +145,7 @@ class ThreadRec(ThreadPollInput):
     def process_data(self, pos, data):
         if self._start_index is None:
             self._start_index = int(pos - data.shape[0])
+            print('_start_index raw', self._start_index)
             self.recv_start_index.emit(self.name, self._start_index)
         
         #~ print(self.input_stream().name, 'pos', pos, 'data.shape', data.shape)

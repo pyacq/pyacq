@@ -309,7 +309,19 @@ class InputStream(object):
         if self._own_buffer and data is not None and self.buffer is not None:
             self.buffer.new_chunk(data, index=index)
         return index, data
-
+    
+    def empty_queue(self):
+        """
+        Receive all pending messing in the zmq queue without consuming them.
+        This is usefull when a Node do not start at the same time than other nodes
+        but was already connected. In that case the zmq water mecanism put
+        messages in a queue and when you start cusuming you get old message.
+        This can be annoying.
+        This recv every thing with timeout=0 and so empty the queue.
+        """
+        while self.socket.poll(timeout=0)>0:
+            self.socket.recv_multipart()
+    
     def close(self):
         """Close the stream.
         

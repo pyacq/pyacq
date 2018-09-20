@@ -40,18 +40,25 @@ class AviRecorder(Node):
     def _configure(self, streams=[], autoconnect=True, dirname=None):
         self.streams = streams
         self.dirname = dirname
+
+        if isinstance(streams, list):
+            names = ['video{}'.format(i) for i in range(len(streams))]
+        elif isinstance(streams, dict):
+            names = list(streams.keys())
+            streams = list(streams.values())
         
         #make inputs
         self.inputs = collections.OrderedDict()
         for i, stream in enumerate(streams):
-            name = 'input{}'.format(i)
+            name = names[i]
             input = InputStream(spec={}, node=self, name=name)
             self.inputs[name] = input
             if autoconnect:
                 input.connect(stream)
                 
     def _initialize(self):
-        os.mkdir(self.dirname)
+        if not os.path.exists(self.dirname):
+            os.mkdir(self.dirname)
         #~ self.files = []
         self.av_containers = []
         self.av_streams = []
@@ -94,6 +101,9 @@ class AviRecorder(Node):
         self._annotations = {}
     
     def _start(self):
+        for name, input in self.inputs.items():
+            input.empty_queue()
+        
         for thread in self.threads:
             thread.start()
 
@@ -131,7 +141,7 @@ class AviRecorder(Node):
         self._flush_stream_properties()
     
     def _flush_stream_properties(self):
-        filename = os.path.join(self.dirname, 'stream_properties.json')
+        filename = os.path.join(self.dirname, 'avi_stream_properties.json')
         with self.mutex:
             _flush_dict(filename, self._stream_properties)
     
@@ -161,6 +171,7 @@ class ThreadRec(ThreadPollInput):
     def process_data(self, pos, data):
         if self._start_index is None:
             self._start_index = int(pos - 1)
+            print('_start_index video', self._start_index)
             self.recv_start_index.emit(self.name, self._start_index)
         
         frame = av.VideoFrame.from_ndarray(data, format='rgb24')
