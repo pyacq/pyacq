@@ -26,8 +26,9 @@ def test_measurementcomputing_USB1608_FS_PLUS():
     dev = MeasurementComputing()
     
 
-    # ai_channel_index = None
-    ai_channel_index = [2, 3, 4 ]
+    #ai_channel_index = None
+    #ai_channel_index = [0, 2, 3, 4 ]
+    #ai_channel_index = [0, 1, 2, 3 ]
     ai_ranges = (-10, 10)
     
     ai_mode = None
@@ -131,7 +132,7 @@ def test_measurementcomputing_USB2533():
 
 if __name__ == '__main__':
     #~ test_measurementcomputing_infodevice()
-    #~ test_measurementcomputing_USB1608_FS_PLUS()
-    test_measurementcomputing_USB2533()
+    test_measurementcomputing_USB1608_FS_PLUS()
+    #~ test_measurementcomputing_USB2533()
 
  

@@ -107,7 +107,8 @@ class MeasurementComputing(Node):
         self.board_info = self.scan_device_info(board_num)
         
         if ai_channel_index is None:
-            ai_channel_index = np.arange(self.board_info['nb_ai_channel'])
+            # ai_channel_index = np.arange(self.board_info['nb_ai_channel'])
+            ai_channel_index = list(range(self.board_info['nb_ai_channel']))
         
         self.board_num = int(board_num)
         self.sample_rate = sample_rate
