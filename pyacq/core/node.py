@@ -164,6 +164,10 @@ class Node(object):
         assert not self.running(),\
             'Cannot start Node {} : the Node is already running'.format(self.name)
         
+        # this is necessary i case of multiple start/stop
+        for input in self.inputs.values():
+            input.reset_buffer_index()
+
         self._start()
         with self.lock:
             self._running = True
@@ -177,7 +181,7 @@ class Node(object):
         self._stop()
         with self.lock:
             self._running = False
-    
+
     def close(self):
         """Close the Node.
         

@@ -109,7 +109,11 @@ class RingBuffer:
     def _set_read_index(self, i):
         # what kind of protection do we need here?
         self._indexes[0] = i
-
+    
+    def reset_index(self):
+        self._set_write_index(0)
+        self._set_read_index(0)
+    
     def new_chunk(self, data, index=None):
         dsize = data.shape[0]
         bsize = self.shape[0]

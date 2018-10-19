@@ -378,3 +378,12 @@ class InputStream(object):
         dtype = make_dtype(self.params['dtype'])
         self.buffer = RingBuffer(shape=shape, dtype=dtype, double=double, axisorder=axisorder, shmem=shmem, fill=fill)
         self._own_buffer = True
+    
+    def reset_buffer_index(self):
+        """
+        Reset the buffer index.
+        Usefull for multiple start/stop on Node.
+        """
+        if self.buffer is not None:
+             self.buffer.reset_index()
+            

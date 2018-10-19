@@ -131,6 +131,7 @@ class BaseOscilloscope(WidgetNode):
         self.timer.timeout.connect(self.refresh)
 
     def _start(self):
+        self._head = 0
         self.estimate_decimate()
         self.reset_curves_data()
         self.poller.start()
