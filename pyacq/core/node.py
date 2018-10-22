@@ -167,6 +167,8 @@ class Node(object):
         # this is necessary i case of multiple start/stop
         for input in self.inputs.values():
             input.reset_buffer_index()
+        for output in self.outputs.values():
+            output.reset_buffer_index()
 
         self._start()
         with self.lock:

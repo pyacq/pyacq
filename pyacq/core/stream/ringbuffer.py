@@ -129,8 +129,8 @@ class RingBuffer:
             index = self._write_index + dsize
         
         assert dsize <= index - self._write_index, ("Data size is %d, but index "
-                                                    "only advanced by %d." % 
-                                                    (dsize, index-self._write_index)) 
+                                                    "only advanced by %d. (index=%d, self._write_index=%d)" % 
+                                                    (dsize, index-self._write_index, index, self._write_index)) 
 
         revert_inds = [self._read_index, self._write_index]
         try:

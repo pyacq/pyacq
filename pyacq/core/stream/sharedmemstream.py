@@ -50,6 +50,9 @@ class SharedMemSender(DataSender):
         
         stat = struct.pack('!' + 'QQ', index, shape[0])
         self.socket.send_multipart([stat])
+    
+    def reset_index(self):
+        self._buffer.reset_index()
 
 
 class SharedMemReceiver(DataReceiver):
