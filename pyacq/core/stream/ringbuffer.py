@@ -109,7 +109,11 @@ class RingBuffer:
     def _set_read_index(self, i):
         # what kind of protection do we need here?
         self._indexes[0] = i
-
+    
+    def reset_index(self):
+        self._set_write_index(0)
+        self._set_read_index(0)
+    
     def new_chunk(self, data, index=None):
         dsize = data.shape[0]
         bsize = self.shape[0]
@@ -125,8 +129,8 @@ class RingBuffer:
             index = self._write_index + dsize
         
         assert dsize <= index - self._write_index, ("Data size is %d, but index "
-                                                    "only advanced by %d." % 
-                                                    (dsize, index-self._write_index)) 
+                                                    "only advanced by %d. (index=%d, self._write_index=%d)" % 
+                                                    (dsize, index-self._write_index, index, self._write_index)) 
 
         revert_inds = [self._read_index, self._write_index]
         try:

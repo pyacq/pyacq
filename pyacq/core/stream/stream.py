@@ -172,6 +172,15 @@ class OutputStream(object):
         self.socket.close()
         del self.socket
         del self.sender
+    
+    def reset_buffer_index(self):
+        """
+        Reset the buffer index.
+        Usefull for multiple start/stop on Node to reset the index.
+        """
+        self.last_index = 0
+        self.sender.reset_index()
+
 
 
 def _shape_equal(shape1, shape2):
@@ -378,3 +387,12 @@ class InputStream(object):
         dtype = make_dtype(self.params['dtype'])
         self.buffer = RingBuffer(shape=shape, dtype=dtype, double=double, axisorder=axisorder, shmem=shmem, fill=fill)
         self._own_buffer = True
+    
+    def reset_buffer_index(self):
+        """
+        Reset the buffer index.
+        Usefull for multiple start/stop on Node to reset the index.
+        """
+        if self.buffer is not None and self._own_buffer:
+             self.buffer.reset_index()
+            

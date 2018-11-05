@@ -76,6 +76,7 @@ class NumpyDeviceBuffer(Node):
         self.timer.timeout.connect(self.send_data)
     
     def _start(self):
+        self.head = 0
         self.timer.start()
 
     def _stop(self):

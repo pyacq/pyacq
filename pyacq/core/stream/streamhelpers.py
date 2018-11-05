@@ -32,6 +32,9 @@ class DataSender:
     def close(self):
         pass
 
+    def reset_index(self):
+        pass
+
 
 class DataReceiver:
     """Base class for InputStream data receivers.
@@ -52,4 +55,3 @@ class DataReceiver:
     
     def close(self):
         pass
-    

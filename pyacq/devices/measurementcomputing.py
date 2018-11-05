@@ -107,7 +107,8 @@ class MeasurementComputing(Node):
         self.board_info = self.scan_device_info(board_num)
         
         if ai_channel_index is None:
-            ai_channel_index = np.arange(self.board_info['nb_ai_channel'])
+            # ai_channel_index = np.arange(self.board_info['nb_ai_channel'])
+            ai_channel_index = list(range(self.board_info['nb_ai_channel']))
         
         self.board_num = int(board_num)
         self.sample_rate = sample_rate
@@ -149,6 +150,8 @@ class MeasurementComputing(Node):
             self.outputs['dichannels'].spec['shape'] = (-1, self.board_info['nb_di_port'])
             self.outputs['dichannels'].spec['dtype'] = self.di_dtype
             self.outputs['dichannels'].spec['sample_rate'] = self.real_sample_rate
+        else:
+            self.outputs.pop('dichannels')
 
     def after_output_configure(self, outputname):
         if outputname == 'aichannels':
@@ -181,13 +184,16 @@ class MeasurementComputing(Node):
         self._stop_daq_scan()
 
     def _start_daq_scan(self):
+        print('self.mode_daq_scan', self.mode_daq_scan)
         if self.mode_daq_scan == 'cbAInScan':
             low_chan = int(min(self.ai_channel_index))
             high_chan = int(max(self.ai_channel_index))
-            cbw.cbAInScan(self.board_num, low_chan, high_chan, ctypes.c_long(self.raw_arr.size),
+            #~ print(low_chan, high_chan)
+            r = cbw.cbAInScan(self.board_num, low_chan, high_chan, ctypes.c_long(self.raw_arr.size),
                     ctypes.byref(self.real_sr), ctypes.c_int(self.gain_array[0]),
                     ctypes.c_void_p(self.raw_arr.ctypes.data), self.options)
             self.function = ULConst.AIFUNCTION
+            print('cbAInScan done', r)
         elif self.mode_daq_scan == 'cbDaqInScan':
             cbw.cbDaqInScan(self.board_num,  ctypes.c_void_p(self.chan_array.ctypes.data),
                 ctypes.c_void_p(self.chan_array_type.ctypes.data),
@@ -199,12 +205,14 @@ class MeasurementComputing(Node):
     def _stop_daq_scan(self):
     
         if self.mode_daq_scan == 'cbAInScan':
-            cbw.cbStopBackground(ctypes.c_int(self.board_num))
+            r = cbw.cbStopBackground(ctypes.c_int(self.board_num), ctypes.c_int(self.function))
+            print('cbStopBackground done', r)
         elif self.mode_daq_scan == 'cbDaqInScan':
             cbw.cbStopBackground(ctypes.c_int(self.board_num), ctypes.c_int(self.function))
     
     def _close(self):
-        del self.raw_arr
+        # del self.raw_arr
+        pass
 
     def scan_device_info(self, board_num):
         board_info = { }
@@ -371,7 +379,6 @@ class MeasurementComputingThread(QtCore.QThread):
             with self.lock:
                 if not self.running:
                     break
-            
             cbw.cbGetIOStatus( ctypes.c_int(board_num), byref(status),
                 byref(cur_count), byref(cur_index), ctypes.c_int(function))
             
@@ -379,12 +386,10 @@ class MeasurementComputingThread(QtCore.QThread):
                 continue
             
             index = cur_index.value // nb_total_channel
-            #~ print('index', index)
             
             if index == last_index :
                 time.sleep(.01)
                 continue
-            
             
             if index<last_index:
                 #end of internal ring buffer
@@ -407,6 +412,7 @@ class MeasurementComputingThread(QtCore.QThread):
             ai_arr += channel_offsets
             outputs['aichannels'].send(ai_arr, index=head)
             
+            
             if board_info['nb_di_port']>0:
                 outputs['dichannels'].send(raw_arr[last_index:index, di_mask].astype(di_dtype), index=head)
             
@@ -414,7 +420,6 @@ class MeasurementComputingThread(QtCore.QThread):
             
             # be nice
             time.sleep(.01)
-            
 
     def stop(self):
         with self.lock:

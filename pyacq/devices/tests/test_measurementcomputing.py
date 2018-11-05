@@ -20,14 +20,58 @@ def test_measurementcomputing_infodevice():
     #~ print(dev.scan_device_info(0))
 
 @pytest.mark.skip('Need a device for test')
+def test_measurementcomputing_multiple_start_stop():
+    app = pg.mkQApp()    
+    dev = MeasurementComputing()
+    
+
+    ai_channel_index = None
+    ai_ranges = (-10, 10)
+    
+    ai_mode = None
+    
+    dev.configure(board_num=0, sample_rate=1000, ai_channel_index=ai_channel_index, ai_ranges=ai_ranges, ai_mode=ai_mode)
+    dev.outputs['aichannels'].configure(protocol='tcp', interface='127.0.0.1', transfertmode='plaindata')
+    dev.initialize()
+    
+    
+    dev.start()
+    
+    global n
+    n = 0
+    
+    def stop_and_start():
+        global n
+        
+        print('*****')
+        print('stop', n)
+        dev.stop()
+        if n<3:
+            n += 1
+            print('*****')
+            print('start', n)
+            dev.start()
+        else:
+            print('terminate')
+            app.quit()
+    
+    # start  and stop 3 times
+    timer = QtCore.QTimer(singleShot=False, interval=1000)
+    timer.timeout.connect(stop_and_start)
+    timer.start()
+
+    app.exec_()
+
+@pytest.mark.skip('Need a device for test')
 def test_measurementcomputing_USB1608_FS_PLUS():
 
     app = pg.mkQApp()    
     dev = MeasurementComputing()
     
 
-    # ai_channel_index = None
-    ai_channel_index = [2, 3, 4 ]
+    ai_channel_index = None
+    #ai_channel_index = [0, 2, 3, 4 ]
+    #ai_channel_index = [0, 1, 2, 3 ]
     ai_ranges = (-10, 10)
     
     ai_mode = None
@@ -55,9 +99,11 @@ def test_measurementcomputing_USB1608_FS_PLUS():
     viewer.show()
     
     def terminate():
-        viewer.stop()
+        viewer0.stop()
+        viewer1.stop()
         dev.stop()
-        viewer.close()
+        viewer0.close()
+        viewer1.close()
         dev.close()
         app.quit()
     
@@ -65,8 +111,12 @@ def test_measurementcomputing_USB1608_FS_PLUS():
     timer = QtCore.QTimer(singleShot = True, interval = 10000)
     timer.timeout.connect(terminate)
     #~ timer.start()
-    
+
     app.exec_()
+
+
+
+
 
 @pytest.mark.skip('Need a device for test')
 def test_measurementcomputing_USB2533():
@@ -131,7 +181,8 @@ def test_measurementcomputing_USB2533():
 
 if __name__ == '__main__':
     #~ test_measurementcomputing_infodevice()
+    test_measurementcomputing_multiple_start_stop()
     #~ test_measurementcomputing_USB1608_FS_PLUS()
-    test_measurementcomputing_USB2533()
+    #~ test_measurementcomputing_USB2533()
 
  
