@@ -410,8 +410,9 @@ class SosFilter(Node,  QtCore.QObject):
 
     def after_input_connect(self, inputname):
         self.nb_channel = self.input.params['shape'][1]
-        for k in ['sample_rate', 'dtype', 'shape']:
-            self.output.spec[k] = self.input.params[k]
+        for k in ['sample_rate', 'dtype',  'shape', 'channel_info']:
+            if k in self.input.params:
+                self.output.spec[k] = self.input.params[k]
     
     def _initialize(self):
         self.thread = SosFilterThread(self.input, self.output)
