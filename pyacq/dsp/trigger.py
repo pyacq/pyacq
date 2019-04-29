@@ -155,6 +155,9 @@ class TriggerBase(Node,  QtCore.QObject):
     
     def _start(self):
         self.thread.last_pos = None
+        # put queue to empty before start
+        # in for the case several start/stop cycle
+        self.input.empty_queue()
         self.thread.start()
     
     def _stop(self):
