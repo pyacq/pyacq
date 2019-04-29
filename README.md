@@ -3,6 +3,7 @@ pyacq
 =====
 
 <a href="https://travis-ci.org/pyacq/pyacq"><img src="https://travis-ci.org/pyacq/pyacq.svg?branch=master"></a>
+[![Build status](https://ci.appveyor.com/api/projects/status/ynioa3acql26mo96?svg=true)](https://ci.appveyor.com/project/samuelgarcia/pyacq-fxy8y)
 
 Pyacq is a simple, pure-Python framework for distributed data acquisition and
 stream processing. Its primary use cases are for analog signals, digital
