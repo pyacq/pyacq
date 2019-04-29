@@ -157,8 +157,8 @@ def compare_online_offline_engines():
 
 if __name__ == '__main__':
     #~ test_sosfilter()
-    #~ test_openclsosfilter()
+    test_openclsosfilter()
     
-    compare_online_offline_engines()
+    #~ compare_online_offline_engines()
 
  
