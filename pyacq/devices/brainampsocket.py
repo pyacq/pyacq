@@ -65,6 +65,7 @@ class BrainAmpThread(QtCore.QThread):
             (id1, id2, id3, id4, msgsize, msgtype) = struct.unpack('<llllLL', buf_header)
 
             rawdata = recv_brainamp_frame(brainamp_socket, msgsize - 24)
+           
             # TODO  msgtype == 3 (msgtype == 1 is header done in Node.configure)
             if msgtype == 4:
                 #~ block, chunk, markers = get_signal_and_markers(rawdata, self.nb_channel)
@@ -84,9 +85,10 @@ class BrainAmpThread(QtCore.QThread):
                 for m in range(nb_marker):
                     markersize, = struct.unpack('<L', rawdata[index:index+4])
                     markers['pos'][m], markers['points'][m],markers['channel'][m] = struct.unpack('<LLl', rawdata[index+4:index+16])
-                    markers['type'][m], markers['description'][m] = rawdata[index+16:index+markersize].tostring().split('\x00')[:2]
+                    markers['type'][m], markers['description'][m] = rawdata[index+16:index+markersize].split(b'\x00')[:2]
                     index = index + markersize
                 head_marker += nb_marker
+                markers['pos'] += (head - points)
                 self.outputs['triggers'].send(markers, index=nb_marker)
 
         brainamp_socket.close()
