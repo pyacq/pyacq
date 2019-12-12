@@ -11,6 +11,7 @@ import sys
 import subprocess
 import os
 import re
+import gc
 
 import numpy as np
 
@@ -46,7 +47,7 @@ class AVThread(QtCore.QThread):
                 if not self.running:
                     break
             for frame in packet.decode():
-                arr = frame.to_rgb().to_nd_array()
+                arr = frame.to_rgb().to_ndarray()
                 n += 1
                 self.out_stream.send(arr, index=n)
 
@@ -107,6 +108,8 @@ class WebCamAV(Node):
         # this delete container (+thread) to close the device
         del(self.container)
         del(self._thread)
+        gc.collect()  #is this usefull ?
+
 
     def _close(self):
         pass
