@@ -24,9 +24,16 @@ import datetime
 @pytest.mark.skip(reason="need Device")
 @pytest.mark.skipif(not HAVE_AV, reason='no have av')
 def test_AviRecorder():
+
+    #~ man = create_manager(auto_close_at_exit=False)
+    #~ ng0 = man.create_nodegroup()
+    #~ ng1 = man.create_nodegroup()
+    
+    
     app = pg.mkQApp()
     
     dev = WebCamAV(name='cam')
+    #~ dev = ng0.create_node('WebCamAV', name='cam')
     dev.configure(camera_num=0)
     dev.output.configure(protocol='tcp', interface='127.0.0.1',transfermode='plaindata',)
     dev.initialize()
@@ -36,8 +43,8 @@ def test_AviRecorder():
         shutil.rmtree(dirname)
     
     rec = AviRecorder()
-    #~ rec = ng1.create_node('RawRecorder')
-    rec.configure(streams=[dev.output], autoconnect=True, dirname=dirname)
+    #~ rec = ng0.create_node('AviRecorder')
+    rec.configure(streams=[dev.output], autoconnect=True, dirname=dirname,  codec_name='h264')
     rec.initialize()
 
     viewer = ImageViewer()
@@ -47,7 +54,6 @@ def test_AviRecorder():
     viewer.show()
     
     dev.start()
-    rec.start()
     viewer.start()
     
     def terminate():
@@ -62,10 +68,19 @@ def test_AviRecorder():
         
         app.quit()
     
+    def start_rec():
+        # the rec is delayed
+        rec.start()
+        
+    
     # start for a while
     timer = QtCore.QTimer(singleShot=True, interval=10000)
     timer.timeout.connect(terminate)
     timer.start()
+    timer2 = QtCore.QTimer(singleShot=True, interval=1500)
+    timer2.timeout.connect(start_rec)
+    timer2.start()
+
     app.exec_()
 
 

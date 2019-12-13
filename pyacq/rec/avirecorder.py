@@ -7,6 +7,7 @@ import collections
 import logging
 import os
 import json
+import fractions
 
 from ..core import Node, register_node_type, ThreadPollInput, InputStream
 from pyqtgraph.Qt import QtCore, QtGui
@@ -37,9 +38,10 @@ class AviRecorder(Node):
         Node.__init__(self, **kargs)
         assert HAVE_AV, "AviRecorder node depends on the `av` package, but it could not be imported."
     
-    def _configure(self, streams=[], autoconnect=True, dirname=None):
+    def _configure(self, streams=[], autoconnect=True, dirname=None, codec_name='h264'):
         self.streams = streams
         self.dirname = dirname
+        self.codec_name = codec_name
 
         if isinstance(streams, list):
             names = ['video{}'.format(i) for i in range(len(streams))]
@@ -72,9 +74,13 @@ class AviRecorder(Node):
             filename = os.path.join(self.dirname, name+'.avi')
             
             sr = input.params['sample_rate']
-            print('sr', sr)
+            
+            # this fix problem inside PyAV
+            sr = fractions.Fraction(sr).limit_denominator()
+            
             av_container = av.open(filename, mode='w')
-            av_stream = av_container.add_stream('h264', rate=sr)
+            av_stream = av_container.add_stream(self.codec_name, rate=sr)
+            
             av_stream.width = input.params['shape'][1]
             av_stream.height = input.params['shape'][0]
             av_stream.pix_fmt = 'yuv420p'
