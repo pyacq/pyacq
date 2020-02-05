@@ -32,13 +32,18 @@ class PlainDataSender(DataSender):
         shape = data.shape
         buf, offset, strides = decompose_array(data)
         
+        
         # compress
         comp = self.params['compression']
         buf = compress(buf, comp, data.itemsize)
         
+        
         # Pack and send
         stat = struct.pack('!' + 'Q' * (3+len(shape)) + 'q' * len(strides), len(shape), index, offset, *(shape + strides))
         copy = self.params.get('copy', False)
+
+        # this trick avoid "does not support the buffer interface." for datetime[ms] dtype in python
+        buf = buf.flatten().view('uint8')
         self.socket.send_multipart([stat, buf], copy=copy)
 
 
