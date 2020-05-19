@@ -4,7 +4,7 @@
 
 import numpy as np
 
-from ..core import Node, register_node_type
+from ..core import Node, register_node_type, InputStream
 from pyqtgraph.Qt import QtCore, QtGui
 from pyqtgraph.util.mutex import Mutex
 
@@ -28,32 +28,32 @@ class OpenEphysGUIRelay(Node):
         '''
         self.openephys_url = openephys_url
         
-        print('configure', openephys_url)
         context = zmq.Context.instance()
         self.socket = context.socket(zmq.PAIR)
-        #~ self.socket.linger = 1000  # don't let socket deadlock when exiting
-        #~ self.socket.setsockopt(zmq.SUBSCRIBE, b'')
+        self.socket.linger = 1000  # don't let socket deadlock when exiting
         self.socket.connect(openephys_url)
 
         self.socket.send(b'config')
         msg = self.socket.recv()
         self.stream_params = json.loads(msg.decode())
-        pprint(self.stream_params)
-        
-        #~ self.stream_params = stream_params
-        
-        #~ self.nb_channel = 
+        #~ pprint(self.stream_params)
 
-        #~ self.outputs['signals'].spec['shape'] = (-1, self.nb_channel)
-        #~ self.outputs['signals'].spec['sample_rate'] = self.sample_rate
-        #~ self.outputs['signals'].spec['nb_channel'] = self.nb_channel
-        #~ self.outputs['signals'].spec.update(stream_params)
-        #~ self.outputs['signals'].spec.update(self.stream_params)
-    
     def _initialize(self):
         pass
 
     def after_output_configure(self, outputname):
+        # here a hack to get the buffer before start/stop
+        stream = InputStream()
+        stream.connect(self.stream_params)
+        stream.set_buffer(size=self.stream_params['buffer_size'])
+        self._start()
+        pos, data = stream.recv(return_data=True)
+        self._stop()
+        n_ampl = data.shape[0]
+        
+        _, n_chan = self.stream_params['shape']
+        self.stream_params['shape'] = (n_ampl, n_chan)
+        
         if outputname == 'signals':
             self.outputs['signals'].params.update(self.stream_params)
 
