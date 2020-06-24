@@ -67,7 +67,7 @@ def lauch_qoscilloscopemultiplot(transfermode, axisorder):
     # start for a while
     timer = QtCore.QTimer(singleShot=True, interval=2000)
     timer.timeout.connect(terminate)
-    #~ timer.start()
+    timer.start()
     
     app.exec_()
 
@@ -77,22 +77,7 @@ def lauch_qoscilloscopemultiplot(transfermode, axisorder):
 def test_qoscilloscopemultiplot1():
     lauch_qoscilloscopemultiplot(transfermode='sharedmem', axisorder=[0,1])
 
-def test_qoscilloscopemultiplot2():
-    lauch_qoscilloscopemultiplot(transfermode='plaindata', axisorder=None)
-
-def test_qoscilloscopemultiplot3():
-    #only case where one channel is continuous in memory for oscilloscope
-    lauch_qoscilloscopemultiplot(transfermode='sharedmem', axisorder=[1, 0])
-
-def test_qoscilloscopemultiplot4():
-    lauch_qoscilloscopemultiplot(transfermode='plaindata',axisorder=None)
-
-
   
 
 if __name__ == '__main__':
     test_qoscilloscopemultiplot1()
-    #~ test_qoscilloscopemultiplot2()
-    #~ test_qoscilloscopemultiplot3()
-    #~ test_qoscilloscopemultiplot4()
-
