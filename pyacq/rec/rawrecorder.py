@@ -70,7 +70,8 @@ class RawRecorder(Node):
             fid = open(filename, mode='wb')
             self.files.append(fid)
             
-            thread = ThreadRec(name, input, fid)
+            flush_every_packet = (input.params.get('streamtype', None) == 'events')
+            thread = ThreadRec(name, input, fid, flush_every_packet=flush_every_packet)
             self.threads.append(thread)
             thread.recv_start_index.connect(self.on_start_index)
             
@@ -136,20 +137,23 @@ def _flush_dict(filename, d):
 
 class ThreadRec(ThreadPollInput):
     recv_start_index = QtCore.Signal(str, int)
-    def __init__(self, name, input_stream,fid, timeout = 200, parent = None):
+    def __init__(self, name, input_stream,fid, timeout=200, flush_every_packet=False, parent=None):
         ThreadPollInput.__init__(self, input_stream, timeout=timeout, return_data=True, parent=parent)
         self.name = name
         self.fid = fid
         self._start_index = None
+        self.flush_every_packet =flush_every_packet
         
     def process_data(self, pos, data):
         if self._start_index is None:
             self._start_index = int(pos - data.shape[0])
-            print('_start_index raw', self._start_index)
+            #~ print('_start_index raw', self._start_index)
             self.recv_start_index.emit(self.name, self._start_index)
         
         #~ print(self.input_stream().name, 'pos', pos, 'data.shape', data.shape)
         self.fid.write(data.tobytes())
-    
         
+        if self.flush_every_packet:
+            self.fid.flush()
+
 register_node_type(RawRecorder)
