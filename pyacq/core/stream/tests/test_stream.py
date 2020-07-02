@@ -71,9 +71,14 @@ def check_stream(chunksize=1024, chan_shape=(16,), **kwds):
 def test_plaindata_ringbuffer():
     check_stream_ringbuffer(transfermode='plaindata', buffer_size=4096)
     
+    check_stream_struct_dtype(transfermode='plaindata', buffer_size=4096)
+    
 def test_sharedmem_ringbuffer():
     check_stream_ringbuffer(transfermode='sharedmem', buffer_size=4096)
     check_stream_ringbuffer(transfermode='sharedmem', buffer_size=4096, axisorder=(1, 0))
+    
+    check_stream_struct_dtype(transfermode='sharedmem', buffer_size=4096)
+    
     
 def check_stream_ringbuffer(**kwds):
     chunk_shape = (-1, 16)
@@ -108,14 +113,55 @@ def check_stream_ringbuffer(**kwds):
     assert np.all(data2 == data)
     if outstream.params['axisorder'] is not None:
         assert np.all(np.argsort(data2.strides)[::-1] == outstream.params['axisorder'])
+        
+
+
+def check_stream_struct_dtype(**kwds):
+
+    dtype_struct = [
+        ('datetime', 'datetime64[ms]'),
+        ('message', 'S32'),
+    ]
+    
+    chunk_shape = (-1,)
+    stream_spec = dict(protocol='tcp', interface='127.0.0.1', port='*', 
+                       transfermode='plaindata', streamtype='analogsignal',
+                       dtype=dtype_struct, shape=chunk_shape, compression='',
+                       scale=None, offset=None, units='', axisorder=None,
+                       double=True)
+    stream_spec.update(kwds)
+    print("  %s" % kwds)
+    
+    outstream = OutputStream()
+    outstream.configure(**stream_spec)
+    
+    instream = InputStream()
+    instream.connect(outstream)
+    instream.set_buffer(stream_spec['buffer_size'], axisorder=stream_spec['axisorder'],
+                double=stream_spec['double'])
+    
+    # Make sure we are re-using sharedmem buffer
+    if instream.receiver.buffer is not None:
+        assert instream._own_buffer is False
+        
+    time.sleep(.1)
+
+    data = np.zeros(50, dtype=dtype_struct)
+    for i in range(10):
+        chunk = data[i*5:(i+1)*5]
+        outstream.send(chunk)
+        instream.recv()
+    data2 = instream[0:50]
+    assert np.all(data2 == data)
+    if outstream.params['axisorder'] is not None:
+        assert np.all(np.argsort(data2.strides)[::-1] == outstream.params['axisorder'])
     
 
 
-
 if __name__ == '__main__':
-    test_stream_plaindata()
-    test_stream_sharedmem()
-    test_plaindata_ringbuffer()
+    #~ test_stream_plaindata()
+    #~ test_stream_sharedmem()
+    #~ test_plaindata_ringbuffer()
     test_sharedmem_ringbuffer()
     
 
