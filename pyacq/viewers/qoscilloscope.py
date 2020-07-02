@@ -118,7 +118,7 @@ class BaseOscilloscope(WidgetNode):
         if self.with_user_dialog and self._ControllerClass:
             self.params_controller = self._ControllerClass(parent=self, viewer=self)
             self.params_controller.setWindowFlags(QtCore.Qt.Window)
-            self.viewBox.doubleclicked.connect(self.show_params_controller)
+            #~ self.viewBox.doubleclicked.connect(self.show_params_controller)
         else:
             self.params_controller = None
         
@@ -416,7 +416,9 @@ class QOscilloscope(BaseOscilloscope):
         BaseOscilloscope._initialize(self)
         
         if self.params_controller is not None:
+            self.viewBox.doubleclicked.connect(self.show_params_controller)
             self.viewBox.gain_zoom.connect(self.params_controller.apply_ygain_zoom)
+            
         self.viewBox.xsize_zoom.connect(self.apply_xsize_zoom)
             
         self.params.param('xsize').setLimits([2./self.sample_rate, self.max_xsize*.95])
@@ -539,12 +541,12 @@ class QOscilloscope(BaseOscilloscope):
             if param.name()=='scale_mode':
                 self.params_controller.compute_rescale()
     
-    def gain_zoom(self, factor, selected=None):
-        for i, p in enumerate(self.by_channel_params.children()):
-            if selected is not None and not selected[i]: continue
-            if self.all_mean is not None:
-                p['offset'] = p['offset'] + self.all_mean[i]*p['gain'] - self.all_mean[i]*p['gain']*factor
-            p['gain'] = p['gain']*factor
+    #~ def gain_zoom(self, factor, selected=None):
+        #~ for i, p in enumerate(self.by_channel_params.children()):
+            #~ if selected is not None and not selected[i]: continue
+            #~ if self.all_mean is not None:
+                #~ p['offset'] = p['offset'] + self.all_mean[i]*p['gain'] - self.all_mean[i]*p['gain']*factor
+            #~ p['gain'] = p['gain']*factor
     
     def get_visible_chunk(self, head=None, limit_to_head_0=True):
         if head is None:
