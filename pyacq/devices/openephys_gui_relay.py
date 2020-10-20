@@ -28,15 +28,19 @@ class OpenEphysGUIRelay(Node):
         '''
         self.openephys_url = openephys_url
         
-        context = zmq.Context.instance()
-        self.socket = context.socket(zmq.PAIR)
-        self.socket.linger = 1000  # don't let socket deadlock when exiting
-        self.socket.connect(openephys_url)
-
-        self.socket.send(b'config')
-        msg = self.socket.recv()
+        socket = self.make_socket()
+        socket.send(b'config')
+        msg = socket.recv()
         self.stream_params = json.loads(msg.decode())
+        socket.close()
         #~ pprint(self.stream_params)
+        
+    def make_socket(self):
+        context = zmq.Context.instance()
+        socket = context.socket(zmq.REQ)
+        socket.linger = 1000  # don't let socket deadlock when exiting
+        socket.connect(self.openephys_url)
+        return socket
 
     def _initialize(self):
         pass
@@ -58,14 +62,16 @@ class OpenEphysGUIRelay(Node):
             self.outputs['signals'].params.update(self.stream_params)
 
     def _start(self):
-        self.socket.send(b'start')
-        msg = self.socket.recv()
+        socket = self.make_socket()
+        socket.send(b'start')
+        msg = socket.recv()
         assert msg == b'ok'
-        
+        socket.close()
     
     def _stop(self):
-        self.socket.send(b'stop')
-        msg = self.socket.recv()
+        socket = self.make_socket()
+        socket.send(b'stop')
+        msg = socket.recv()
         assert msg == b'ok'
 
     def _close(self):
