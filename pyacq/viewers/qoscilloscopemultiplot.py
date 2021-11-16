@@ -34,7 +34,8 @@ class OscilloscopeMultiPlotController(OscilloscopeController):
         
         self.viewer.by_channel_params.blockSignals(False)
 
-    def apply_ygain_zoom(self, factor_ratio):
+    def apply_ygain_zoom(self, factor_ratio,  y_baseline=None):
+
         chan = self.viewer.viewBoxes.index(self.sender())
         
         self.viewer.all_params.blockSignals(True)
@@ -42,9 +43,13 @@ class OscilloscopeMultiPlotController(OscilloscopeController):
         ymin = self.viewer.by_channel_params['ch{}'.format(chan), 'ylim_min']
         ymax = self.viewer.by_channel_params['ch{}'.format(chan), 'ylim_max']
         
-        d = (ymax-ymin) * factor_ratio / 2.
-        self.viewer.by_channel_params['ch{}'.format(chan), 'ylim_max'] = (ymin+ymax)/2. + d
-        self.viewer.by_channel_params['ch{}'.format(chan), 'ylim_min'] = (ymin+ymax)/2. - d
+        d = (ymax-ymin) * factor_ratio
+        
+        new_ylim_max = y_baseline + d / 2.
+        new_ylim_min = y_baseline - d / 2.
+        
+        self.viewer.by_channel_params['ch{}'.format(chan), 'ylim_max'] = new_ylim_max
+        self.viewer.by_channel_params['ch{}'.format(chan), 'ylim_min'] = new_ylim_min
             
         self.viewer.all_params.blockSignals(False)
 
@@ -89,6 +94,9 @@ class QOscilloscopeMultiPlot(BaseOscilloscope):
         
         BaseOscilloscope._initialize(self)
         
+        del self.plot
+        del self.viewBox
+        
         # hack the BaseOscilloscope and change to multiplot
         
         
@@ -101,22 +109,21 @@ class QOscilloscopeMultiPlot(BaseOscilloscope):
             plot = self.multiplot.addPlot(row=i, col=0, viewBox=viewBox)
             plot.hideButtons()
             plot.showAxis('left', False)
-            plot.showAxis('bottom', False)            
+            plot.showAxis('bottom', False)
+            plot.disableAutoRange()
             self.plots.append(plot)
             self.viewBoxes.append(viewBox)
             
             if self.params_controller is not None:
                 viewBox.gain_zoom.connect(self.params_controller.apply_ygain_zoom)
-            viewBox.xsize_zoom.connect(self.apply_xsize_zoom)
-            
-        
-        del self.plot
-        
-        if self.params_controller is not None:
-            for viewBox in self.viewBoxes:
                 viewBox.doubleclicked.connect(self.show_params_controller)
-                viewBox.gain_zoom.connect(self.params_controller.apply_ygain_zoom)
             viewBox.xsize_zoom.connect(self.apply_xsize_zoom)
+
+        if self.params_controller is not None:
+            viewBox.xsize_zoom.connect(self.apply_xsize_zoom)
+        
+        
+        
             
         self.params.param('xsize').setLimits([2./self.sample_rate, self.max_xsize*.95])
         
@@ -185,11 +192,14 @@ class QOscilloscopeMultiPlot(BaseOscilloscope):
             if visible:
                 ylim_min = self.by_channel_params['ch{}'.format(c), 'ylim_min']
                 ylim_max = self.by_channel_params['ch{}'.format(c), 'ylim_max']
-                self.plots[c].setXRange(self.t_vect[0], self.t_vect[-1])
-                self.plots[c].setYRange(ylim_min, ylim_max)
                 self.plots[c].showAxis('left', self.params['show_left_axis'])
                 self.plots[c].showAxis('bottom', self.params['show_bottom_axis'])
                 self.plots[c].show()
+                self.plots[c].disableAutoRange()
+                self.viewBoxes[c].disableAutoRange()
+                self.plots[c].setXRange(self.t_vect[0], self.t_vect[-1])
+                self.plots[c].setYRange(ylim_min, ylim_max)
+                
                 label = self.channel_labels[c]
                 if self.params['display_labels']:
                     label.setPos(-self.params['xsize'], (ylim_min+ylim_max)/2)

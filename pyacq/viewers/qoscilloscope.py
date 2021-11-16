@@ -14,7 +14,7 @@ from ..core import (WidgetNode, register_node_type, InputStream,
 
 class MyViewBox(pg.ViewBox):
     doubleclicked = QtCore.pyqtSignal()
-    gain_zoom = QtCore.pyqtSignal(float)
+    gain_zoom = QtCore.pyqtSignal(float, float)
     xsize_zoom = QtCore.pyqtSignal(float)
     def __init__(self, *args, **kwds):
         pg.ViewBox.__init__(self, *args, **kwds)
@@ -27,11 +27,15 @@ class MyViewBox(pg.ViewBox):
     def mouseDragEvent(self, ev):
         ev.ignore()
     def wheelEvent(self, ev, axis=None):
+        pos = self.mapToView(ev.pos())
+        #~ x, y = pos.x(), pos.y()
+        y_baseline = pos.y()
+        
         if ev.modifiers() == QtCore.Qt.ControlModifier:
-            z = 10 if ev.delta()>0 else 1/10.
+            gain = 10 if ev.delta()>0 else 1/10.
         else:
-            z = 1.3 if ev.delta()>0 else 1/1.3
-        self.gain_zoom.emit(z)
+            gain = 1.3 if ev.delta()>0 else 1/1.3
+        self.gain_zoom.emit(gain, y_baseline)
         ev.accept()
     def mouseDragEvent(self, ev):
         ev.accept()
@@ -340,7 +344,7 @@ class OscilloscopeController(QtGui.QWidget):
         self.offsets = offsets
         self.viewer.by_channel_params.blockSignals(False)
 
-    def apply_ygain_zoom(self, factor_ratio):
+    def apply_ygain_zoom(self, factor_ratio, y_baseline=None):
         
         scale_mode = self.viewer.params['scale_mode']
         
