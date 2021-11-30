@@ -45,8 +45,15 @@ class OscilloscopeMultiPlotController(OscilloscopeController):
         
         d = (ymax-ymin) * factor_ratio
         
-        new_ylim_max = y_baseline + d / 2.
-        new_ylim_min = y_baseline - d / 2.
+        if factor_ratio < 1:
+            # zoom in
+            baseline = y_baseline
+        else:
+            # zoom out
+            baseline = (ymax + ymin) / 2.
+        
+        new_ylim_max = baseline + d / 2.
+        new_ylim_min = baseline - d / 2.
         
         self.viewer.by_channel_params['ch{}'.format(chan), 'ylim_max'] = new_ylim_max
         self.viewer.by_channel_params['ch{}'.format(chan), 'ylim_min'] = new_ylim_min
