@@ -72,15 +72,18 @@ class WebCamAV(Node):
         assert HAVE_AV, "WebCamAV node depends on the `av` package, but it could not be imported."
     
 
-    def _configure(self, camera_num=0, **options):
+    def _configure(self, camera_num=0, camera_name=None, **options):
         self.camera_num = camera_num
         self.options = options
         
         # todo 'dshow' under windows
         if sys.platform.startswith('win'):
             self.format = 'dshow'
-            dev_names = get_device_list_dshow()
-            self.filepath = "video={}".format(dev_names[camera_num])
+            if camera_name is None:
+                dev_names = get_device_list_dshow()
+                self.filepath = "video={}".format(dev_names[camera_num])
+            else:
+                self.filepath = f"video={camera_name}"
         else:
             self.filepath = '/dev/video{}'.format(self.camera_num)
             self.format = 'video4linux2'
