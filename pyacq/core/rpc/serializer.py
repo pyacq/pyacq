@@ -170,7 +170,8 @@ class MsgpackSerializer(Serializer):
         #return msgpack.loads(msg, encoding='utf8', use_list=False, object_hook=self.decode)
 
         #Return lists/tuples as lists because json can't be configured otherwise
-        return msgpack.loads(msg, encoding='utf8', object_hook=self.decode)
+        return msgpack.loads(msg,  object_hook=self.decode)
+        # encoding='utf8',
 
 
 class JsonSerializer(Serializer):
