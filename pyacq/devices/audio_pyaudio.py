@@ -165,7 +165,9 @@ class PyAudio(Node):
     def _close(self):
         self.audiostream.close()
         self.pa.terminate()
-        del self.thread
+        if self.output_device_index is not None:
+            del (self.thread)
+
 
     def _audiocallback(self, in_data, frame_count, time_info, status):
         #~ print('audiocallback', len(self.out_queue))
