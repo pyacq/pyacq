@@ -10,12 +10,12 @@ import numpy as np
 from ..core import (Node, register_node_type, ThreadPollInput)
 from ..core.stream.ringbuffer import RingBuffer
 
-import distutils.version
+import packaging.version
 try:
     import scipy.signal
     HAVE_SCIPY = True
     # scpy.signal.sosfilt was introduced in scipy 0.16
-    assert distutils.version.LooseVersion(scipy.__version__) > '0.16'
+    assert packaging.version.parse(scipy.__version__) >= packaging.version.parse('0.16')
 except ImportError:
     HAVE_SCIPY = False
 

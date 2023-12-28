@@ -2,13 +2,11 @@
 # Copyright (c) 2016, French National Center for Scientific Research (CNRS)
 # Distributed under the (new) BSD License. See LICENSE for more info.
 
-import threading, atexit, time, logging
+import threading, time, logging
 from pyacq.core.rpc import RPCClient, RemoteCallException, RPCServer, QtRPCServer, ObjectProxy, ProcessSpawner
 from pyacq.core.rpc.log import RPCLogHandler, set_process_name, set_thread_name, start_log_server
-import zmq.utils.monitor
 import numpy as np
 import pyqtgraph as pg
-from pyqtgraph.Qt import QtCore, QtGui
 
 
 # Set up nice logging for tests:
@@ -305,7 +303,7 @@ def test_qt_rpc():
             qt = client._import('pyqtgraph.Qt')
             # widget creation happens in main GUI thread; we are working with
             # proxies from here.
-            self.l = qt.QtGui.QLabel('remote-controlled label')
+            self.l = qt.QtWidgets.QLabel('remote-controlled label')
             self.l.show()
             time.sleep(0.3)
             self.l.hide()

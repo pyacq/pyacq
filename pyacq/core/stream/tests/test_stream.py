@@ -2,15 +2,12 @@
 # Copyright (c) 2016, French National Center for Scientific Research (CNRS)
 # Distributed under the (new) BSD License. See LICENSE for more info.
 
-import time
-import timeit
-import pytest
 import sys
-import os
+import time
 
-from pyacq.core.stream import OutputStream, InputStream, RingBuffer, compression_methods
 import numpy as np
 
+from pyacq.core.stream import OutputStream, InputStream, compression_methods
 
 protocols = ['tcp', 'inproc', 'ipc']  # 'udp' is not working
 if sys.platform.startswith('win'):
@@ -163,5 +160,3 @@ if __name__ == '__main__':
     #~ test_stream_sharedmem()
     #~ test_plaindata_ringbuffer()
     test_sharedmem_ringbuffer()
-    
-

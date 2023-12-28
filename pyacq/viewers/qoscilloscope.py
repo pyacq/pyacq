@@ -2,7 +2,7 @@
 # Copyright (c) 2016, French National Center for Scientific Research (CNRS)
 # Distributed under the (new) BSD License. See LICENSE for more info.
 
-from pyqtgraph.Qt import QtCore, QtGui
+from pyqtgraph.Qt import QtCore, QtWidgets
 import pyqtgraph as pg
 
 import numpy as np
@@ -61,7 +61,7 @@ class BaseOscilloscope(WidgetNode):
     def __init__(self, **kargs):
         WidgetNode.__init__(self, **kargs)
         
-        self.layout = QtGui.QVBoxLayout()
+        self.layout = QtWidgets.QVBoxLayout()
         self.setLayout(self.layout)
         
         self.graphicsview = pg.GraphicsView()
@@ -183,25 +183,25 @@ class BaseOscilloscope(WidgetNode):
             self.params['xsize'] = newsize
 
 
-class OscilloscopeController(QtGui.QWidget):
+class OscilloscopeController(QtWidgets.QWidget):
     channel_visibility_changed = QtCore.pyqtSignal()
     
     def __init__(self, parent=None, viewer=None):
-        QtGui.QWidget.__init__(self, parent)
+        QtWidgets.QWidget.__init__(self, parent)
         
         self._viewer = weakref.ref(viewer)
         
         # layout
-        self.mainlayout = QtGui.QVBoxLayout()
+        self.mainlayout = QtWidgets.QVBoxLayout()
         self.setLayout(self.mainlayout)
         t = 'Options for {}'.format(self.viewer.name)
         self.setWindowTitle(t)
-        self.mainlayout.addWidget(QtGui.QLabel('<b>'+t+'<\b>'))
+        self.mainlayout.addWidget(QtWidgets.QLabel('<b>'+t+'<\b>'))
         
-        h = QtGui.QHBoxLayout()
+        h = QtWidgets.QHBoxLayout()
         self.mainlayout.addLayout(h)
         
-        self.v1 = QtGui.QVBoxLayout()
+        self.v1 = QtWidgets.QVBoxLayout()
         h.addLayout(self.v1)
         self.tree_params = pg.parametertree.ParameterTree()
         self.tree_params.setParameters(self.viewer.params, showTop=True)
@@ -213,32 +213,32 @@ class OscilloscopeController(QtGui.QWidget):
         h.addWidget(self.tree_by_channel_params)
         self.tree_by_channel_params.setParameters(self.viewer.by_channel_params, showTop=True)
 
-        v = QtGui.QVBoxLayout()
+        v = QtWidgets.QVBoxLayout()
         h.addLayout(v)
         
         self.channel_visibility_changed.connect(self.on_channel_visibility_changed)
 
-        but = QtGui.QPushButton('Auto scale')
+        but = QtWidgets.QPushButton('Auto scale')
         v.addWidget(but)
         #~ but.clicked.connect(self.compute_rescale)
         but.clicked.connect(self.on_channel_visibility_changed)
         
         
         if self.viewer.nb_channel>1:
-            v.addWidget(QtGui.QLabel('<b>Select channel...</b>'))
+            v.addWidget(QtWidgets.QLabel('<b>Select channel...</b>'))
             names = [ '{}: {}'.format(c, name) for c, name in enumerate(self.viewer.channel_names)]
-            self.qlist = QtGui.QListWidget()
+            self.qlist = QtWidgets.QListWidget()
             v.addWidget(self.qlist, 2)
             self.qlist.addItems(names)
-            self.qlist.setSelectionMode(QtGui.QAbstractItemView.ExtendedSelection)
+            self.qlist.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
             self.qlist.doubleClicked.connect(self.on_double_clicked)
             
             for i in range(len(names)):
                 self.qlist.item(i).setSelected(True)            
-            v.addWidget(QtGui.QLabel('<b>and apply...<\b>'))
+            v.addWidget(QtWidgets.QLabel('<b>and apply...<\b>'))
             
         # Gain and offset
-        but = QtGui.QPushButton('set visble')
+        but = QtWidgets.QPushButton('set visble')
         v.addWidget(but)
         but.clicked.connect(self.on_set_visible)
         
@@ -378,13 +378,13 @@ default_params = [
     {'name': 'ylim_max', 'type': 'float', 'value': 10.},
     {'name': 'ylim_min', 'type': 'float', 'value': -10.},
     {'name': 'scale_mode', 'type': 'list', 'value': 'real_scale', 
-        'values':['real_scale', 'same_for_all', 'by_channel'] },
+        'limits':['real_scale', 'same_for_all', 'by_channel'] },
     {'name': 'background_color', 'type': 'color', 'value': 'k'},
     {'name': 'refresh_interval', 'type': 'int', 'value': 100, 'limits':[5, 1000]},
-    {'name': 'mode', 'type': 'list', 'value': 'scan', 'values': ['scan', 'scroll']},
+    {'name': 'mode', 'type': 'list', 'value': 'scan', 'limits': ['scan', 'scroll']},
     {'name': 'auto_decimate', 'type': 'bool', 'value': True},
     {'name': 'decimate', 'type': 'int', 'value': 1, 'limits': [1, None], },
-    {'name': 'decimation_method', 'type': 'list', 'value': 'pure_decimate', 'values': ['pure_decimate', 'min_max', 'mean']},
+    {'name': 'decimation_method', 'type': 'list', 'value': 'pure_decimate', 'limits': ['pure_decimate', 'min_max', 'mean']},
     {'name': 'display_labels', 'type': 'bool', 'value': False},
     {'name': 'show_bottom_axis', 'type': 'bool', 'value': False},
     {'name': 'show_left_axis', 'type': 'bool', 'value': False},

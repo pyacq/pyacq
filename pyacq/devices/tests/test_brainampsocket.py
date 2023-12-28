@@ -8,7 +8,7 @@ from pyacq import create_manager
 from pyacq.devices.brainampsocket import BrainAmpSocket
 from pyacq.viewers import QOscilloscope
 
-from pyqtgraph.Qt import QtCore, QtGui
+from pyqtgraph.Qt import QtCore, QtWidgets
 
 import pytest
 
@@ -16,7 +16,7 @@ import pytest
 @pytest.mark.skipif(True, reason='Need brainamp device to test')
 def test_brainampsocket():
     # in main App
-    app = QtGui.QApplication([])
+    app = QtWidgets.QApplication([])
     
     dev = BrainAmpSocket()
     #~ dev.configure(brainamp_host = '194.167.217.129', brainamp_port = 51244)

@@ -6,18 +6,15 @@
 av is python binding to libav or ffmpeg and this is so great.
 http://mikeboers.github.io/PyAV/index.html
 """
-import time
-import sys
-import subprocess
-import os
-import re
 import gc
+import re
+import subprocess
+import sys
 
-import numpy as np
+from pyqtgraph.Qt import QtCore
+from pyqtgraph.util.mutex import Mutex
 
 from ..core import Node, register_node_type
-from pyqtgraph.Qt import QtCore, QtGui
-from pyqtgraph.util.mutex import Mutex
 
 try:
     import av

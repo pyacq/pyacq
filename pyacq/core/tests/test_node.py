@@ -6,7 +6,7 @@ import time
 import sys
 from pyacq import create_manager
 
-from pyqtgraph.Qt import QtCore, QtGui
+from pyqtgraph.Qt import QtCore
 import pyqtgraph as pg
 from pyacq.core.tests.fakenodes import FakeSender, FakeReceiver, ReceiverWidget
 

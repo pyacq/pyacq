@@ -5,7 +5,7 @@ import os
 import time
 
 from ..core import Node, register_node_type, ThreadPollInput
-from pyqtgraph.Qt import QtCore, QtGui
+from pyqtgraph.Qt import QtCore
 from pyqtgraph.util.mutex import Mutex
 
 # very usefull URL for this wrapper:

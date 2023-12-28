@@ -4,7 +4,8 @@
 
 import numpy as np
 import pytest
-from pyacq.core.stream import OutputStream, InputStream, RingBuffer
+
+from pyacq.core.stream import RingBuffer
 
 
 def test_ringbuffer():
@@ -23,7 +24,7 @@ def test_ringbuffer():
     
     buf1 = RingBuffer(shape=(10, 5, 7), dtype=np.ubyte, double=False)
     buf2 = RingBuffer(shape=(10, 5, 7), dtype=np.ubyte, double=True)
-    buf3 = RingBuffer(shape=(10, 5, 7), dtype=np.float, double=False)
+    buf3 = RingBuffer(shape=(10, 5, 7), dtype=np.float64, double=True)
     buf4 = RingBuffer(shape=(10, 5, 7), dtype=np.ubyte, double=True, axisorder=(1, 2, 0))
     buf5 = RingBuffer(shape=(10, 5, 7), dtype='float32', double=False, axisorder=(1, 2, 0))
     

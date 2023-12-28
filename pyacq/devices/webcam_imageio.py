@@ -5,7 +5,7 @@
 import numpy as np
 
 from ..core import Node, register_node_type
-from pyqtgraph.Qt import QtCore, QtGui
+from pyqtgraph.Qt import QtCore
 from pyqtgraph.util.mutex import Mutex
 
 try:

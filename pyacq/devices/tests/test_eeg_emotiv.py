@@ -7,7 +7,7 @@ import pytest
 
 from pyacq.devices.eeg_emotiv import Emotiv, HAVE_PYCRYPTO
 from pyacq.viewers.qoscilloscope import QOscilloscope
-from pyqtgraph.Qt import QtCore, QtGui
+from pyqtgraph.Qt import QtCore
 import pyqtgraph as pg
 
 from collections import OrderedDict

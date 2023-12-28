@@ -4,7 +4,7 @@
 
 from pyacq import Node,WidgetNode
 from pyacq.core.node import _MyTest
-from pyqtgraph.Qt import QtCore, QtGui
+from pyqtgraph.Qt import QtCore, QtWidgets
 import numpy as np
 
 
@@ -75,8 +75,8 @@ class ReceiverWidget(WidgetNode):
     def __init__(self, tag='label', **kargs):
         WidgetNode.__init__(self, **kargs)
         self.tag = tag
-        self.label = QtGui.QLabel()
-        self.layout = QtGui.QHBoxLayout()
+        self.label = QtWidgets.QLabel()
+        self.layout = QtWidgets.QHBoxLayout()
         self.layout.addWidget(self.label)
         self.setLayout(self.layout)
 

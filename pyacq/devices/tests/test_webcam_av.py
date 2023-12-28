@@ -8,7 +8,7 @@ from pyacq import create_manager
 from pyacq.devices.webcam_av import WebCamAV, HAVE_AV, get_device_list_dshow
 from pyacq.viewers.imageviewer import ImageViewer
 
-from pyqtgraph.Qt import QtCore, QtGui
+from pyqtgraph.Qt import QtCore, QtWidgets
 
 import pytest
 
@@ -16,7 +16,7 @@ import pytest
 @pytest.mark.skipif(not HAVE_AV, reason='no have av')
 def test_webcam_opencv():
     # in main App
-    app = QtGui.QApplication([])
+    app = QtWidgets.QApplication([])
     
     dev = WebCamAV(name='cam')
     dev.configure(camera_num=0)

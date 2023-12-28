@@ -8,7 +8,7 @@ from pyacq import create_manager
 from pyacq.devices.ni_daqmx import NIDAQmx, HAVE_NIDAQMX
 
 
-from pyqtgraph.Qt import QtCore, QtGui
+from pyqtgraph.Qt import QtCore, QtWidgets
 
 import pytest
 
@@ -16,7 +16,7 @@ import pytest
 @pytest.mark.skipif(not HAVE_NIDAQMX, reason='no have nidaqmx')
 def test_ni_daqmx():
     # in main App
-    app = QtGui.QApplication([])
+    app = QtWidgets.QApplication([])
 
     dev = NIDAQmx()
     dev.configure(sample_rate=50e3, aichannels=['Dev1/ai0', 'Dev1/ai1'], 

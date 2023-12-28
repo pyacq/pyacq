@@ -8,7 +8,7 @@ from pyacq import create_manager
 from pyacq.devices.webcam_imageio import WebCamImageIO, HAVE_IMAGEIO
 from pyacq.viewers.imageviewer import ImageViewer
 
-from pyqtgraph.Qt import QtCore, QtGui
+from pyqtgraph.Qt import QtCore, QtWidgets
 
 import pytest
 
@@ -16,7 +16,7 @@ import pytest
 @pytest.mark.skipif(not HAVE_IMAGEIO, reason='no have imageio')
 def test_webcam_imageio():
     # in main App
-    app = QtGui.QApplication([])
+    app = QtWidgets.QApplication([])
     
     dev = WebCamImageIO(name='cam0')
     dev.configure(camera_num=0)

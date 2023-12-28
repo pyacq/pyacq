@@ -4,7 +4,7 @@
 
 from pyacq.core import OutputStream, InputStream
 from pyacq.core.tools import ThreadPollInput, StreamConverter, ChannelSplitter, ChunkResizer
-from pyqtgraph.Qt import QtCore, QtGui
+from pyqtgraph.Qt import QtCore
 import pyqtgraph as pg
 
 import numpy as np

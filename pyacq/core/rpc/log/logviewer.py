@@ -3,7 +3,7 @@
 # Distributed under the (new) BSD License. See LICENSE for more info.
 
 import logging
-from pyqtgraph.Qt import QtCore, QtGui
+from pyqtgraph.Qt import QtCore, QtWidgets
 
 
 Stylesheet = """
@@ -19,11 +19,11 @@ Stylesheet = """
 """
 
 
-class LogViewer(QtGui.QWidget):
+class LogViewer(QtWidgets.QWidget):
     """QWidget for displaying and filtering log messages.
     """
     def __init__(self, logger='', parent=None):
-        QtGui.QWidget.__init__(self, parent=parent)
+        QtWidgets.QWidget.__init__(self, parent=parent)
         
         # Set up handler to send log records to this widget by signal
         self.handler = QtLogHandler()
@@ -33,10 +33,10 @@ class LogViewer(QtGui.QWidget):
         logger.addHandler(self.handler)
         
         # Set up GUI
-        self.layout = QtGui.QGridLayout()
+        self.layout = QtWidgets.QGridLayout()
         self.layout.setContentsMargins(0, 0, 0, 0)
         self.setLayout(self.layout)
-        self.text = QtGui.QTextBrowser()
+        self.text = QtWidgets.QTextBrowser()
         self.text.document().setDefaultStyleSheet(Stylesheet)
         
     def new_record(self, rec):

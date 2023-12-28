@@ -1,6 +1,6 @@
 import time
 import pyqtgraph as pg
-from pyqtgraph.Qt import QtCore, QtGui
+from pyqtgraph.Qt import QtCore
 
 from pyacq import create_manager
 from pyacq import MeasurementComputing

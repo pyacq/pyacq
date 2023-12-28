@@ -8,7 +8,7 @@ from pyacq import create_manager
 from pyacq.devices.eeg_openBCI import OpenBCI, HAVE_PYSERIAL
 from pyacq.viewers import QOscilloscope
 
-from pyqtgraph.Qt import QtCore, QtGui
+from pyqtgraph.Qt import QtCore, QtWidgets
 
 import pytest
 
@@ -16,7 +16,7 @@ import pytest
 @pytest.mark.skipif(not HAVE_PYSERIAL, reason='no have pyserial')
 def test_eeg_OpenBCI():
     # in main App
-    app = QtGui.QApplication([])
+    app = QtWidgets.QApplication([])
 
     dev = OpenBCI()
     dev.configure(device_handle='/dev/ttyUSB0')

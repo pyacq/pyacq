@@ -12,7 +12,7 @@ import threading
 import zmq
 import logging
 import numpy as np
-from pyqtgraph.Qt import QtGui
+from pyqtgraph.Qt import QtWidgets
 
 from .serializer import all_serializers
 from .proxy import ObjectProxy
@@ -412,7 +412,7 @@ class RPCClient(object):
             elif poller == 'qt':
                 # Server runs in Qt thread; we need to time-share with Qt event
                 # loop.
-                QtGui.QApplication.processEvents()
+                QtWidgets.QApplication.processEvents()
                 try:
                     self._read_and_process_one(timeout=0.05)
                 except TimeoutError:

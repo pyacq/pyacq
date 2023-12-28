@@ -2,7 +2,7 @@
 # Copyright (c) 2016, French National Center for Scientific Research (CNRS)
 # Distributed under the (new) BSD License. See LICENSE for more info.
 
-from pyqtgraph.Qt import QtCore, QtGui
+from pyqtgraph.Qt import QtCore, QtWidgets
 import pyqtgraph as pg
 from pyqtgraph.util.mutex import Mutex
 import vispy.color
@@ -30,10 +30,10 @@ default_params = [
         {'name': 'xsize', 'type': 'float', 'value': 10., 'step': 0.1, 'limits': (.1, 60)},
         {'name': 'nb_column', 'type': 'int', 'value': 1},
         {'name': 'background_color', 'type': 'color', 'value': 'k'},
-        {'name': 'colormap', 'type': 'list', 'value': 'viridis', 'values': list(vispy.color.get_colormaps().keys())},
-        {'name': 'scale_mode', 'type': 'list', 'value': 'by_channel', 'values':['same_for_all', 'by_channel'] },
+        {'name': 'colormap', 'type': 'list', 'value': 'viridis', 'limits': list(vispy.color.get_colormaps().keys())},
+        {'name': 'scale_mode', 'type': 'list', 'value': 'by_channel', 'limits':['same_for_all', 'by_channel'] },
         {'name': 'refresh_interval', 'type': 'int', 'value': 500, 'limits':[5, 1000]},
-        {'name': 'mode', 'type': 'list', 'value': 'scroll', 'values': ['scan', 'scroll']},
+        {'name': 'mode', 'type': 'list', 'value': 'scroll', 'limits': ['scan', 'scroll']},
         {'name': 'show_axis', 'type': 'bool', 'value': False},
         {'name': 'display_labels', 'type': 'bool', 'value': True },
         {'name': 'timefreq', 'type': 'group', 'children': [
@@ -110,7 +110,7 @@ class QTimeFreq(WidgetNode):
     def __init__(self, **kargs):
         WidgetNode.__init__(self, **kargs)
         
-        self.mainlayout = QtGui.QHBoxLayout()
+        self.mainlayout = QtWidgets.QHBoxLayout()
         self.setLayout(self.mainlayout)
         
         self.graphiclayout = pg.GraphicsLayoutWidget()
@@ -698,23 +698,23 @@ register_node_type(TimeFreqWorker)
 
 
 
-class TimeFreqController(QtGui.QWidget):
+class TimeFreqController(QtWidgets.QWidget):
     """
     GUI controller for QTimeFreq.
     """
     def __init__(self, parent=None, viewer=None):
-        QtGui.QWidget.__init__(self, parent)
+        QtWidgets.QWidget.__init__(self, parent)
         
         self._viewer = weakref.ref(viewer)
         
         # layout
-        self.mainlayout = QtGui.QVBoxLayout()
+        self.mainlayout = QtWidgets.QVBoxLayout()
         self.setLayout(self.mainlayout)
         t = 'Options for {}'.format(self.viewer.name)
         self.setWindowTitle(t)
-        self.mainlayout.addWidget(QtGui.QLabel('<b>'+t+'<\b>'))
+        self.mainlayout.addWidget(QtWidgets.QLabel('<b>'+t+'<\b>'))
         
-        h = QtGui.QHBoxLayout()
+        h = QtWidgets.QHBoxLayout()
         self.mainlayout.addLayout(h)
 
         self.tree_params = pg.parametertree.ParameterTree()
@@ -727,36 +727,36 @@ class TimeFreqController(QtGui.QWidget):
         h.addWidget(self.tree_by_channel_params)
         self.tree_by_channel_params.setParameters(self.viewer.by_channel_params, showTop=True)
 
-        v = QtGui.QVBoxLayout()
+        v = QtWidgets.QVBoxLayout()
         h.addLayout(v)
 
-        but = QtGui.QPushButton('Auto scale')
+        but = QtWidgets.QPushButton('Auto scale')
         but.clicked.connect(self.viewer.auto_clim)
         v.addWidget(but)
         
         if self.viewer.nb_channel>1:
-            v.addWidget(QtGui.QLabel('<b>Select channel...</b>'))
+            v.addWidget(QtWidgets.QLabel('<b>Select channel...</b>'))
             names = [ '{}: {}'.format(c, name) for c, name in enumerate(self.viewer.channel_names)]
-            self.qlist = QtGui.QListWidget()
+            self.qlist = QtWidgets.QListWidget()
             self.qlist.doubleClicked.connect(self.on_double_clicked)
             v.addWidget(self.qlist, 2)
             self.qlist.addItems(names)
-            self.qlist.setSelectionMode(QtGui.QAbstractItemView.ExtendedSelection)
+            self.qlist.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
             
             for i in range(len(names)):
                 self.qlist.item(i).setSelected(True)            
-            v.addWidget(QtGui.QLabel('<b>and apply...<\b>'))
+            v.addWidget(QtWidgets.QLabel('<b>and apply...<\b>'))
         
-        but = QtGui.QPushButton('set visble')
+        but = QtWidgets.QPushButton('set visble')
         v.addWidget(but)
         but.clicked.connect(self.on_set_visible)
         
         
-        v.addWidget(QtGui.QLabel(self.tr('<b>Clim change (mouse wheel on graph):</b>'),self))
-        h = QtGui.QHBoxLayout()
+        v.addWidget(QtWidgets.QLabel(self.tr('<b>Clim change (mouse wheel on graph):</b>'),self))
+        h = QtWidgets.QHBoxLayout()
         v.addLayout(h)
         for label, factor in [('--', 1./10.), ('-', 1./1.3), ('+', 1.3), ('++', 10.),]:
-            but = QtGui.QPushButton(label)
+            but = QtWidgets.QPushButton(label)
             but.factor = factor
             but.clicked.connect(self.clim_zoom)
             h.addWidget(but)
