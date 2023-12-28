@@ -2,14 +2,9 @@
 # Copyright (c) 2016, French National Center for Scientific Research (CNRS)
 # Distributed under the (new) BSD License. See LICENSE for more info.
 
-from pyqtgraph.Qt import QtCore, QtGui
-import pyqtgraph as pg
-
 import numpy as np
 
-
-from .qoscilloscope import BaseOscilloscope, QOscilloscope, OscilloscopeController
-
+from .qoscilloscope import QOscilloscope, OscilloscopeController
 
 
 class DigitalOscilloscopeController(OscilloscopeController):

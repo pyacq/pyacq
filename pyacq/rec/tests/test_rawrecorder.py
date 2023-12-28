@@ -2,21 +2,15 @@
 # Copyright (c) 2016, French National Center for Scientific Research (CNRS)
 # Distributed under the (new) BSD License. See LICENSE for more info.
 
-import pytest
-
-from pyacq import create_manager
-from pyacq.viewers.qoscilloscope import QOscilloscope
-from pyacq.devices import NumpyDeviceBuffer
-from pyacq.rec import RawRecorder
-import numpy as np
-
-from pyqtgraph.Qt import QtCore, QtGui
-import pyqtgraph as pg
-
 import os
 import shutil
-import datetime
 
+import numpy as np
+import pyqtgraph as pg
+from pyqtgraph.Qt import QtCore
+
+from pyacq import create_manager
+from pyacq.rec import RawRecorder
 
 
 def test_RawRecorder():

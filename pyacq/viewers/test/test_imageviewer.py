@@ -2,16 +2,12 @@
 # Copyright (c) 2016, French National Center for Scientific Research (CNRS)
 # Distributed under the (new) BSD License. See LICENSE for more info.
 
-import pytest
+import numpy as np
+import pyqtgraph as pg
+from pyqtgraph.Qt import QtCore
 
 from pyacq.core import Node
 from pyacq.viewers.imageviewer import ImageViewer
-from pyacq.devices import NumpyDeviceBuffer
-import numpy as np
-
-from pyqtgraph.Qt import QtCore, QtGui
-import pyqtgraph as pg
-
 
 sample_rate = 10
 

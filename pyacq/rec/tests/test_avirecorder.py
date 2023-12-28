@@ -2,21 +2,16 @@
 # Copyright (c) 2016, French National Center for Scientific Research (CNRS)
 # Distributed under the (new) BSD License. See LICENSE for more info.
 
-import pytest
-
-from pyacq import create_manager
-from pyacq.devices.webcam_av import WebCamAV, HAVE_AV
-from pyacq.viewers.imageviewer import ImageViewer
-from pyacq.rec.avirecorder import AviRecorder
-
-import numpy as np
-
-from pyqtgraph.Qt import QtCore, QtGui
-import pyqtgraph as pg
-
 import os
 import shutil
-import datetime
+
+import pyqtgraph as pg
+import pytest
+from pyqtgraph.Qt import QtCore
+
+from pyacq.devices.webcam_av import WebCamAV, HAVE_AV
+from pyacq.rec.avirecorder import AviRecorder
+from pyacq.viewers.imageviewer import ImageViewer
 
 
 # TODO make this test able to run without device

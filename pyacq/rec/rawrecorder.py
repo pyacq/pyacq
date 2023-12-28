@@ -2,16 +2,14 @@
 # Copyright (c) 2016, French National Center for Scientific Research (CNRS)
 # Distributed under the (new) BSD License. See LICENSE for more info.
 
-import numpy as np
 import collections
-import logging
-import os
 import json
+import os
 
-from ..core import Node, register_node_type, ThreadPollInput, InputStream
-from pyqtgraph.Qt import QtCore, QtGui
+from pyqtgraph.Qt import QtCore
 from pyqtgraph.util.mutex import Mutex
 
+from ..core import Node, register_node_type, ThreadPollInput, InputStream
 from ..version import version as pyacq_version
 
 

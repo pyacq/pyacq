@@ -2,18 +2,15 @@
 # Copyright (c) 2016, French National Center for Scientific Research (CNRS)
 # Distributed under the (new) BSD License. See LICENSE for more info.
 
-import pytest
 import logging
 
-from pyacq import create_manager, ThreadPollInput
-from pyacq.viewers.qtimefreq import TimeFreqWorker, QTimeFreq, HAVE_SCIPY, generate_wavelet_fourier
-from pyacq.devices import NumpyDeviceBuffer
 import numpy as np
-import time
-
-from pyqtgraph.Qt import QtCore, QtGui
 import pyqtgraph as pg
+import pytest
+from pyqtgraph.Qt import QtCore
 
+from pyacq import create_manager
+from pyacq.viewers.qtimefreq import QTimeFreq, HAVE_SCIPY
 
 logger = logging.getLogger()
 

@@ -2,18 +2,13 @@
 # Copyright (c) 2016, French National Center for Scientific Research (CNRS)
 # Distributed under the (new) BSD License. See LICENSE for more info.
 
-import time
 import numpy as np
 import pyqtgraph as pg
+from pyqtgraph.Qt import QtCore
 
-from pyacq import create_manager, InputStream, NumpyDeviceBuffer, ThreadPollOutput
-from pyacq.dsp.trigger import AnalogTrigger, DigitalTrigger
+from pyacq import NumpyDeviceBuffer
+from pyacq.dsp.trigger import AnalogTrigger
 from pyacq.dsp.triggeraccumulator import TriggerAccumulator
-
-
-from pyqtgraph.Qt import QtCore, QtGui
-
-
 
 nb_channel = 2
 sample_rate =1000.

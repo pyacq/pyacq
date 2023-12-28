@@ -2,16 +2,11 @@
 # Copyright (c) 2016, French National Center for Scientific Research (CNRS)
 # Distributed under the (new) BSD License. See LICENSE for more info.
 
-from pyqtgraph.Qt import QtCore, QtGui
+import numpy as np
 import pyqtgraph as pg
 
-import numpy as np
-import weakref
-
-from ..core import (WidgetNode, register_node_type, InputStream,
-        ThreadPollInput, StreamConverter)
-
-from .qoscilloscope import MyViewBox, BaseOscilloscope, QOscilloscope, OscilloscopeController
+from .qoscilloscope import MyViewBox, BaseOscilloscope, OscilloscopeController
+from ..core import (register_node_type)
 
 
 class OscilloscopeMultiPlotController(OscilloscopeController):
