@@ -24,8 +24,8 @@ class NodeGroup(object):
         
         Return the new Node.
         """
-        if isinstance(node_class, str):
-            node_class = nodelist.all_nodes[node_class]
+        assert isinstance(node_class, str)
+        node_class = nodelist.all_nodes[node_class]
         node = node_class(*args, **kwds)
         self.add_node(node)
         return node
