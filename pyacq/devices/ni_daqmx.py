@@ -1,10 +1,7 @@
 import numpy as np
-import collections
-import logging
-import ctypes
 
-from ..core import Node, register_node_type, ThreadPollInput
-from pyqtgraph.Qt import QtCore, QtGui
+from ..core import Node, register_node_type
+from pyqtgraph.Qt import QtCore
 from pyqtgraph.util.mutex import Mutex
 
 try:

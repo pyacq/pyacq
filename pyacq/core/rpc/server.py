@@ -2,24 +2,22 @@
 # Copyright (c) 2016, French National Center for Scientific Research (CNRS)
 # Distributed under the (new) BSD License. See LICENSE for more info.
 
-import sys
-import time
-import os
-import traceback
-import socket
-import threading
-import builtins
-import zmq
-import logging
-import numpy as np
 import atexit
-from pyqtgraph.Qt import QtCore, QtGui
+import builtins
+import logging
+import sys
+import threading
+import time
+import traceback
 
-from .serializer import all_serializers
-from .proxy import ObjectProxy
-from .timer import Timer
+import numpy as np
+import zmq
+from pyqtgraph.Qt import QtCore, QtWidgets
+
 from . import log
-
+from .proxy import ObjectProxy
+from .serializer import all_serializers
+from .timer import Timer
 
 logger = logging.getLogger(__name__)
 
@@ -307,11 +305,11 @@ class RPCServer(object):
                 try:
                     self._send_result(caller, req_id, rval=result)
                 except:
-                    logger.warn("    => Failed to send result for %d", req_id) 
+                    logger.warning("    => Failed to send result for %d", req_id)
                     exc = sys.exc_info()
                     self._send_error(caller, req_id, exc)
             else:
-                logger.warn("    => returning exception for %d: %s", req_id, exc) 
+                logger.warning("    => returning exception for %d: %s", req_id, exc)
                 self._send_error(caller, req_id, exc)
                     
         elif exc is not None:
@@ -354,7 +352,7 @@ class RPCServer(object):
                 try:
                     result = obj(*fnargs)
                 except:
-                    logger.warn("Failed to call object %s: %d, %s", obj, len(fnargs), fnargs[1:])
+                    logger.warning("Failed to call object %s: %d, %s", obj, len(fnargs), fnargs[1:])
                     raise
             else:
                 result = obj(*fnargs, **fnkwds)
@@ -417,7 +415,7 @@ class RPCServer(object):
     def _atexit(self):
         # Process is exiting; do any last-minute cleanup if necessary.
         if self._closed is not True:
-            logger.warn("RPCServer exiting without close()!")
+            logger.warning("RPCServer exiting without close()!")
             self.close()
 
     def close(self):
@@ -523,8 +521,8 @@ class QtRPCServer(RPCServer):
         proc = ProcessSpawner(qt=True)
         
         # Display a widget from the new process.
-        qtgui = proc._import('PyQt4.QtGui')
-        w = qtgui.QWidget()
+        qtwidgets = proc._import('PyQt4.QtWidgets')
+        w = qtwidgets.QWidget()
         w.show()
         
     Starting in an existing Qt application::
@@ -552,7 +550,7 @@ class QtRPCServer(RPCServer):
         # this method is called from the Qt main thread.
         if action == 'close':
             if self.quit_on_close:
-                QtGui.QApplication.instance().quit()
+                QtWidgets.QApplication.instance().quit()
             # can't stop poller thread here--that would prevent the return 
             # message being sent. In general it should be safe to leave this thread
             # running anyway.

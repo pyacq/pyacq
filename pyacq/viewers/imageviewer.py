@@ -6,7 +6,7 @@ from collections import OrderedDict
 
 from ..core import WidgetNode, register_node_type, InputStream
 
-from pyqtgraph.Qt import QtCore, QtGui
+from pyqtgraph.Qt import QtCore, QtWidgets
 
 import numpy as np
 import pyqtgraph as pg
@@ -22,7 +22,7 @@ class ImageViewer(WidgetNode):
     def __init__(self, **kargs):
         WidgetNode.__init__(self, **kargs)
         
-        self.layout = QtGui.QHBoxLayout()
+        self.layout = QtWidgets.QHBoxLayout()
         self.setLayout(self.layout)
 
 
@@ -118,7 +118,7 @@ class ImageViewer(WidgetNode):
     def __init__(self, **kargs):
         WidgetNode.__init__(self, **kargs)
         
-        self.layout = QtGui.QHBoxLayout()
+        self.layout = QtWidgets.QHBoxLayout()
         self.setLayout(self.layout)
         
         self.canvas = vispy.scene.SceneCanvas(keys='interactive', show=True)

@@ -8,7 +8,7 @@ from pyacq import create_manager
 from pyacq.devices.blackrock import Blackrock, open_sbSdk_dll, cbSdkConnection, CbSdkError
 from pyacq.viewers import QOscilloscope
 
-from pyqtgraph.Qt import QtCore, QtGui
+from pyqtgraph.Qt import QtCore, QtWidgets
 
 import pytest
 
@@ -50,7 +50,7 @@ def test_blackrock():
     
 
     # in main App
-    app = QtGui.QApplication([])
+    app = QtWidgets.QApplication([])
     
     # for testing in background
     #~ man = create_manager(auto_close_at_exit=True)

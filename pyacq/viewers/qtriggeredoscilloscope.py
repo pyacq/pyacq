@@ -2,7 +2,7 @@
 # Copyright (c) 2016, French National Center for Scientific Research (CNRS)
 # Distributed under the (new) BSD License. See LICENSE for more info.
 
-from pyqtgraph.Qt import QtCore, QtGui
+from pyqtgraph.Qt import QtCore, QtWidgets
 import pyqtgraph as pg
 
 import numpy as np
@@ -41,10 +41,10 @@ class QTriggeredOscilloscope(BaseOscilloscope):
                     {'name': 'refresh_interval', 'type': 'int', 'value': 100 , 'limits':[5, 1000]},
                     {'name': 'auto_decimate', 'type': 'bool', 'value': True},
                     {'name': 'decimate', 'type': 'int', 'value': 1, 'limits': [1, None], },
-                    {'name': 'decimation_method', 'type': 'list', 'value': 'pure_decimate', 'values': ['pure_decimate', 'min_max', 'mean']},
+                    {'name': 'decimation_method', 'type': 'list', 'value': 'pure_decimate', 'limits': ['pure_decimate', 'min_max', 'mean']},
                     {'name': 'display_labels', 'type': 'bool', 'value': False},
                     {'name': 'scale_mode', 'type': 'list', 'value': 'real_scale', 
-                        'values':['real_scale', 'same_for_all', 'by_channel'] },
+                        'limits':['real_scale', 'same_for_all', 'by_channel'] },
                     
                 ]
     
@@ -59,15 +59,15 @@ class QTriggeredOscilloscope(BaseOscilloscope):
     def __init__(self, **kargs):
         BaseOscilloscope.__init__(self, **kargs)
 
-        h = QtGui.QHBoxLayout()
+        h = QtWidgets.QHBoxLayout()
         self.layout.addLayout(h)
-        self.but_startstop = QtGui.QPushButton('Start/Stop', checkable = True, checked = True)
+        self.but_startstop = QtWidgets.QPushButton('Start/Stop', checkable = True, checked = True)
         h.addWidget(self.but_startstop)
         self.but_startstop.toggled.connect(self.start_or_stop_trigger)
-        but = QtGui.QPushButton('Reset')
+        but = QtWidgets.QPushButton('Reset')
         but.clicked.connect(self.reset_stack)
         h.addWidget(but)
-        self.label_count = QtGui.QLabel('Nb events:')
+        self.label_count = QtWidgets.QLabel('Nb events:')
         h.addWidget(self.label_count)
         h.addStretch()
         

@@ -6,7 +6,7 @@ import sys
 import ctypes
 from ctypes import byref
 
-from pyqtgraph.Qt import QtCore, QtGui
+from pyqtgraph.Qt import QtCore
 from pyqtgraph.util.mutex import Mutex
 
 from ..core import Node, register_node_type

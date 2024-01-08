@@ -2,16 +2,11 @@
 # Copyright (c) 2016, French National Center for Scientific Research (CNRS)
 # Distributed under the (new) BSD License. See LICENSE for more info.
 
-from pyqtgraph.Qt import QtCore, QtGui
+import numpy as np
 import pyqtgraph as pg
 
-import numpy as np
-import weakref
-
-from ..core import (WidgetNode, register_node_type, InputStream,
-        ThreadPollInput, StreamConverter)
-
-from .qoscilloscope import MyViewBox, BaseOscilloscope, QOscilloscope, OscilloscopeController
+from .qoscilloscope import MyViewBox, BaseOscilloscope, OscilloscopeController
+from ..core import (register_node_type)
 
 
 class OscilloscopeMultiPlotController(OscilloscopeController):
@@ -64,10 +59,10 @@ default_params = [
     {'name': 'xsize', 'type': 'float', 'value': 3., 'step': 0.1},
     {'name': 'background_color', 'type': 'color', 'value': 'k'},
     {'name': 'refresh_interval', 'type': 'int', 'value': 100, 'limits':[5, 1000]},
-    {'name': 'mode', 'type': 'list', 'value': 'scan', 'values': ['scan', 'scroll']},
+    {'name': 'mode', 'type': 'list', 'value': 'scan', 'limits': ['scan', 'scroll']},
     {'name': 'auto_decimate', 'type': 'bool', 'value': True},
     {'name': 'decimate', 'type': 'int', 'value': 1, 'limits': [1, None], },
-    {'name': 'decimation_method', 'type': 'list', 'value': 'pure_decimate', 'values': ['pure_decimate', 'min_max', 'mean']},
+    {'name': 'decimation_method', 'type': 'list', 'value': 'pure_decimate', 'limits': ['pure_decimate', 'min_max', 'mean']},
     {'name': 'display_labels', 'type': 'bool', 'value': False},
     {'name': 'show_bottom_axis', 'type': 'bool', 'value': True},
     {'name': 'show_left_axis', 'type': 'bool', 'value': True},

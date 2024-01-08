@@ -9,7 +9,7 @@ import atexit
 import numpy as np
 import zmq
 from collections import OrderedDict
-from pyqtgraph.Qt import QtCore, QtGui
+from pyqtgraph.Qt import QtCore
 from pyqtgraph.util.mutex import Mutex
 
 from .node import Node, register_node_type

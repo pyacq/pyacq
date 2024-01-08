@@ -121,9 +121,9 @@ class TriggerBase(Node,  QtCore.QObject):
     _default_params = [
                         {'name': 'channel', 'type': 'int', 'value': 0},
                         {'name': 'threshold', 'type': 'float', 'value': 0.},
-                        {'name': 'front', 'type': 'list', 'value': '+' , 'values' : ['+', '-'] },
+                        {'name': 'front', 'type': 'list', 'value': '+' , 'limits' : ['+', '-'] },
                         {'name': 'debounce_mode', 'type': 'list', 'value': 'no-debounce' ,
-                                            'values' : ['no-debounce', 'after-stable', 'before-stable'] },
+                                            'limits' : ['no-debounce', 'after-stable', 'before-stable'] },
                         {'name': 'debounce_time', 'type': 'float', 'value': 0.01},
                 ]
     

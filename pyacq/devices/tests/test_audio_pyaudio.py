@@ -9,7 +9,7 @@ import numpy as np
 from pyacq import create_manager
 from pyacq.devices.audio_pyaudio import PyAudio, HAVE_PYAUDIO
 
-from pyqtgraph.Qt import QtCore, QtGui
+from pyqtgraph.Qt import QtCore
 import pyqtgraph as pg
 
 

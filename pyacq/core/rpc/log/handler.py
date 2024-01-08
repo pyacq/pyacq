@@ -4,8 +4,6 @@
 
 import logging
 import sys
-import socket
-import os
 import threading
 import time
 import atexit
@@ -126,9 +124,9 @@ class RPCLogHandler(logging.StreamHandler):
             tid = threading.current_thread().ident
             color = RPCLogHandler.thread_colors.get(tid, None)
             if color is None:
-                ind = len(RPCLogHandler.thread_colors) % len(_color_list)
+                ind = len(RPCLogHandler.thread_colors) % len(_thread_color_list)
                 ind = ind//10*10  # decrease to multiple of 10
-                color = _color_list[ind]
+                color = _thread_color_list[ind]
                 RPCLogHandler.thread_colors[tid] = color
             return (color + message + colorama.Style.RESET_ALL)
         except KeyError:
@@ -151,7 +149,7 @@ def _log_unhandled_exception(exc, val, tb):
     exc_str += [" < exception caught here >\n"]
     exc_str += traceback.format_exception(exc, val, tb)[1:]
     exc_str = ''.join(['    ' + line for line in exc_str])
-    logging.getLogger().warn("Unhandled exception:\n%s", exc_str)
+    logging.getLogger().warning("Unhandled exception:\n%s", exc_str)
     #_sys_excepthook(exc, val, tb)
 
 

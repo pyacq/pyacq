@@ -35,7 +35,7 @@ class RingBuffer:
         
         # initialize int buffers with 0 and float buffers with nan
         if fill is None:
-            fill = 0 if make_dtype(dtype).kind in 'ui' else np.nan
+            fill = np.nan if make_dtype(dtype).kind in 'fc' else 0
         self._filler = fill
         
         if shmem is None:
@@ -45,7 +45,7 @@ class RingBuffer:
             self._shmem = None
             self.shm_id = None
         else:
-            size = np.product(shape) * make_dtype(dtype).itemsize + 16
+            size = np.prod(shape) * make_dtype(dtype).itemsize + 16
             if shmem is True:
                 # create new shared memory buffer
                 self._shmem = SharedMem(nbytes=size)

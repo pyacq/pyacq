@@ -3,7 +3,7 @@
 # Distributed under the (new) BSD License. See LICENSE for more info.
 
 from ..core import Node, register_node_type
-from pyqtgraph.Qt import QtCore, QtGui
+from pyqtgraph.Qt import QtCore
 from pyqtgraph.util.mutex import Mutex
 import os
 import numpy as np

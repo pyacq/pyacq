@@ -2,19 +2,18 @@
 # Copyright (c) 2016, French National Center for Scientific Research (CNRS)
 # Distributed under the (new) BSD License. See LICENSE for more info.
 
-from pyqtgraph.Qt import QtCore
-import pyqtgraph as pg
-from pyqtgraph.util.mutex import Mutex
+import packaging.version
 import numpy as np
+from pyqtgraph.Qt import QtCore
+from pyqtgraph.util.mutex import Mutex
 
-from ..core import (Node, register_node_type, ThreadPollInput, StreamConverter)
+from ..core import (Node, register_node_type, ThreadPollInput)
 
-import distutils.version
 try:
     import scipy.signal
     HAVE_SCIPY = True
     # scpy.signal.sosfilt was introduced in scipy 0.16
-    assert distutils.version.LooseVersion(scipy.__version__)>'0.16'
+    assert packaging.version.parse(scipy.__version__) >= packaging.version.parse('0.16')
 except ImportError:
     HAVE_SCIPY = False
 

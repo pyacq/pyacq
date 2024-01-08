@@ -2,15 +2,12 @@
 # Copyright (c) 2016, French National Center for Scientific Research (CNRS)
 # Distributed under the (new) BSD License. See LICENSE for more info.
 
-import pytest
+import numpy as np
+import pyqtgraph as pg
+from pyqtgraph.Qt import QtCore
 
 from pyacq import create_manager
 from pyacq.viewers.qoscilloscopemultiplot import QOscilloscopeMultiPlot
-from pyacq.devices import NumpyDeviceBuffer
-import numpy as np
-
-from pyqtgraph.Qt import QtCore, QtGui
-import pyqtgraph as pg
 
 #~ nb_channel = 32
 nb_channel = 5

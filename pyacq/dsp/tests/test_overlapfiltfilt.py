@@ -2,18 +2,15 @@
 # Copyright (c) 2016, French National Center for Scientific Research (CNRS)
 # Distributed under the (new) BSD License. See LICENSE for more info.
 
-import pytest
-import time
 import numpy as np
 import pyqtgraph as pg
+import pytest
+import scipy.signal
+from pyqtgraph.Qt import QtCore
 
-from pyacq import create_manager, NumpyDeviceBuffer
+from pyacq import NumpyDeviceBuffer
 from pyacq.dsp.overlapfiltfilt import OverlapFiltfilt, HAVE_PYOPENCL, sosfiltfilt_engines
 from pyacq.viewers.qoscilloscope import QOscilloscope
-
-from pyqtgraph.Qt import QtCore, QtGui
-import scipy.signal
-
 
 nb_channel = 4
 sample_rate =1000.
