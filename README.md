@@ -25,6 +25,7 @@ Supported Hardware
 | Audio interfaces (via PyAudio)        |    X    |    X    |
 | Webcams (via imageio or libav)        |    X    |    X    |
 | Blackrock NSP        |        |    X    |
+| Multi channel system W2100    |   No    |    X    |
 
 
 Visualization Tools
