@@ -1,0 +1,51 @@
+[project]
+name = "pyacq"
+version = "0.2.0-dev"
+authors = [
+  { name="Samuel Garcia", email="sam.garcia.die@gmail.com" }
+]
+description = "Simple Framework for data acquisition (signal, video) in pure python."
+readme = "README.md"
+requires-python = ">=3.9,<4.0"
+classifiers = [
+    "Programming Language :: Python :: 3 :: Only",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Intended Audience :: Science/Research",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: MacOS",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering"
+]
+
+
+dependencies = [
+    "numpy",
+    "pyzmq",
+    "pyqtgraph"
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["pyacq*"]
+namespaces = false
+exclude = ["pyacq.*.tests"]
+
+
+[build-system]
+requires = ["setuptools>=62.0"]
+build-backend = "setuptools.build_meta"
+
+
+[project.urls]
+homepage = "https://github.com/pyacq/pyacq"
+repository = "https://github.com/pyacq/pyacq"
+documentation = "https://pyacq.readthedocs.io/"
+
+[project.optional-dependencies]
+
+test = [
+  "msgpack<=1.0.2",
+  "pytest",
+]
