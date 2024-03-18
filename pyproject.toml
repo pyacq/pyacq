@@ -46,6 +46,6 @@ documentation = "https://pyacq.readthedocs.io/"
 [project.optional-dependencies]
 
 test = [
-  "msgpack<=1.0.2",
+  "msgpack",
   "pytest",
 ]
