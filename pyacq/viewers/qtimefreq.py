@@ -29,7 +29,7 @@ default_params = [
         {'name': 'xsize', 'type': 'float', 'value': 10., 'step': 0.1, 'limits': (.1, 60)},
         {'name': 'nb_column', 'type': 'int', 'value': 1},
         {'name': 'background_color', 'type': 'color', 'value': 'k'},
-        {'name': 'colormap', 'type': 'list', 'value': 'viridis', 'limits': ['viridis', 'plasma', 'inferno']},
+        {'name': 'colormap', 'type': 'list', 'value': 'viridis', 'limits': ['viridis', 'jet', 'gray', 'hot', ]},
         {'name': 'scale_mode', 'type': 'list', 'value': 'by_channel', 'limits':['same_for_all', 'by_channel'] },
         {'name': 'refresh_interval', 'type': 'int', 'value': 500, 'limits':[5, 1000]},
         {'name': 'mode', 'type': 'list', 'value': 'scroll', 'limits': ['scan', 'scroll']},
@@ -313,7 +313,8 @@ class QTimeFreq(WidgetNode):
             else:
                 plot.setTitle(None)
 
-            self.graphiclayout.ci.layout.addItem(plot, r, c)  # , rowspan, colspan)
+            # self.graphiclayout.ci.layout.addItem(plot, r, c)  # , rowspan, colspan)
+            self.graphiclayout.addItem(plot, r, c)
             if r not in self.graphiclayout.ci.rows:
                 self.graphiclayout.ci.rows[r] = {}
             self.graphiclayout.ci.rows[r][c] = plot
@@ -436,12 +437,10 @@ class QTimeFreq(WidgetNode):
                 self.timer_action.start()
     
     def apply_actions(self):
-        print('apply_actions')
         with self.mutex_action:
             if self.running():
                 self.global_timer.stop()
             for action, do_it in self.actions.items():
-                print(action, do_it)
                 if do_it:
                     action()
             for action in self.actions:
