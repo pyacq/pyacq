@@ -5,7 +5,6 @@
 from pyqtgraph.Qt import QtCore, QtWidgets
 import pyqtgraph as pg
 from pyqtgraph.util.mutex import Mutex
-import vispy.color
 
 import sys
 import numpy as np
@@ -30,7 +29,7 @@ default_params = [
         {'name': 'xsize', 'type': 'float', 'value': 10., 'step': 0.1, 'limits': (.1, 60)},
         {'name': 'nb_column', 'type': 'int', 'value': 1},
         {'name': 'background_color', 'type': 'color', 'value': 'k'},
-        {'name': 'colormap', 'type': 'list', 'value': 'viridis', 'limits': list(vispy.color.get_colormaps().keys())},
+        {'name': 'colormap', 'type': 'list', 'value': 'viridis', 'limits': ['viridis', 'jet', 'gray', 'hot', ]},
         {'name': 'scale_mode', 'type': 'list', 'value': 'by_channel', 'limits':['same_for_all', 'by_channel'] },
         {'name': 'refresh_interval', 'type': 'int', 'value': 500, 'limits':[5, 1000]},
         {'name': 'mode', 'type': 'list', 'value': 'scroll', 'limits': ['scan', 'scroll']},
@@ -289,9 +288,10 @@ class QTimeFreq(WidgetNode):
         self.plots = [None] * self.nb_channel
         self.images = [None] * self.nb_channel
         r,c = 0,0
-        nb_visible =sum(self.by_channel_params.children()[i]['visible'] for i in range(self.nb_channel)) 
-        rowspan = self.params['nb_column']
-        colspan = nb_visible//self.params['nb_column']
+        nb_visible =sum(self.by_channel_params.children()[i]['visible'] for i in range(self.nb_channel))
+        nb_column = min(self.params['nb_column'], self.nb_channel)
+        rowspan = nb_column
+        colspan = nb_visible // nb_column
         self.graphiclayout.ci.currentRow = 0
         self.graphiclayout.ci.currentCol = 0        
         for i in range(self.nb_channel):
@@ -313,7 +313,8 @@ class QTimeFreq(WidgetNode):
             else:
                 plot.setTitle(None)
 
-            self.graphiclayout.ci.layout.addItem(plot, r, c)  # , rowspan, colspan)
+            # self.graphiclayout.ci.layout.addItem(plot, r, c)  # , rowspan, colspan)
+            self.graphiclayout.addItem(plot, r, c)
             if r not in self.graphiclayout.ci.rows:
                 self.graphiclayout.ci.rows[r] = {}
             self.graphiclayout.ci.rows[r][c] = plot
@@ -363,9 +364,11 @@ class QTimeFreq(WidgetNode):
             input_map.params['sample_rate'] = self.sub_sample_rate
     
     def initialize_plots(self):
+        import matplotlib.cm
         N = 512
-        cmap = vispy.color.get_colormap(self.params['colormap'])
-        self.lut = (255*cmap.map(np.arange(N)[:,None]/float(N))).astype('uint8')
+        cmap = matplotlib.cm.get_cmap(self.params['colormap'], N)
+        # self.lut = (255*cmap(np.arange(N)[:,None]/N)).astype('uint8')
+        self.lut = (255*cmap(np.arange(N))).astype('uint8')
         
         tfr_params = self.params.param('timefreq')
         for i in range(self.nb_channel):

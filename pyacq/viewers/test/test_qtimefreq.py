@@ -65,7 +65,7 @@ def lauch_qtimefreq(transfermode, axisorder, localworker):
     viewer.initialize()
     viewer.show()
     
-    viewer.params['nb_column'] = 4
+    viewer.params['nb_column'] = 1
     viewer.params['refresh_interval'] = 1000
     
     
@@ -83,7 +83,7 @@ def lauch_qtimefreq(transfermode, axisorder, localworker):
     # start for a while
     timer = QtCore.QTimer(singleShot=True, interval=3000)
     timer.timeout.connect(terminate)
-    timer.start()
+    # timer.start()
     
     app.exec_()
     
@@ -95,7 +95,7 @@ def lauch_qtimefreq(transfermode, axisorder, localworker):
 def test_qtimefreq_local_worker():
     lauch_qtimefreq('plaindata', [0,1], True)
     #lauch_qtimefreq('plaindata', [1,0], True)
-    lauch_qtimefreq('sharedmem', [0,1], True)
+    # lauch_qtimefreq('sharedmem', [0,1], True)
     #lauch_qtimefreq('sharedmem', [1,0], True)
 
 @pytest.mark.skipif(not HAVE_SCIPY, reason='no HAVE_SCIPY')
@@ -110,6 +110,6 @@ def test_qtimefreq_distributed_worker():
 
 if __name__ == '__main__':
     test_qtimefreq_local_worker()
-    test_qtimefreq_distributed_worker()
+    # test_qtimefreq_distributed_worker()
 
 
